@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>BurgerKiss – v5 (Modular + Categories)</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="hud-wrap">
+    <header>
+      <div class="totals">
+        <h1 id="grand">0 GHS</h1>
+        <div class="stats">
+          <span class="pill" id="combosPill">Combos: 0</span>
+          <span class="pill" id="discountTag">No discount</span>
+        </div>
+      </div>
+      <div class="tabbar">
+        <button id="tabOrder" class="active">Order</button>
+        <button id="tabMake">Make</button>
+        <button id="tabPay">Pay</button>
+        <button class="x" id="btnSummary">Summary</button>
+        <button class="x" id="btnReceipt">Receipt</button>
+        <button class="x" id="btnPrices">Edit Prices</button>
+        <button class="x" id="btnGroup">Group Ticket</button>
+      </div>
+    </header>
+    <div class="hud-rows">
+      <div class="toolbar">
+        <button class="ghost" id="btnUndo">Undo</button>
+        <button class="danger" id="btnReset">Reset</button>
+        <button class="disc" data-disc="0.01">-1%</button>
+        <button class="disc" data-disc="0.03">-3%</button>
+        <button class="disc" data-disc="0.05">-5%</button>
+        <button class="disc" data-disc="0.10">-10%</button>
+        <button class="ok" id="btnClearDisc">Clear Discount</button>
+        <button class="ghost" id="btnClearStorage">Clear Storage</button>
+      </div>
+      <div class="toolbar" id="slotsBar">
+        <span class="chip" id="btnAddSlot">+ Slot</span>
+        <span class="chip" id="btnRenameSlot">Rename</span>
+        <span class="chip" id="btnDeleteSlot">Delete</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CATEGORY TABS (neu) -->
+  <div class="catbar">
+    <button class="tab active" data-cat="all">All</button>
+    <button class="tab" data-cat="burger">Burgers</button>
+    <button class="tab" data-cat="wings">Wings</button>
+    <button class="tab" data-cat="fries">Fries</button>
+    <button class="tab" data-cat="extra">Extras</button>
+    <button class="tab" data-cat="drink">Drinks</button>
+  </div>
+
+  <div class="wrap">
+    <!-- ORDER -->
+    <section id="tab-order">
+      <div class="grid" id="buttons"></div>
+      <div class="note-box">
+        <input id="noteInput" placeholder="Note for NEXT item (e.g. 'no onion')" />
+        <div class="quick">
+          <span class="chip quick-note">No onion</span>
+          <span class="chip quick-note">Extra onion</span>
+          <span class="chip quick-note">No lettuce</span>
+          <span class="chip quick-note">Extra spicy</span>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Current items (active slot)</h3>
+        <div class="rows" id="lines"></div>
+        <div class="sumline"><span>Subtotal</span><b id="subtotal">0 GHS</b></div>
+        <div class="sumline"><span>Discount</span><b id="discount">0 GHS</b></div>
+        <div class="sumline"><span>Total</span><b id="total">0 GHS</b></div>
+      </div>
+    </section>
+
+    <!-- MAKE -->
+    <section id="tab-make" class="hidden">
+      <div id="makeList" class="panel">
+        <h3>Preparation – mark items as done</h3>
+      </div>
+    </section>
+
+    <!-- PAY -->
+    <section id="tab-pay" class="hidden">
+      <div id="payList" class="panel">
+        <h3>Payment status</h3>
+      </div>
+      <div class="panel" style="margin-top:10px">
+        <div class="sumline"><span>All Slots Subtotal</span><b id="allSubtotal">0 GHS</b></div>
+        <div class="sumline"><span>Global Discount</span><b id="allDiscount">0 GHS</b></div>
+        <div class="sumline"><span>Grand Total</span><b id="allGrand">0 GHS</b></div>
+      </div>
+    </section>
+
+    <!-- PRINT AREA -->
+    <section id="printArea" class="hidden"></section>
+  </div>
+
+  <!-- SUMMARY MODAL -->
+  <div class="modal" id="modalSummary">
+    <div class="sheet">
+      <header>
+        <b id="sumTitle">Summary – SN1</b>
+        <div><button class="x" id="sumClose">Close</button></div>
+      </header>
+      <div class="body" id="sumBody"></div>
+    </div>
+  </div>
+
+  <!-- RECEIPT MODAL -->
+  <div class="modal" id="modalReceipt">
+    <div class="sheet">
+      <header>
+        <b>Receipt</b>
+        <div>
+          <button class="x" id="rCopy">Copy</button>
+          <button class="x" id="rWA">WhatsApp</button>
+          <button class="x" id="rPrint">Print</button>
+          <button class="x" id="rClose">Close</button>
+        </div>
+      </header>
+      <div class="body" id="receiptBody"></div>
+    </div>
+  </div>
+
+  <!-- PRICES MODAL -->
+  <div class="modal" id="modalPrices">
+    <div class="sheet">
+      <header>
+        <b>Edit Prices</b>
+        <div>
+          <button class="x" id="pSave">Save</button>
+          <button class="x" id="pReset">Reset</button>
+          <button class="x" id="pClose">Close</button>
+        </div>
+      </header>
+      <div class="body" id="pricesBody"></div>
+    </div>
+  </div>
+
+  <!-- GROUP MODAL -->
+  <div class="modal" id="modalGroup">
+    <div class="sheet">
+      <header>
+        <b>Group Ticket</b>
+        <div>
+          <button class="x" id="gMake">Create Receipt</button>
+          <button class="x" id="gPaid">Mark Paid</button>
+          <button class="x" id="gClose">Close</button>
+        </div>
+      </header>
+      <div class="body" id="groupBody"></div>
+    </div>
+  </div>
+
+<script src="js/data.js"></script>
+<script src="js/prices.js"></script>
+<script src="js/state.js"></script>
+<script src="js/logic.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
