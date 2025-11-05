@@ -1,110 +1,107 @@
-// sync.js — Voll-Sync für BurgerKiss POS über Firebase Realtime Database
+// sync.js – BurgerKiss POS Live-Sync (Variante B: nur aktiver Slot)
+// Voraussetzung: FIREBASE_CONFIG + BK_STATE + BK_SYNC_PATH sind gesetzt.
+
 (function () {
   try {
-    if (!window.FIREBASE_CONFIG || !window.firebase) return;
+    if (!window.FIREBASE_CONFIG) return;
 
-    // Firebase init (Compat SDKs sind in index.html eingebunden)
+    // Firebase init (compat)
     const app  = firebase.apps && firebase.apps.length
       ? firebase.app()
       : firebase.initializeApp(window.FIREBASE_CONFIG);
     const auth = firebase.auth();
     const db   = firebase.database();
 
-    // Raum-Name: beide Geräte müssen im selben Raum sein (Standard = room-1)
-    const ROOM_ID =
-      new URLSearchParams(location.search).get("room") ||
-      localStorage.getItem("bk_room") ||
-      "burgerkiss-pos-room-1";
-
-    // Stabile Geräte-ID, damit wir unsere eigenen Writes ignorieren
-    let did = localStorage.getItem("bk_device_id");
-    if (!did) {
-      did = "dev-" + Math.random().toString(36).slice(2);
-      localStorage.setItem("bk_device_id", did);
+    const SYNC_BASE = (window.BK_SYNC_PATH || "/pos/live").replace(/\/+$/,'');
+    // stabile Geräte-ID
+    let deviceId = localStorage.getItem("bk_device_id");
+    if (!deviceId) {
+      deviceId = "dev-" + Math.random().toString(36).slice(2, 8);
+      localStorage.setItem("bk_device_id", deviceId);
     }
 
-    // Preis-Overrides lesen/schreiben (gleiches Key wie in prices.js)
-    const PRICE_KEY = "bk_prices_v1";
-    function getPriceMap() {
-      try { return JSON.parse(localStorage.getItem(PRICE_KEY) || "{}"); }
-      catch (e) { return {}; }
-    }
-    function setPriceMap(map) {
-      localStorage.setItem(PRICE_KEY, JSON.stringify(map || {}));
-      // optional: UI aktualisieren, falls deine UI eine Funktion dafür hat
-      if (window.BK_UI && typeof BK_UI.renderAll === "function") BK_UI.renderAll();
-    }
-
-    // Paket bauen: kompletter App-Status + Preis-Overrides
-    function pack() {
-      const state = (window.BK_STATE && BK_STATE.getState)
-        ? BK_STATE.getState()
-        : null;
-      return { sender: did, ts: Date.now(), state, prices: getPriceMap() };
+    // Tools
+    function getState() { return (window.BK_STATE && BK_STATE.getState) ? BK_STATE.getState() : null; }
+    function setState(next) { if (window.BK_STATE && BK_STATE.setState) BK_STATE.setState(next); }
+    function getActiveSlotInfo() {
+      const s = getState();
+      if (!s || !Array.isArray(s.slots)) return { idx: 0, name: "SN1", obj: null };
+      const idx = Math.max(0, Math.min(s.slots.length - 1, s.active || 0));
+      const slot = s.slots[idx] || null;
+      const name = (slot && slot.name) ? slot.name : ("SN" + (idx + 1));
+      return { idx, name, obj: slot };
     }
 
-    // Paket anwenden (Remote -> Lokal)
-    function apply(payload) {
-      if (!payload) return;
-      // Reihenfolge: erst Preise, dann State, dann rendern
-      if (payload.prices) setPriceMap(payload.prices);
-      if (payload.state && window.BK_STATE) {
-        if (typeof BK_STATE.replaceState === "function") {
-          BK_STATE.replaceState(payload.state);
-        } else if (typeof BK_STATE.setState === "function") {
-          BK_STATE.setState(payload.state);
-        }
-      }
-      if (window.BK_UI && typeof BK_UI.renderAll === "function") BK_UI.renderAll();
-    }
+    // Aktuellen Slot-Listener verwalten
+    let currentRef = null;
+    let suppress   = false;   // um Echo zu vermeiden
+    let lastSlotName = null;
 
-    // Doppel-Events vermeiden
-    let suppress = false;
-    function publish() {
-      if (suppress) return;
-      const payload = pack();
-      db.ref("rooms/" + ROOM_ID).set(payload).catch(console.warn);
-    }
+    function subscribeTo(slotName) {
+      if (!slotName) return;
+      if (currentRef) currentRef.off();
+      currentRef = db.ref(SYNC_BASE + "/" + slotName);
+      currentRef.on("value", snap => {
+        const v = snap.val();
+        if (!v || v.sender === deviceId) return;
+        const st = getState(); if (!st) return;
+        const { idx, name } = getActiveSlotInfo();
+        if (name !== slotName) return; // nur wenn wir wirklich gerade auf diesem Slot sind
+        if (!v.slot) return;
 
-    // Hook: warte bis BK_STATE verfügbar ist, dann setState „umbiegen“
-    function hookState() {
-      if (!window.BK_STATE || typeof BK_STATE.setState !== "function" || typeof BK_STATE.getState !== "function") {
-        setTimeout(hookState, 200);
-        return;
-      }
-
-      const _set = BK_STATE.setState;
-      BK_STATE.setState = function (next) {
-        _set(next);         // lokal anwenden
-        publish();          // ins Netz senden
-      };
-
-      // Preis-Änderungen erkennen: localStorage.setItem hooken (nur für unser KEY)
-      const _lsSet = localStorage.setItem;
-      localStorage.setItem = function (k, v) {
-        _lsSet.apply(localStorage, arguments);
-        if (k === PRICE_KEY) publish();
-      };
-
-      // Wenn Raum noch leer ist -> unseren Stand initial hochladen
-      db.ref("rooms/" + ROOM_ID).get().then(snap => {
-        if (!snap.exists()) publish();
-      }).catch(() => {});
-
-      // Remote-Listener
-      db.ref("rooms/" + ROOM_ID).on("value", snap => {
-        const val = snap.val();
-        if (!val) return;
-        if (val.sender === did) return;       // eigene Writes ignorieren
+        // Fremden Slot-Zustand lokal einspielen (nur aktiver Slot wird ersetzt)
         suppress = true;
-        try { apply(val); }
-        finally { setTimeout(() => { suppress = false; }, 50); }
+        try {
+          const next = JSON.parse(JSON.stringify(st));
+          next.slots[idx] = v.slot;  // kompletten Slot übernehmen
+          // active, discounts etc. bleiben wie sie sind (können aber auch im Slot stecken)
+          setState(next);
+        } finally {
+          setTimeout(() => { suppress = false; }, 30);
+        }
       });
     }
 
-    // anonym anmelden, dann hooken
+    function publishActiveSlot() {
+      if (suppress) return;
+      const st = getState(); if (!st) return;
+      const { name, obj } = getActiveSlotInfo();
+      if (!obj) return;
+      const payload = { sender: deviceId, ts: Date.now(), slot: obj };
+      db.ref(SYNC_BASE + "/" + name).set(payload).catch(console.warn);
+    }
+
+    function maybeResubscribe() {
+      const { name } = getActiveSlotInfo();
+      if (name !== lastSlotName) {
+        lastSlotName = name;
+        subscribeTo(name);
+        // beim ersten Wechsel initial hochladen (falls im Netz noch nix ist)
+        db.ref(SYNC_BASE + "/" + name).get().then(s => { if (!s.exists()) publishActiveSlot(); });
+      }
+    }
+
+    // BK_STATE hooken
+    function hookState() {
+      if (!window.BK_STATE || typeof BK_STATE.setState !== "function" || typeof BK_STATE.getState !== "function") {
+        setTimeout(hookState, 150);
+        return;
+      }
+      // initial subscription auf aktuellen Slot
+      maybeResubscribe();
+
+      // Original setState wrappen: nach JEDEM lokalen Update → publish + evtl. resubscribe
+      const _set = BK_STATE.setState;
+      BK_STATE.setState = function (next) {
+        _set(next);
+        maybeResubscribe();
+        publishActiveSlot();
+      };
+    }
+
+    // Start: anonym authentifizieren, dann hooken
     auth.signInAnonymously()
-      .then(hookState)
+      .then(() => { hookState(); })
       .catch(e => console.warn("Firebase auth failed:", e));
 
   } catch (e) {
