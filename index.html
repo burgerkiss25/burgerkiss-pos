@@ -3,33 +3,38 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>BurgerKiss – POS</title>
+  <title>BurgerKiss – POS (Variante B: gespiegelt auf SN1)</title>
+  <link rel="stylesheet" href="https://burgerkiss25.github.io/burgerkiss-pos/style.css?v=11" />
 
-  <!-- Styles -->
-  <link rel="stylesheet" href="https://burgerkiss25.github.io/burgerkiss-pos/style.css?v=10" />
-
-  <!-- App-Flags / Config -->
+  <!-- ====================== POS-Konfiguration ====================== -->
   <script>
-    // Sync global an/aus
+    // Preise lokal editierbar lassen
+    window.BK_ALLOW_PRICE_EDIT = true;
+
+    // Live-Sync aktivieren
     window.BK_SYNC_ENABLED = true;
 
-    // Firebase Config + Sync-Pfad
+    // Variante B: ALLE Geräte arbeiten auf demselben Slot.
+    // Hier fix auf SN1 “gepinnt”.
+    window.BK_SYNC_FORCE_SLOT = 'SN1';
+
+    // Datenbank-Pfad für Live-Sync (unter deiner Realtime DB)
+    window.BK_SYNC_PATH = '/pos/live';
+
+    // Firebase Web SDK Konfiguration (dein Projekt)
     window.FIREBASE_CONFIG = {
       apiKey: "AIzaSyD1LNc1SPciD6k5GYbzimLqs0XZRf54DUs",
       authDomain: "burgerkiss-pos.firebaseapp.com",
-      databaseURL: "https://burgerkiss-pos-default-rtdb.europe-west1.firebasedatabase.app/",
       projectId: "burgerkiss-pos",
       storageBucket: "burgerkiss-pos.firebasestorage.app",
-      messagingSenderId: "1041746532885",
-      appId: "1:1041746532885:web:3a20041480487fb60c399c"
+      messagingSenderId: "1041476532885",
+      appId: "1:1041476532885:web:3a20041480487fb60c399c"
     };
-    // Offizieller Pfad (Variante B = nur aktiver Slot)
-    window.BK_SYNC_PATH = "/pos/live";
   </script>
+  <!-- =============================================================== -->
 </head>
 <body>
-
-  <!-- HUD / Header -->
+  <!-- Sticky HUD -->
   <div class="hud-wrap">
     <header>
       <div class="totals">
@@ -39,7 +44,6 @@
           <span class="pill" id="discountTag">No discount</span>
         </div>
       </div>
-
       <div class="tabbar">
         <button id="tabOrder" class="active">Order</button>
         <button id="tabMake">Make</button>
@@ -64,14 +68,16 @@
       </div>
 
       <div class="toolbar" id="slotsBar">
+        <!-- In Variante B ist der Slot fix – die Buttons sind rein informativ -->
         <span class="chip" id="btnAddSlot">+ Slot</span>
         <span class="chip" id="btnRenameSlot">Rename</span>
         <span class="chip" id="btnDeleteSlot">Delete</span>
+        <span class="chip" id="activeSlotLabel">SN1</span>
       </div>
     </div>
   </div>
 
-  <!-- Kategorien / Tabs -->
+  <!-- Kategorien -->
   <div class="catbar">
     <button class="tab active" data-cat="all">All</button>
     <button class="tab" data-cat="burger">Burgers</button>
@@ -186,20 +192,20 @@
     </div>
   </div>
 
-  <!-- App Scripts -->
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/data.js?v=10"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/prices.js?v=10"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/state.js?v=10"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/logic.js?v=10"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/ui.js?v=10"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/main.js?v=10"></script>
+  <!-- ====================== App-Skripte ====================== -->
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/data.js?v=11"></script>
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/prices.js?v=11"></script>
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/state.js?v=11"></script>
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/logic.js?v=11"></script>
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/ui.js?v=11"></script>
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/main.js?v=11"></script>
 
-  <!-- Firebase SDKs (Compat) -->
+  <!-- =================== Firebase SDK (Compat) =================== -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
-  <!-- Polling-basiertes Live Sync -->
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/sync_poll.js?v=10"></script>
+  <!-- =============== Live-Sync (Variante B, Polling) =============== -->
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/sync_poll.js?v=11"></script>
 </body>
 </html>
