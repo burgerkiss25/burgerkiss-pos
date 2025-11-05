@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>BurgerKiss – POS</title>
 
-<!-- firebase config -->
+<!-- Firebase Config -->
 <script>
   window.FIREBASE_CONFIG = {
     apiKey: "AIzaSyD1LNc1SPciD6k5GYbzimLqs0XZRf54DUs",
     authDomain: "burgerkiss-pos.firebaseapp.com",
-    databaseURL: "https://burgerkiss-pos-default-rtdb.firebaseio.com",
+    databaseURL: "https://burgerkiss-pos-default-rtdb.europe-west1.firebasedatabase.app/",
     projectId: "burgerkiss-pos",
     storageBucket: "burgerkiss-pos.firebasestorage.app",
     messagingSenderId: "1041746532885",
@@ -18,9 +18,8 @@
   };
 </script>
 
-<!-- styles -->
+<!-- Styles -->
 <link rel="stylesheet" href="https://burgerkiss25.github.io/burgerkiss-pos/style.css" />
-
 </head>
 <body>
 
@@ -76,7 +75,6 @@
 </div>
 
 <div class="wrap">
-
   <!-- ORDER -->
   <section id="tab-order">
     <div class="grid" id="buttons"></div>
@@ -178,15 +176,15 @@
   </div>
 </div>
 
-<!-- firebase SDKs COMPAT -->
+<!-- Firebase SDKs (Compat) -->
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
-<!-- sync script (noch anlegen) -->
+<!-- Live-Sync -->
 <script src="https://burgerkiss25.github.io/burgerkiss-pos/sync.js"></script>
 
-<!-- APP scripts -->
+<!-- App Scripts -->
 <script src="https://burgerkiss25.github.io/burgerkiss-pos/data.js"></script>
 <script src="https://burgerkiss25.github.io/burgerkiss-pos/prices.js"></script>
 <script src="https://burgerkiss25.github.io/burgerkiss-pos/state.js"></script>
