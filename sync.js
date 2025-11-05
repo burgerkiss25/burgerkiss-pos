@@ -1,110 +1,131 @@
 // sync.js – BurgerKiss POS Live-Sync (Variante B: nur aktiver Slot)
-// Voraussetzung: FIREBASE_CONFIG + BK_STATE + BK_SYNC_PATH sind gesetzt.
+// Stabilitäts-Focus: Debounce, try/catch überall, Echo- & Equality-Schutz, Auto-Recovery.
 
 (function () {
-  try {
-    if (!window.FIREBASE_CONFIG) return;
+  // Schnell aus, falls nötig
+  if (window.BK_SYNC_ENABLED === false) return;
 
-    // Firebase init (compat)
-    const app  = firebase.apps && firebase.apps.length
-      ? firebase.app()
-      : firebase.initializeApp(window.FIREBASE_CONFIG);
+  const LOG = (...a)=>{ /* console.log('[SYNC]', ...a); */ };
+
+  function safe(fn){ try{ return fn(); }catch(e){ console.warn('[SYNC]', e); } }
+
+  // Hard guard: App-State muss existieren
+  function hasStateAPI(){
+    return !!(window.BK_STATE && typeof BK_STATE.getState==='function' && typeof BK_STATE.setState==='function');
+  }
+
+  // Mini deep-equal (nur für Slots)
+  function shallowEqual(a,b){
+    try{ return JSON.stringify(a)===JSON.stringify(b); }catch(_){ return false; }
+  }
+
+  function debounce(fn,delay){
+    let t; return function(){ const args=arguments; clearTimeout(t); t=setTimeout(()=>fn.apply(this,args),delay); };
+  }
+
+  // Initialisieren, wenn alles bereit ist
+  function boot(){
+    if (!window.FIREBASE_CONFIG) return;
+    if (typeof firebase==='undefined') return;
+    if (!hasStateAPI()) { setTimeout(boot,100); return; }
+
+    // Firebase init
+    const app = firebase.apps && firebase.apps.length ? firebase.app() : firebase.initializeApp(window.FIREBASE_CONFIG);
     const auth = firebase.auth();
     const db   = firebase.database();
 
     const SYNC_BASE = (window.BK_SYNC_PATH || "/pos/live").replace(/\/+$/,'');
-    // stabile Geräte-ID
-    let deviceId = localStorage.getItem("bk_device_id");
-    if (!deviceId) {
-      deviceId = "dev-" + Math.random().toString(36).slice(2, 8);
-      localStorage.setItem("bk_device_id", deviceId);
-    }
+    let deviceId = localStorage.getItem('bk_device_id');
+    if (!deviceId){ deviceId = 'dev-'+Math.random().toString(36).slice(2,8); localStorage.setItem('bk_device_id', deviceId); }
 
-    // Tools
-    function getState() { return (window.BK_STATE && BK_STATE.getState) ? BK_STATE.getState() : null; }
-    function setState(next) { if (window.BK_STATE && BK_STATE.setState) BK_STATE.setState(next); }
-    function getActiveSlotInfo() {
-      const s = getState();
-      if (!s || !Array.isArray(s.slots)) return { idx: 0, name: "SN1", obj: null };
-      const idx = Math.max(0, Math.min(s.slots.length - 1, s.active || 0));
+    // Helpers
+    const getState = ()=> BK_STATE.getState();
+    const setState = (s)=> BK_STATE.setState(s);
+
+    function activeSlotInfo(){
+      const s = getState(); if (!s) return { idx:0, name:'SN1', slot:null };
+      const idx = Math.max(0, Math.min((s.active|0)||0, s.slots.length-1));
       const slot = s.slots[idx] || null;
-      const name = (slot && slot.name) ? slot.name : ("SN" + (idx + 1));
-      return { idx, name, obj: slot };
+      const name = slot && slot.name ? slot.name : ('SN'+(idx+1));
+      return { idx, name, slot };
     }
 
-    // Aktuellen Slot-Listener verwalten
     let currentRef = null;
-    let suppress   = false;   // um Echo zu vermeiden
     let lastSlotName = null;
+    let suppress = false;     // blockiert Echo
+    let ready = false;
 
-    function subscribeTo(slotName) {
-      if (!slotName) return;
-      if (currentRef) currentRef.off();
-      currentRef = db.ref(SYNC_BASE + "/" + slotName);
-      currentRef.on("value", snap => {
+    const publish = debounce(function(){
+      if (suppress) return;
+      const { name, slot } = activeSlotInfo();
+      if (!slot) return;
+      const payload = { sender: deviceId, ts: Date.now(), slot };
+      safe(()=> currentRef && currentRef.set(payload) );
+    }, 50);
+
+    function subscribeTo(name){
+      if (!name) return;
+      if (currentRef) safe(()=> currentRef.off());
+      currentRef = db.ref(SYNC_BASE + '/' + name);
+      safe(()=> currentRef.on('value', snap=>{
         const v = snap.val();
-        if (!v || v.sender === deviceId) return;
-        const st = getState(); if (!st) return;
-        const { idx, name } = getActiveSlotInfo();
-        if (name !== slotName) return; // nur wenn wir wirklich gerade auf diesem Slot sind
+        if (!v) return;
+        if (v.sender === deviceId) return; // eigenes Echo ignorieren
+        const { idx, name: curName, slot: localSlot } = activeSlotInfo();
+        if (curName !== name) return;      // nur wenn wir wirklich in diesem Slot sind
         if (!v.slot) return;
 
-        // Fremden Slot-Zustand lokal einspielen (nur aktiver Slot wird ersetzt)
+        if (shallowEqual(localSlot, v.slot)) return; // nichts zu tun
+
         suppress = true;
-        try {
-          const next = JSON.parse(JSON.stringify(st));
-          next.slots[idx] = v.slot;  // kompletten Slot übernehmen
-          // active, discounts etc. bleiben wie sie sind (können aber auch im Slot stecken)
+        try{
+          const state = getState();
+          const next = JSON.parse(JSON.stringify(state));
+          next.slots[idx] = v.slot;   // nur aktiven Slot ersetzen
           setState(next);
-        } finally {
-          setTimeout(() => { suppress = false; }, 30);
+        }finally{
+          setTimeout(()=>{ suppress=false; }, 25);
         }
-      });
+      }));
     }
 
-    function publishActiveSlot() {
-      if (suppress) return;
-      const st = getState(); if (!st) return;
-      const { name, obj } = getActiveSlotInfo();
-      if (!obj) return;
-      const payload = { sender: deviceId, ts: Date.now(), slot: obj };
-      db.ref(SYNC_BASE + "/" + name).set(payload).catch(console.warn);
-    }
-
-    function maybeResubscribe() {
-      const { name } = getActiveSlotInfo();
-      if (name !== lastSlotName) {
+    function maybeResubscribe(){
+      const { name } = activeSlotInfo();
+      if (name !== lastSlotName){
         lastSlotName = name;
         subscribeTo(name);
-        // beim ersten Wechsel initial hochladen (falls im Netz noch nix ist)
-        db.ref(SYNC_BASE + "/" + name).get().then(s => { if (!s.exists()) publishActiveSlot(); });
+        // Falls dort noch nichts liegt, lade ersten Stand hoch
+        safe(()=> db.ref(SYNC_BASE + '/' + name).get().then(s=>{
+          if (!s.exists()) publish();
+        }));
       }
     }
 
-    // BK_STATE hooken
-    function hookState() {
-      if (!window.BK_STATE || typeof BK_STATE.setState !== "function" || typeof BK_STATE.getState !== "function") {
-        setTimeout(hookState, 150);
-        return;
-      }
-      // initial subscription auf aktuellen Slot
-      maybeResubscribe();
-
-      // Original setState wrappen: nach JEDEM lokalen Update → publish + evtl. resubscribe
-      const _set = BK_STATE.setState;
-      BK_STATE.setState = function (next) {
-        _set(next);
-        maybeResubscribe();
-        publishActiveSlot();
+    // wrap setState EINMAL
+    if (!BK_STATE.__syncWrapped){
+      const __orig = BK_STATE.setState;
+      BK_STATE.setState = function(next){
+        __orig(next);
+        safe(maybeResubscribe);
+        safe(publish);
       };
+      BK_STATE.__syncWrapped = true;
     }
 
-    // Start: anonym authentifizieren, dann hooken
-    auth.signInAnonymously()
-      .then(() => { hookState(); })
-      .catch(e => console.warn("Firebase auth failed:", e));
+    // Sichtbarkeitswechsel: aktiv → sofort publish
+    document.addEventListener('visibilitychange', ()=>{
+      if (document.visibilityState === 'visible') safe(publish);
+    });
 
-  } catch (e) {
-    console.warn("Sync init error:", e);
+    // Heartbeat: falls mal was schief läuft, rehooken wir sanft
+    setInterval(()=>{ safe(maybeResubscribe); }, 1500);
+
+    // Start: anonym einloggen → dann re/subscribe + publish
+    auth.signInAnonymously()
+      .then(()=>{ ready=true; safe(maybeResubscribe); safe(publish); })
+      .catch(e=>{ console.warn('[SYNC] auth failed', e); /* läuft dann einfach ohne Sync weiter */ });
   }
+
+  // Start
+  boot();
 })();
