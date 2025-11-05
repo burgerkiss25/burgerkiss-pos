@@ -6,7 +6,22 @@
   <title>BurgerKiss – POS</title>
 
   <!-- Styles -->
-  <link rel="stylesheet" href="https://burgerkiss25.github.io/burgerkiss-pos/style.css?v=7" />
+  <link rel="stylesheet" href="https://burgerkiss25.github.io/burgerkiss-pos/style.css?v=8" />
+
+  <!-- Firebase Config (dein Projekt) -->
+  <script>
+    window.FIREBASE_CONFIG = {
+      apiKey: "AIzaSyD1LNc1SPciD6k5GYbzimLqs0XZRf54DUs",
+      authDomain: "burgerkiss-pos.firebaseapp.com",
+      databaseURL: "https://burgerkiss-pos-default-rtdb.europe-west1.firebasedatabase.app/",
+      projectId: "burgerkiss-pos",
+      storageBucket: "burgerkiss-pos.firebasestorage.app",
+      messagingSenderId: "1041746532885",
+      appId: "1:1041746532885:web:3a20041480487fb60c399c"
+    };
+    // Offizieller Sync-Pfad (Variante B = nur aktiver Slot)
+    window.BK_SYNC_PATH = "/pos/live";
+  </script>
 </head>
 <body>
 
@@ -167,12 +182,20 @@
     </div>
   </div>
 
-  <!-- App Scripts (ohne Firebase/Sync) -->
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/data.js?v=7"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/prices.js?v=7"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/state.js?v=7"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/logic.js?v=7"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/ui.js?v=7"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/main.js?v=7"></script>
+  <!-- App Scripts -->
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/data.js?v=8"></script>
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/prices.js?v=8"></script>
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/state.js?v=8"></script>
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/logic.js?v=8"></script>
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/ui.js?v=8"></script>
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/main.js?v=8"></script>
+
+  <!-- Firebase SDKs (Compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+  <!-- Live Sync (Variante B: nur aktiver Slot) -->
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/sync.js?v=8"></script>
 </body>
 </html>
