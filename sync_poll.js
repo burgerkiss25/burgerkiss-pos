@@ -1,161 +1,128 @@
-// sync_poll.js – BurgerKiss POS Live-Sync (Variante B: nur aktiver Slot)
-// Polling-basiert (stabil & simpel): kein Realtime-Listener, kein setState-Hook.
+// sync_poll.js – BurgerKiss POS Live-Sync (Variante B: 1 Slot gespiegelt)
+// Polling-basiert: stabil & simpel. Mit BK_SYNC_FORCE_SLOT = 'SN1' arbeiten alle
+// Geräte auf demselben Slot (volle Spiegelung).
 
-"use strict";
-
-/** 👉 Deine Realtime-Database URL (REGION beachten!) */
-const DB_URL = "https://burgerkiss-pos-default-rtdb.europe-west1.firebasedatabase.app/";
-
-(function () {
-  // Schalter: Sync global abschalten, falls gesetzt
+(function(){
   if (window.BK_SYNC_ENABLED === false) return;
   if (!window.FIREBASE_CONFIG) return;
 
-  /** Warten bis BK_STATE verfügbar ist */
-  function hasState() {
-    return !!(
-      window.BK_STATE &&
-      typeof BK_STATE.getState === "function" &&
-      typeof BK_STATE.setState === "function"
-    );
-  }
-  function later(fn, ms) {
-    return setTimeout(fn, ms);
-  }
-  function json(x) {
-    try { return JSON.stringify(x); } catch (_) { return ""; }
-  }
-  function clone(x) {
-    try { return JSON.parse(JSON.stringify(x)); } catch (_) { return null; }
+  // ---------- kleine Helfer ----------
+  function later(fn, ms){ return setTimeout(fn, ms); }
+  function json(x){ try { return JSON.stringify(x); } catch(e){ return ''; } }
+  function clone(x){ try { return JSON.parse(JSON.stringify(x)); } catch(e){ return null; } }
+
+  // Prüfen ob State-API bereit
+  function hasState(){
+    return !!(window.BK_STATE &&
+              typeof BK_STATE.getState === 'function' &&
+              typeof BK_STATE.setState === 'function');
   }
 
-  function boot() {
+  // Slot-Label bestimmen (Force-Mode = immer derselbe Slot)
+  function slotLabel(){
+    if (window.BK_SYNC_FORCE_SLOT && typeof BK_SYNC_FORCE_SLOT === 'string') {
+      return BK_SYNC_FORCE_SLOT;
+    }
+    // Fallback: immer SN1
+    return 'SN1';
+  }
+
+  // ---------- Boot ----------
+  function boot(){
     if (!hasState()) { later(boot, 150); return; }
 
-    // Firebase initialisieren (compat SDKs)
-    const app  = (firebase.apps && firebase.apps.length) ? firebase.app() : firebase.initializeApp(window.FIREBASE_CONFIG);
+    const app = (window.firebase.apps && firebase.apps.length)
+      ? firebase.app()
+      : firebase.initializeApp(window.FIREBASE_CONFIG);
+
     const auth = firebase.auth();
-    const db   = firebase.database(); // wir nutzen refFromURL() mit DB_URL
+    const db   = firebase.database();
 
-    // Basis-Pfad in der DB (z. B. /pos/live/SN1)
-    const BASE = (window.BK_SYNC_PATH || "/pos/live").replace(/\/+$/, "");
+    // Basis-Pfad, z.B. '/pos/live'
+    const BASE = (window.BK_SYNC_PATH || '/pos/live').replace(/\/+$/,'');
+    const SLOT = slotLabel(); // z.B. 'SN1'
+    const REF  = db.ref(`${BASE}/${SLOT}`);
 
-    // Geräte-ID (zur Duplikat-Erkennung)
-    let deviceId = localStorage.getItem("bk_device_id");
-    if (!deviceId) {
-      deviceId = "dev-" + Math.random().toString(36).slice(2, 8);
-      localStorage.setItem("bk_device_id", deviceId);
+    // leichte Sender-ID (pro Gerät)
+    const sender = `dev-${Math.random().toString(36).slice(2,8)}`;
+    window.BK_SYNC = { sender, path: `${BASE}/${SLOT}` };
+
+    // anonym anmelden
+    auth.signInAnonymously().catch(function(e){
+      console.warn('firebase auth anonymous failed:', e && e.message);
+    });
+
+    // lokaler Hash verhindert unnötige Writes
+    let lastLocalHash = '';
+    let lastRemoteHash = '';
+
+    function packState(){
+      const s = clone(BK_STATE.getState());
+      if (!s) return null;
+
+      // Wir synchronisieren NUR den aktiven Slot-Inhalt, damit es klein bleibt.
+      const a = Math.max(0, Math.min((s.active|0), (s.slots.length-1)));
+      const active = s.slots[a] || {name:'SN1', items:[], pay:'unpaid'};
+
+      const payload = {
+        slot:   { name: slotLabel(), items: active.items||[], pay: active.pay||'unpaid' },
+        sender: sender,
+        ts:     Date.now()
+      };
+      payload.hash = json({slot: payload.slot}); // Hash ohne flüchtige Felder
+      return payload;
     }
 
-    // Hilfsfunktionen auf BK_STATE
-    const getState = () => BK_STATE.getState();
-    const setState = (s) => BK_STATE.setState(s);
+    function pushIfChanged(){
+      const p = packState();
+      if (!p) return;
 
-    function activeSlotInfo() {
-      const s = getState();
-      if (!s || !Array.isArray(s.slots) || !s.slots.length) {
-        return { idx: 0, name: "SN1", slot: null };
-      }
-      const idx = Math.max(0, Math.min((s.active | 0) || 0, s.slots.length - 1));
-      const slot = s.slots[idx] || null;
-      const name = slot && slot.name ? slot.name : "SN" + (idx + 1);
-      return { idx, name, slot };
-    }
-
-    // Referenzen mit fixer DB_URL bilden
-    function ref(path) {
-      const url = DB_URL.replace(/\/$/, "") + path;
-      // refFromURL toleriert volle URL
-      return db.refFromURL(url);
-    }
-    function pathFor(slotName) {
-      return BASE + "/" + slotName;
-    }
-
-    // Hash-Vergleiche (lokal/remote)
-    let lastLocalHash  = "";
-    let lastRemoteHash = "";
-    let lastSlotName   = "";
-    let applyingRemote = false;
-
-    function localHash() {
-      const { slot } = activeSlotInfo();
-      return json(slot);
-    }
-
-    // Lokale Änderungen zur DB pushen
-    function pushIfChanged() {
-      if (applyingRemote) return;
-
-      const curHash = localHash();
-      if (!curHash) return;
-
-      const { name } = activeSlotInfo();
-      if (name !== lastSlotName) {
-        lastSlotName = name;
-        lastRemoteHash = ""; // Slot-Wechsel → Remote neu ermitteln
-      }
-
-      if (curHash !== lastLocalHash) {
-        lastLocalHash = curHash;
-      }
-
-      if (lastLocalHash && lastLocalHash !== lastRemoteHash) {
-        const { name, slot } = activeSlotInfo();
-        const payload = { sender: deviceId, ts: Date.now(), hash: lastLocalHash, slot: slot || null };
-        ref(pathFor(name)).set(payload).catch(() => {});
+      if (p.hash !== lastLocalHash){
+        // nur schreiben, wenn sich lokal wirklich etwas geändert hat
+        REF.update(p).catch(function(e){
+          console.warn('sync push failed', e && e.message);
+        });
+        lastLocalHash = p.hash;
       }
     }
 
-    // Remote lesen & anwenden
-    function pullAndApply() {
-      const { name, idx } = activeSlotInfo();
-      if (!name) return;
+    function pullAndApply(){
+      REF.get().then(function(snap){
+        const val = snap.val();
+        if (!val || !val.slot) return;
 
-      ref(pathFor(name)).get().then((snap) => {
-        const v = snap.val();
-        if (!v) return;                    // nichts auf der Leitung → warten
-        if (v.sender === deviceId) {       // eigene Updates ignorieren
-          lastRemoteHash = v.hash || "";
-          return;
+        const remoteHash = val.hash || json({slot: val.slot});
+        // Wenn remote neuer Stand ≠ letzter angewandter Stand → anwenden
+        if (remoteHash !== lastRemoteHash){
+          lastRemoteHash = remoteHash;
+
+          // aktuellen State nehmen und NUR aktiven Slot ersetzen
+          const current = clone(BK_STATE.getState()) || {slots:[{name:slotLabel(), items:[], pay:'unpaid'}], active:0, discountRate:0};
+          const a = Math.max(0, Math.min((current.active|0), (current.slots.length-1)));
+          current.slots[a] = {
+            name: slotLabel(),
+            items: Array.isArray(val.slot.items) ? val.slot.items : [],
+            pay:   val.slot.pay || 'unpaid'
+          };
+          // Anwenden (keine Endlosschleife, weil unser lokaler Hash sich danach sofort angleicht)
+          BK_STATE.setState(current);
+          // nach apply lokalen Hash angleichen, damit push nicht sofort feuert
+          lastLocalHash = remoteHash;
         }
-
-        const curHash = localHash();
-        lastRemoteHash = v.hash || "";
-
-        if (lastRemoteHash === curHash) return; // bereits gleich
-
-        if (v.slot) {
-          applyingRemote = true;
-          try {
-            const state = getState();
-            const next  = clone(state);
-            if (!next || !Array.isArray(next.slots)) return;
-
-            next.slots[idx] = v.slot; // nur aktiven Slot ersetzen
-            setState(next);
-            lastLocalHash = json(v.slot);
-          } finally {
-            later(() => { applyingRemote = false; }, 80);
-          }
-        }
-      }).catch(() => {});
-    }
-
-    // Poll-Loop
-    function loop() {
-      try { pushIfChanged(); } catch (_) {}
-      later(() => { try { pullAndApply(); } catch (_) {} }, 150);
-    }
-
-    // Anmelden (anonym) und starten
-    auth.signInAnonymously()
-      .catch(() => {})
-      .finally(() => {
-        // sanfter Poll-Intervall
-        setInterval(loop, 1500); // alle 1.5 s
-        loop();                  // sofort einmal
+      }).catch(function(e){
+        console.warn('sync pull failed', e && e.message);
       });
+    }
+
+    // sanftes Polling (schreibe & lese)
+    function tick(){
+      try { pushIfChanged(); pullAndApply(); }
+      catch(e){ /* still */ }
+      finally { later(tick, 1200); } // ~1.2s
+    }
+
+    // beim Start den Slot-Knoten “markieren”
+    REF.update({ sender, ts: Date.now() }).finally(tick);
   }
 
   boot();
