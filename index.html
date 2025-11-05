@@ -3,23 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>BurgerKiss – POS</title>
-
-  <!-- Firebase Config (dein Projekt) -->
-  <script>
-    window.FIREBASE_CONFIG = {
-      apiKey: "AIzaSyD1LNc1SPciD6k5GYbzimLqs0XZRf54DUs",
-      authDomain: "burgerkiss-pos.firebaseapp.com",
-      databaseURL: "https://burgerkiss-pos-default-rtdb.europe-west1.firebasedatabase.app/",
-      projectId: "burgerkiss-pos",
-      storageBucket: "burgerkiss-pos.firebasestorage.app",
-      messagingSenderId: "1041746532885",
-      appId: "1:1041746532885:web:3a20041480487fb60c399c"
-    };
-  </script>
-
-  <!-- Styles -->
-  <link rel="stylesheet" href="https://burgerkiss25.github.io/burgerkiss-pos/style.css?v=5" />
+  <title>BurgerKiss – POS Variante A (lokal)</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="hud-wrap">
@@ -27,8 +12,8 @@
       <div class="totals">
         <h1 id="grand">0 GHS</h1>
         <div class="stats">
-          <span class="pill" id="combosPill">Combos: 0</span>
-          <span class="pill" id="discountTag">No discount</span>
+          <span class="pill" id="combosPill">Combos 0</span>
+          <span class="pill" id="discountTag">No Discount</span>
         </div>
       </div>
       <div class="tabbar">
@@ -46,10 +31,10 @@
       <div class="toolbar">
         <button class="ghost" id="btnUndo">Undo</button>
         <button class="danger" id="btnReset">Reset</button>
-        <button class="disc" data-disc="0.01">-1%</button>
-        <button class="disc" data-disc="0.03">-3%</button>
-        <button class="disc" data-disc="0.05">-5%</button>
-        <button class="disc" data-disc="0.10">-10%</button>
+        <button class="disc" data-disc="0.01">-1 %</button>
+        <button class="disc" data-disc="0.03">-3 %</button>
+        <button class="disc" data-disc="0.05">-5 %</button>
+        <button class="disc" data-disc="0.10">-10 %</button>
         <button class="ok" id="btnClearDisc">Clear Discount</button>
         <button class="ghost" id="btnClearStorage">Clear Storage</button>
       </div>
@@ -61,7 +46,7 @@
     </div>
   </div>
 
-  <!-- Kategorien -->
+  <!-- Kategorie-Tabs -->
   <div class="catbar">
     <button class="tab active" data-cat="all">All</button>
     <button class="tab" data-cat="burger">Burgers</button>
@@ -72,11 +57,12 @@
   </div>
 
   <div class="wrap">
-    <!-- ORDER -->
+    <!-- Order -->
     <section id="tab-order">
       <div class="grid" id="buttons"></div>
+
       <div class="note-box">
-        <input id="noteInput" placeholder="Note for NEXT item (e.g. 'no onion')" />
+        <input id="noteInput" placeholder="Note for next item (e.g. 'no onion')" />
         <div class="quick">
           <span class="chip quick-note">No onion</span>
           <span class="chip quick-note">Extra onion</span>
@@ -84,6 +70,7 @@
           <span class="chip quick-note">Extra spicy</span>
         </div>
       </div>
+
       <div class="panel">
         <h3>Current items (active slot)</h3>
         <div class="rows" id="lines"></div>
@@ -93,14 +80,14 @@
       </div>
     </section>
 
-    <!-- MAKE -->
+    <!-- Make -->
     <section id="tab-make" class="hidden">
       <div id="makeList" class="panel">
         <h3>Preparation – mark items as done</h3>
       </div>
     </section>
 
-    <!-- PAY -->
+    <!-- Pay -->
     <section id="tab-pay" class="hidden">
       <div id="payList" class="panel">
         <h3>Payment status</h3>
@@ -112,11 +99,10 @@
       </div>
     </section>
 
-    <!-- PRINT AREA -->
     <section id="printArea" class="hidden"></section>
   </div>
 
-  <!-- SUMMARY MODAL -->
+  <!-- Summary -->
   <div class="modal" id="modalSummary">
     <div class="sheet">
       <header>
@@ -127,7 +113,7 @@
     </div>
   </div>
 
-  <!-- RECEIPT MODAL -->
+  <!-- Receipt -->
   <div class="modal" id="modalReceipt">
     <div class="sheet">
       <header>
@@ -143,7 +129,7 @@
     </div>
   </div>
 
-  <!-- PRICES MODAL -->
+  <!-- Edit Prices -->
   <div class="modal" id="modalPrices">
     <div class="sheet">
       <header>
@@ -158,7 +144,7 @@
     </div>
   </div>
 
-  <!-- GROUP MODAL -->
+  <!-- Group -->
   <div class="modal" id="modalGroup">
     <div class="sheet">
       <header>
@@ -173,20 +159,12 @@
     </div>
   </div>
 
-  <!-- Firebase SDKs (Compat) -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-
-  <!-- Live Sync -->
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/sync.js?v=5"></script>
-
-  <!-- App Scripts -->
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/data.js?v=5"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/prices.js?v=5"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/state.js?v=5"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/logic.js?v=5"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/ui.js?v=5"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/main.js?v=5"></script>
+  <!-- App-Skripte -->
+  <script src="data.js?v=7"></script>
+  <script src="prices.js?v=7"></script>
+  <script src="state.js?v=7"></script>
+  <script src="logic.js?v=7"></script>
+  <script src="ui.js?v=7"></script>
+  <script src="main.js?v=7"></script>
 </body>
 </html>
