@@ -83,7 +83,9 @@
     items.forEach(it=>{
       const b = document.createElement('button');
       b.className='item';
-      b.innerHTML = `<div class="name">${it.name}</div>
+      const img = BK_IMAGES.get(it.id);
+      b.innerHTML = `${img ? `<img class="item-thumb" src="${img}" alt="${it.name}">` : ''}
+                     <div class="name">${it.name}</div>
                      <div class="price">${it.cat==='burger'?'Single':'Price'}: ${BK_PRICES.getPrice(it.id)} GHS</div>
                      <span class="badge">+1</span>`;
       b.onclick = ()=>{
@@ -285,6 +287,12 @@
   const savePrices = ()=> BK_PRICES.save();
   const resetPrices = ()=> BK_PRICES.reset();
 
+  // Images modal
+  const openImages = ()=> BK_IMAGES.openEditor();
+  const closeImages = ()=> BK_IMAGES.closeEditor();
+  const saveImages = ()=> BK_IMAGES.save();
+  const resetImages = ()=> BK_IMAGES.reset();
+
   function openGroup(){
     groupSel = new Set();
     const {slots} = BK_STATE.getState();
@@ -378,6 +386,7 @@
     openSummary, closeSummary,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
+    openImages, closeImages, saveImages, resetImages,
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
