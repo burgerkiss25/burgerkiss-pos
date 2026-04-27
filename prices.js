@@ -47,13 +47,19 @@
     localStorage.setItem(KEY, JSON.stringify(MAP));
     closeEditor();
     window.BK_UI.renderAll(); // refresh
-    alert('Prices saved locally.');
+    if(window.BK_UI && BK_UI.infoDialog) BK_UI.infoDialog('Prices saved locally.');
   }
   function reset(){
-    if(!confirm('Reset all edited prices to defaults?')) return;
-    MAP = {};
-    localStorage.removeItem(KEY);
-    openEditor(true);
+    const run = ()=>{
+      MAP = {};
+      localStorage.removeItem(KEY);
+      openEditor(true);
+    };
+    if(window.BK_UI && BK_UI.confirmDialog){
+      BK_UI.confirmDialog('Reset prices', 'Reset all edited prices to defaults?').then(ok=>{ if(ok) run(); });
+      return;
+    }
+    run();
   }
 
   // expose

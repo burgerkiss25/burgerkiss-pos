@@ -4,16 +4,26 @@
   const had = BK_STATE.load();
   if(!had) BK_STATE.addSlot();
 
+  const forceSlot = !!(window.BK_SYNC_FORCE_SLOT && typeof window.BK_SYNC_FORCE_SLOT === 'string');
+
   // Buttons
-  document.getElementById('btnUndo').onclick = ()=>{ BK_STATE.undo(); BK_UI.renderAll(); };
-  document.getElementById('btnReset').onclick= ()=>{ if(BK_STATE.clearAll()) BK_UI.renderAll(); };
-  document.querySelectorAll('.disc').forEach(b=> b.onclick = ()=>{ BK_STATE.setDiscount(Number(b.dataset.disc)); BK_UI.renderAll(); });
-  document.getElementById('btnClearDisc').onclick = ()=>{ BK_STATE.setDiscount(0); BK_UI.renderAll(); };
-  document.getElementById('btnClearStorage').onclick = ()=> BK_STATE.clearStorage();
+  document.getElementById('btnUndo').onclick = ()=>{ BK_STATE.undo(); BK_UI.renderOrder(); BK_UI.renderMake(); BK_UI.refreshTotals(); };
+  document.getElementById('btnReset').onclick= ()=> BK_UI.clearAllWithConfirm();
+  document.querySelectorAll('.disc').forEach(b=> b.onclick = ()=>{ BK_STATE.setDiscount(Number(b.dataset.disc)); BK_UI.refreshTotals(); });
+  document.getElementById('btnClearDisc').onclick = ()=>{ BK_STATE.setDiscount(0); BK_UI.refreshTotals(); };
+  document.getElementById('btnClearStorage').onclick = ()=> BK_UI.clearStorageWithConfirm();
 
   document.getElementById('btnAddSlot').onclick = ()=>{ BK_STATE.addSlot(); BK_UI.renderAll(); };
-  document.getElementById('btnRenameSlot').onclick = ()=>{ BK_STATE.renameActive(); BK_UI.renderAll(); };
-  document.getElementById('btnDeleteSlot').onclick = ()=>{ BK_STATE.deleteActive(); BK_UI.renderAll(); };
+  document.getElementById('btnRenameSlot').onclick = ()=> BK_UI.renameActiveSlot();
+  document.getElementById('btnDeleteSlot').onclick = ()=> BK_UI.deleteActiveSlot();
+
+  if(forceSlot){
+    ['btnAddSlot', 'btnRenameSlot', 'btnDeleteSlot'].forEach(id=>{
+      const el = document.getElementById(id);
+      el.classList.add('disabled');
+      el.onclick = ()=> BK_UI.infoDialog(`Slot management disabled while force-slot mode is active (${window.BK_SYNC_FORCE_SLOT}).`);
+    });
+  }
 
   // Quick notes
   document.querySelectorAll('.quick-note').forEach(el=>{
@@ -56,7 +66,7 @@
   document.getElementById('gMake').onclick    = ()=> BK_UI.groupMakeReceipt();
   document.getElementById('gPaid').onclick    = ()=> BK_UI.groupMarkPaid();
 
-  // Category tabs (NEU)
+  // Category tabs
   document.querySelectorAll('.catbar .tab').forEach(btn=>{
     btn.onclick = () => BK_UI.setCategory(btn.dataset.cat);
   });
