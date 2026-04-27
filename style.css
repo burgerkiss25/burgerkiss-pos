@@ -15,6 +15,7 @@ header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:10px 10px
 .hud-rows button,.hud-rows .chip{
   padding:8px 10px;border-radius:10px;border:1px solid #2b2e35;background:#171a20;color:#e9edf2;font-weight:600;font-size:13px;cursor:pointer
 }
+.hud-rows .disabled{opacity:.45;filter:saturate(.5)}
 .chip.active{outline:2px solid #3a3f48}
 .tabbar{display:flex;gap:8px;margin-left:auto}
 .tabbar button{background:#151920;border:1px solid #28303a;cursor:pointer}

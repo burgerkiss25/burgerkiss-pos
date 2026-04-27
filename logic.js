@@ -1,5 +1,19 @@
 // Preis-/Combo-Logik (pro Slot + global)
 (function(){
+  function makeItemKey(itemId, note){
+    return JSON.stringify([itemId, note || '']);
+  }
+  function parseItemKey(key){
+    try{
+      const arr = JSON.parse(key);
+      if(Array.isArray(arr) && typeof arr[0]==='string'){
+        return [arr[0], typeof arr[1]==='string' ? arr[1] : ''];
+      }
+    }catch(e){}
+    const legacy = String(key || '').split('|');
+    return [legacy[0] || '', legacy[1] || ''];
+  }
+
   function computeSlot(slot){
     const counts = {}; BK_DATA.BASE.forEach(x=>counts[x.id]=0);
     slot.items.forEach(it=> counts[it.itemId]++);
@@ -65,43 +79,24 @@
   function groupCounts(items){
     const counts={};
     items.forEach(it=>{
-      const key = it.itemId + (it.note ? '|' + it.note : '');
+      const key = makeItemKey(it.itemId, it.note || '');
       counts[key]=(counts[key]||0)+1;
     });
     return counts;
   }
-  function groupHtml(items){
+  function groupedLines(items){
     const counts = groupCounts(items);
-    const wrap = document.createElement('div');
-    Object.entries(counts).forEach(([key,qty])=>{
-      const [id, note=''] = key.split('|');
+    return Object.entries(counts).map(([key,qty])=>{
+      const [id, note=''] = parseItemKey(key);
       const p = BK_DATA.BASE.find(x=>x.id===id);
-      const row = document.createElement('div');
-      row.className='row'; row.style.borderTop='1px dashed #2a2f39'; row.style.padding='6px 0';
-      row.innerHTML = `<span><b>${p.name}</b> <small>× ${qty}${note?` · ${note}`:''}</small></span>
-                       <span>${qty*BK_PRICES.getPrice(id)} GHS</span>`;
-      wrap.appendChild(row);
+      return { id, note, qty, name: p ? p.name : id, total: qty*BK_PRICES.getPrice(id), key };
     });
-    return wrap.outerHTML;
   }
   function textLines(items){
-    const counts = groupCounts(items);
-    const lines = [];
-    Object.entries(counts).forEach(([key,qty])=>{
-      const [id, note=''] = key.split('|');
-      const p = BK_DATA.BASE.find(x=>x.id===id);
-      lines.push(`- ${p.name} x${qty}${note?` (${note})`:''} = ${qty*BK_PRICES.getPrice(id)} GHS`);
-    });
-    return lines.join('\n');
-  }
-  function sectionHtml(slot){
-    const c = computeSlot(slot);
-    return `<div style="margin:6px 0 10px">
-      <div><b>${slot.name}</b></div>
-      ${groupHtml(slot.items)}
-      <div class="sumline"><span>${slot.name} Subtotal</span><b>${c.subtotal} GHS</b></div>
-    </div>`;
+    return groupedLines(items)
+      .map(({name, qty, note, total})=> `- ${name} x${qty}${note?` (${note})`:''} = ${total} GHS`)
+      .join('\n');
   }
 
-  window.BK_LOGIC = { computeSlot, computeAll, groupHtml, textLines, sectionHtml };
+  window.BK_LOGIC = { computeSlot, computeAll, makeItemKey, parseItemKey, groupCounts, groupedLines, textLines };
 })();

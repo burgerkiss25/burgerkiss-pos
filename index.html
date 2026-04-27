@@ -20,6 +20,8 @@
 
     // Datenbank-Pfad für Live-Sync (unter deiner Realtime DB)
     window.BK_SYNC_PATH = '/pos/live';
+    // Optional: Polling-Intervall in ms
+    window.BK_SYNC_INTERVAL_MS = 1200;
 
     // Firebase Web SDK Konfiguration (dein Projekt)
     window.FIREBASE_CONFIG = {
@@ -68,7 +70,7 @@
       </div>
 
       <div class="toolbar" id="slotsBar">
-        <!-- Slot-Verwaltung: Trotz voreingestelltem SN1 lassen sich Slots hinzufügen, umbenennen und löschen -->
+        <!-- Slot-Verwaltung: wird im Force-Slot-Modus in main.js deaktiviert -->
         <span class="chip" id="btnAddSlot">+ Slot</span>
         <span class="chip" id="btnRenameSlot">Rename</span>
         <span class="chip" id="btnDeleteSlot">Delete</span>
