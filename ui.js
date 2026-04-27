@@ -84,14 +84,17 @@
       const b = document.createElement('button');
       b.className='item';
       const img = BK_IMAGES.get(it.id);
-      if(img){
-        b.classList.add('item-with-bg');
-        b.style.backgroundImage = `url(${img})`;
-      }else{
-        b.classList.remove('item-with-bg');
-        b.style.backgroundImage = '';
-      }
-      b.innerHTML = `<div class="name">${it.name}</div>
+const img = BK_IMAGES.get(it.id);
+if(img){
+  b.classList.add('item-with-bg');
+  b.style.backgroundImage = `url(${img})`;
+}else{
+  b.classList.remove('item-with-bg');
+  b.style.backgroundImage = '';
+}
+b.innerHTML = `<div class="name">${it.name}</div>
+               <div class="price">${it.cat==='burger'?'Single':'Price'}: ${BK_PRICES.getPrice(it.id)} GHS</div>
+               <span class="badge">+1</span>`;
                      <div class="price">${it.cat==='burger'?'Single':'Price'}: ${BK_PRICES.getPrice(it.id)} GHS</div>
                      <span class="badge">+1</span>`;
       b.onclick = ()=>{
