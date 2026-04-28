@@ -324,6 +324,49 @@
     });
   }
 
+  function renderStock(){
+    if(!window.BK_STOCK) return;
+    const payList = document.getElementById('payList');
+    if(!payList) return;
+    let host = document.getElementById('stockCard');
+    if(!host){
+      host = document.createElement('div');
+      host.id = 'stockCard';
+      host.className = 'slot-card';
+      payList.appendChild(host);
+    }
+    const {slots} = BK_STATE.getState();
+    const rows = BK_STOCK.getSnapshot(slots);
+
+    host.innerHTML = '<div class="slot-head"><div><span class="label">Stock</span> · used / left</div></div>';
+    rows.forEach(r=>{
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML = `
+        <span class="left"><b>${r.name}</b> <small>${r.start} ${r.unit || ''}</small></span>
+        <span style="${r.low ? 'color:#ffb347' : ''}">used ${r.used} · left ${r.left} ${r.unit || ''}</span>
+      `;
+      host.appendChild(row);
+    });
+  }
+
+  const openStock = ()=> BK_STOCK.openEditor();
+  const closeStock = ()=> BK_STOCK.closeEditor();
+  const saveStock = ()=>{
+    const ok = BK_STOCK.saveEditor();
+    if(!ok){ infoDialog('Invalid stock values.'); return; }
+    renderStock();
+    infoDialog('Stock saved locally.');
+  };
+  const resetStock = ()=>{
+    confirmDialog('Reset stock', 'Reset stock quantities to defaults?').then(ok=>{
+      if(!ok) return;
+      BK_STOCK.reset();
+      closeStock();
+      renderStock();
+    });
+  };
+
   function openSummary(){
     const st = BK_STATE.getState();
     if(!st.slots.length){ BK_STATE.addSlot(); }
@@ -501,6 +544,7 @@
     openPrices, closePrices, savePrices, resetPrices,
     openProducts, closeProducts, addProductRow, saveProducts, resetProducts,
     openImages, closeImages, saveImages, resetImages,
+    openStock, closeStock, saveStock, resetStock,
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,

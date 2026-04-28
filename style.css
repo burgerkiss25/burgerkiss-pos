@@ -111,10 +111,13 @@ button.item > *{position:relative;z-index:1}
   width:100%;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:6px
 }
 
+#stockBody input{
+  width:100%;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:6px
+}
+
 /* Print */
 @media print{
   .hud-wrap,.wrap > section:not(#printArea){display:none}
   #printArea{display:block}
   body{background:#fff;color:#000}
 }
-

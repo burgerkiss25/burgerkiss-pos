@@ -3,6 +3,7 @@
   BK_PRICES.load();
   BK_PRODUCTS.load();
   BK_IMAGES.load();
+  BK_STOCK.load();
   const had = BK_STATE.load();
   if(!had) BK_STATE.addSlot();
 
@@ -103,7 +104,13 @@
   document.getElementById('iSave').onclick     = ()=> BK_UI.saveImages();
   document.getElementById('iReset').onclick    = ()=> BK_UI.resetImages();
 
-  ;['btnPrices','btnProducts','btnImages'].forEach(id=>{
+  // Stock
+  document.getElementById('btnStock').onclick = ()=> BK_UI.openStock();
+  document.getElementById('sClose').onclick   = ()=> BK_UI.closeStock();
+  document.getElementById('sSave').onclick    = ()=> BK_UI.saveStock();
+  document.getElementById('sReset').onclick   = ()=> BK_UI.resetStock();
+
+  ;['btnPrices','btnProducts','btnImages','btnStock'].forEach(id=>{
     const prev = document.getElementById(id).onclick;
     document.getElementById(id).onclick = ()=>{ editMenu.classList.remove('open'); if(typeof prev==='function') prev(); };
   });
