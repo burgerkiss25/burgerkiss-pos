@@ -57,6 +57,16 @@
         <button class="x" id="btnImages">Edit Images</button>
         <button class="x" id="btnGroup">Group Ticket</button>
       </div>
+  <button id="tabOrder" class="active">Order</button>
+  <button id="tabMake">Make</button>
+  <button id="tabPay">Pay</button>
+  <button class="x" id="btnSummary">Summary</button>
+  <button class="x" id="btnReceipt">Receipt</button>
+  <button class="x" id="btnPrices">Edit Prices</button>
+  <button class="x" id="btnProducts">Edit Products</button>
+  <button class="x" id="btnImages">Edit Images</button>
+  <button class="x" id="btnGroup">Group Ticket</button>
+</div>
     </header>
 
     <div class="hud-rows">
@@ -214,6 +224,36 @@
       <div class="body" id="imagesBody"></div>
     </div>
   </div>
+<!-- PRODUCTS MODAL -->
+<div class="modal" id="modalProducts">
+  <div class="sheet">
+    <header>
+      <b>Edit Products</b>
+      <div>
+        <button class="x" id="prodAdd">+ Add</button>
+        <button class="x" id="prodSave">Save</button>
+        <button class="x" id="prodReset">Reset</button>
+        <button class="x" id="prodClose">Close</button>
+      </div>
+    </header>
+    <div class="body" id="productsBody"></div>
+  </div>
+</div>
+
+<!-- IMAGES MODAL -->
+<div class="modal" id="modalImages">
+  <div class="sheet">
+    <header>
+      <b>Edit Images</b>
+      <div>
+        <button class="x" id="iSave">Save</button>
+        <button class="x" id="iReset">Reset</button>
+        <button class="x" id="iClose">Close</button>
+      </div>
+    </header>
+    <div class="body" id="imagesBody"></div>
+  </div>
+</div>
 
   <!-- GROUP MODAL -->
   <div class="modal" id="modalGroup">
@@ -247,5 +287,7 @@
 
   <!-- =============== Live-Sync (Variante B, Polling) =============== -->
   <script src="https://burgerkiss25.github.io/burgerkiss-pos/sync_poll.js?v=11"></script>
+
+  
 </body>
 </html>

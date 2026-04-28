@@ -44,6 +44,11 @@ button.item{
   color:#ecf0f1;padding:10px;text-align:left;position:relative;overflow:hidden;cursor:pointer
 }
 button.item:active{transform:scale(.98)}
+button.item{
+  aspect-ratio:1/1;border-radius:12px;border:1px solid var(--line);background:var(--card);
+  color:#ecf0f1;padding:10px;text-align:left;position:relative;overflow:hidden;cursor:pointer
+}
+button.item:active{transform:scale(.98)}
 button.item.item-with-bg{background-size:cover;background-position:center;background-repeat:no-repeat}
 button.item.item-with-bg::before{
   content:'';position:absolute;inset:0;
