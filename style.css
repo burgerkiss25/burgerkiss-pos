@@ -44,9 +44,17 @@ button.item{
   color:#ecf0f1;padding:10px;text-align:left;position:relative;overflow:hidden;cursor:pointer
 }
 button.item:active{transform:scale(.98)}
+button.item.item-with-bg{background-size:cover;background-position:center;background-repeat:no-repeat}
+button.item.item-with-bg::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(to top, rgba(6,9,14,.88) 0%, rgba(6,9,14,.55) 36%, rgba(6,9,14,.30) 62%, rgba(6,9,14,.20) 100%);
+}
+button.item > *{position:relative;z-index:1}
 .name{font-weight:800;font-size:15px;margin-bottom:6px}
 .price{font-size:12px;color:var(--muted)}
 .badge{position:absolute;right:8px;bottom:8px;background:#21242a;border:1px solid #2e323a;padding:2px 8px;border-radius:8px;font-size:12px;color:#c9d1d9}
+
+.img-preview{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #2a2f39;margin-right:8px}
 
 .toolbar{display:flex;gap:8px;flex-wrap:wrap}
 .toolbar .danger{background:#23181a;border-color:#3b1f23;color:#ffd6dc}
@@ -89,6 +97,10 @@ button.item:active{transform:scale(.98)}
 .sheet header{position:sticky;top:0;background:#0f1217;border-bottom:1px solid #212732;display:flex;justify-content:space-between;align-items:center;padding:10px 12px}
 .sheet .body{padding:10px 12px}
 .x{border:none;background:#1b1f27;border:1px solid #2d3440;color:#eaeef2;padding:8px 10px;border-radius:10px;cursor:pointer}
+
+#productsBody input{
+  width:100%;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:6px
+}
 
 /* Print */
 @media print{
