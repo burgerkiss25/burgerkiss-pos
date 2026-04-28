@@ -1,4 +1,5 @@
 // Slots/Discount/Undo + Persistenz
+
 (function(){
   const SAVE_KEY = 'bk_state_v5';
   let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo'}]
