@@ -73,6 +73,17 @@
   document.getElementById('rWA').onclick        = ()=> BK_UI.shareWA();
   document.getElementById('rPrint').onclick     = ()=> BK_UI.printReceipt();
 
+  // Edit dropdown
+  const editMenuWrap = document.getElementById('editMenuWrap');
+  const editMenu = document.getElementById('editMenu');
+  document.getElementById('btnEditMenu').onclick = (e)=>{
+    e.stopPropagation();
+    editMenu.classList.toggle('open');
+  };
+  document.addEventListener('click', (e)=>{
+    if(!editMenuWrap.contains(e.target)) editMenu.classList.remove('open');
+  });
+
   // Prices
   document.getElementById('btnPrices').onclick = ()=> BK_UI.openPrices();
   document.getElementById('pClose').onclick    = ()=> BK_UI.closePrices();

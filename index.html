@@ -52,9 +52,14 @@
         <button id="tabPay">Pay</button>
         <button class="x" id="btnSummary">Summary</button>
         <button class="x" id="btnReceipt">Receipt</button>
-        <button class="x" id="btnPrices">Edit Prices</button>
-        <button class="x" id="btnProducts">Edit Products</button>
-        <button class="x" id="btnImages">Edit Images</button>
+        <div class="edit-menu-wrap" id="editMenuWrap">
+          <button class="x" id="btnEditMenu">Edit ▾</button>
+          <div class="edit-menu" id="editMenu">
+            <button class="x" id="btnPrices">Edit Prices</button>
+            <button class="x" id="btnProducts">Edit Products</button>
+            <button class="x" id="btnImages">Edit Images</button>
+          </div>
+        </div>
         <button class="x" id="btnGroup">Group Ticket</button>
       </div>
     </header>
@@ -181,7 +186,7 @@
     </div>
   </div>
 
-  <!-- PRODUCTS MODAL -->
+<!-- PRODUCTS MODAL -->
   <div class="modal" id="modalProducts">
     <div class="sheet">
       <header>
@@ -245,4 +250,4 @@
   <!-- =============== Live-Sync (Variante B, Polling) =============== -->
   <script src="https://burgerkiss25.github.io/burgerkiss-pos/sync_poll.js?v=11"></script>
 </body>
-</html>
+  </html>

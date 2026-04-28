@@ -21,6 +21,15 @@ header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:10px 10px
 .tabbar button{background:#151920;border:1px solid #28303a;cursor:pointer}
 .tabbar .active{background:#1b2027;border-color:#384352}
 
+.edit-menu-wrap{position:relative;display:inline-flex}
+.edit-menu{
+  position:absolute;right:0;top:calc(100% + 6px);display:none;min-width:170px;
+  padding:6px;background:#101319;border:1px solid #2a313b;border-radius:10px;z-index:120;
+  box-shadow:0 8px 20px rgba(0,0,0,.35)
+}
+.edit-menu.open{display:flex;flex-direction:column;gap:6px}
+.edit-menu .x{width:100%;text-align:left}
+
 /* Category bar (NEU) */
 .catbar{
   position:sticky; top:98px; z-index:40;
