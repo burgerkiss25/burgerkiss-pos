@@ -79,10 +79,20 @@
   function buildProducts(){
     const grid = document.getElementById('buttons');
     grid.innerHTML = '';
-    const items = BK_DATA.BASE.filter(it => currentCat==='all' ? true : it.cat===currentCat);
+    const base = (Array.isArray(BK_DATA.BASE) && BK_DATA.BASE.length) ? BK_DATA.BASE : (BK_DATA.DEFAULT_BASE || []);
+    if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
+    const items = base.filter(it => currentCat==='all' ? true : it.cat===currentCat);
     items.forEach(it=>{
       const b = document.createElement('button');
       b.className='item';
+      const img = BK_IMAGES.get(it.id);
+      if(img){
+        b.classList.add('item-with-bg');
+        b.style.backgroundImage = `url(${img})`;
+      }else{
+        b.classList.remove('item-with-bg');
+        b.style.backgroundImage = '';
+      }
       b.innerHTML = `<div class="name">${it.name}</div>
                      <div class="price">${it.cat==='burger'?'Single':'Price'}: ${BK_PRICES.getPrice(it.id)} GHS</div>
                      <span class="badge">+1</span>`;
@@ -285,6 +295,19 @@
   const savePrices = ()=> BK_PRICES.save();
   const resetPrices = ()=> BK_PRICES.reset();
 
+  // Products modal
+  const openProducts = ()=> BK_PRODUCTS.openEditor();
+  const closeProducts = ()=> BK_PRODUCTS.closeEditor();
+  const addProductRow = ()=> BK_PRODUCTS.addRow();
+  const saveProducts = ()=> BK_PRODUCTS.save();
+  const resetProducts = ()=> BK_PRODUCTS.reset();
+
+  // Images modal
+  const openImages = ()=> BK_IMAGES.openEditor();
+  const closeImages = ()=> BK_IMAGES.closeEditor();
+  const saveImages = ()=> BK_IMAGES.save();
+  const resetImages = ()=> BK_IMAGES.reset();
+
   function openGroup(){
     groupSel = new Set();
     const {slots} = BK_STATE.getState();
@@ -378,6 +401,8 @@
     openSummary, closeSummary,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
+    openProducts, closeProducts, addProductRow, saveProducts, resetProducts,
+    openImages, closeImages, saveImages, resetImages,
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,

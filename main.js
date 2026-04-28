@@ -1,10 +1,29 @@
 // Bootstrapping & Event-Wiring
 (function(){
   BK_PRICES.load();
+  BK_PRODUCTS.load();
+  BK_IMAGES.load();
   const had = BK_STATE.load();
   if(!had) BK_STATE.addSlot();
 
   const forceSlot = !!(window.BK_SYNC_FORCE_SLOT && typeof window.BK_SYNC_FORCE_SLOT === 'string');
+
+
+  function removeDuplicateIds(ids){
+    ids.forEach(id=>{
+      const nodes = document.querySelectorAll(`[id="${id}"]`);
+      nodes.forEach((n, i)=>{ if(i>0) n.remove(); });
+    });
+  }
+
+  // Schutz gegen fehlerhafte Merge-Duplikate in index.html
+  removeDuplicateIds([
+    'tabOrder','tabMake','tabPay',
+    'btnSummary','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup',
+    'btnUndo','btnReset','btnClearDisc','btnClearStorage',
+    'btnAddSlot','btnRenameSlot','btnDeleteSlot','activeSlotLabel',
+    'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalReceipt','editMenuWrap','btnEditMenu','editMenu'
+  ]);
 
   // Buttons
   document.getElementById('btnUndo').onclick = ()=>{ BK_STATE.undo(); BK_UI.renderOrder(); BK_UI.renderMake(); BK_UI.refreshTotals(); };
@@ -54,11 +73,40 @@
   document.getElementById('rWA').onclick        = ()=> BK_UI.shareWA();
   document.getElementById('rPrint').onclick     = ()=> BK_UI.printReceipt();
 
+  // Edit dropdown
+  const editMenuWrap = document.getElementById('editMenuWrap');
+  const editMenu = document.getElementById('editMenu');
+  document.getElementById('btnEditMenu').onclick = (e)=>{
+    e.stopPropagation();
+    editMenu.classList.toggle('open');
+  };
+  document.addEventListener('click', (e)=>{
+    if(!editMenuWrap.contains(e.target)) editMenu.classList.remove('open');
+  });
+
   // Prices
   document.getElementById('btnPrices').onclick = ()=> BK_UI.openPrices();
   document.getElementById('pClose').onclick    = ()=> BK_UI.closePrices();
   document.getElementById('pSave').onclick     = ()=> BK_UI.savePrices();
   document.getElementById('pReset').onclick    = ()=> BK_UI.resetPrices();
+
+  // Products
+  document.getElementById('btnProducts').onclick = ()=> BK_UI.openProducts();
+  document.getElementById('prodClose').onclick   = ()=> BK_UI.closeProducts();
+  document.getElementById('prodAdd').onclick     = ()=> BK_UI.addProductRow();
+  document.getElementById('prodSave').onclick    = ()=> BK_UI.saveProducts();
+  document.getElementById('prodReset').onclick   = ()=> BK_UI.resetProducts();
+
+  // Images
+  document.getElementById('btnImages').onclick = ()=> BK_UI.openImages();
+  document.getElementById('iClose').onclick    = ()=> BK_UI.closeImages();
+  document.getElementById('iSave').onclick     = ()=> BK_UI.saveImages();
+  document.getElementById('iReset').onclick    = ()=> BK_UI.resetImages();
+
+  ;['btnPrices','btnProducts','btnImages'].forEach(id=>{
+    const prev = document.getElementById(id).onclick;
+    document.getElementById(id).onclick = ()=>{ editMenu.classList.remove('open'); prev(); };
+  });
 
   // Group
   document.getElementById('btnGroup').onclick = ()=> BK_UI.openGroup();
