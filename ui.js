@@ -79,10 +79,20 @@
   function buildProducts(){
     const grid = document.getElementById('buttons');
     grid.innerHTML = '';
-    const items = BK_DATA.BASE.filter(it => currentCat==='all' ? true : it.cat===currentCat);
+    const base = (Array.isArray(BK_DATA.BASE) && BK_DATA.BASE.length) ? BK_DATA.BASE : (BK_DATA.DEFAULT_BASE || []);
+    if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
+    const items = base.filter(it => currentCat==='all' ? true : it.cat===currentCat);
     items.forEach(it=>{
       const b = document.createElement('button');
       b.className='item';
+      const img = BK_IMAGES.get(it.id);
+      if(img){
+        b.classList.add('item-with-bg');
+        b.style.backgroundImage = `url(${img})`;
+      }else{
+        b.classList.remove('item-with-bg');
+        b.style.backgroundImage = '';
+      }
       b.innerHTML = `<div class="name">${it.name}</div>
                      <div class="price">${it.cat==='burger'?'Single':'Price'}: ${BK_PRICES.getPrice(it.id)} GHS</div>
                      <span class="badge">+1</span>`;
@@ -111,7 +121,11 @@
     const bar = document.getElementById('slotsBar');
     bar.querySelectorAll('.slot-chip').forEach(n=>n.remove());
 
-    const ctl = Array.from(bar.children).slice(-4);
+    const controlIds = ['btnAddSlot', 'btnRenameSlot', 'btnDeleteSlot', 'activeSlotLabel'];
+    const ctl = controlIds
+      .map(id => document.getElementById(id))
+      .filter(Boolean)
+      .filter(el => el.parentElement === bar);
     ctl.forEach(c=>bar.removeChild(c));
     slots.forEach((s,i)=>{
       const el = document.createElement('span');
@@ -215,7 +229,51 @@
     document.getElementById('allSubtotal').textContent = `${g.grandSubtotal} GHS`;
     document.getElementById('allDiscount').textContent = `-${g.discount} GHS`;
     document.getElementById('allGrand').textContent = `${g.grand} GHS`;
+    renderStock();
   }
+
+  function renderStock(){
+    if(!window.BK_STOCK) return;
+    const payList = document.getElementById('payList');
+    if(!payList) return;
+    let host = document.getElementById('stockCard');
+    if(!host){
+      host = document.createElement('div');
+      host.id = 'stockCard';
+      host.className = 'slot-card';
+      payList.appendChild(host);
+    }
+    const {slots} = BK_STATE.getState();
+    const rows = BK_STOCK.getSnapshot(slots);
+
+    host.innerHTML = '<div class="slot-head"><div><span class="label">Stock</span> · used / left</div></div>';
+    rows.forEach(r=>{
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML = `
+        <span class="left"><b>${r.name}</b> <small>${r.start} ${r.unit || ''}</small></span>
+        <span style="${r.low ? 'color:#ffb347' : ''}">used ${r.used} · left ${r.left} ${r.unit || ''}</span>
+      `;
+      host.appendChild(row);
+    });
+  }
+
+  const openStock = ()=> BK_STOCK.openEditor();
+  const closeStock = ()=> BK_STOCK.closeEditor();
+  const saveStock = ()=>{
+    const ok = BK_STOCK.saveEditor();
+    if(!ok){ infoDialog('Invalid stock values.'); return; }
+    renderStock();
+    infoDialog('Stock saved locally.');
+  };
+  const resetStock = ()=>{
+    confirmDialog('Reset stock', 'Reset stock quantities to defaults?').then(ok=>{
+      if(!ok) return;
+      BK_STOCK.reset();
+      closeStock();
+      renderStock();
+    });
+  };
 
   function openSummary(){
     const st = BK_STATE.getState();
@@ -284,6 +342,19 @@
   const closePrices = ()=> BK_PRICES.closeEditor();
   const savePrices = ()=> BK_PRICES.save();
   const resetPrices = ()=> BK_PRICES.reset();
+
+  // Products modal
+  const openProducts = ()=> BK_PRODUCTS.openEditor();
+  const closeProducts = ()=> BK_PRODUCTS.closeEditor();
+  const addProductRow = ()=> BK_PRODUCTS.addRow();
+  const saveProducts = ()=> BK_PRODUCTS.save();
+  const resetProducts = ()=> BK_PRODUCTS.reset();
+
+  // Images modal
+  const openImages = ()=> BK_IMAGES.openEditor();
+  const closeImages = ()=> BK_IMAGES.closeEditor();
+  const saveImages = ()=> BK_IMAGES.save();
+  const resetImages = ()=> BK_IMAGES.reset();
 
   function openGroup(){
     groupSel = new Set();
@@ -375,9 +446,13 @@
 
   window.BK_UI = {
     renderAll, renderOrder, renderMake, renderPay, refreshTotals,
+    renderStock,
     openSummary, closeSummary,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
+    openProducts, closeProducts, addProductRow, saveProducts, resetProducts,
+    openImages, closeImages, saveImages, resetImages,
+    openStock, closeStock, saveStock, resetStock,
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
