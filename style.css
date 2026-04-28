@@ -44,6 +44,11 @@ button.item{
   color:#ecf0f1;padding:10px;text-align:left;position:relative;overflow:hidden;cursor:pointer
 }
 button.item:active{transform:scale(.98)}
+button.item{
+  aspect-ratio:1/1;border-radius:12px;border:1px solid var(--line);background:var(--card);
+  color:#ecf0f1;padding:10px;text-align:left;position:relative;overflow:hidden;cursor:pointer
+}
+button.item:active{transform:scale(.98)}
 button.item.item-with-bg{background-size:cover;background-position:center;background-repeat:no-repeat}
 button.item.item-with-bg::before{
   content:'';position:absolute;inset:0;
@@ -55,6 +60,7 @@ button.item > *{position:relative;z-index:1}
 .badge{position:absolute;right:8px;bottom:8px;background:#21242a;border:1px solid #2e323a;padding:2px 8px;border-radius:8px;font-size:12px;color:#c9d1d9}
 
 .img-preview{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #2a2f39;margin-right:8px}
+
 
 .toolbar{display:flex;gap:8px;flex-wrap:wrap}
 .toolbar .danger{background:#23181a;border-color:#3b1f23;color:#ffd6dc}
@@ -101,7 +107,6 @@ button.item > *{position:relative;z-index:1}
 #productsBody input{
   width:100%;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:6px
 }
-
 /* Print */
 @media print{
   .hud-wrap,.wrap > section:not(#printArea){display:none}
