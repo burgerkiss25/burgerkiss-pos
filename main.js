@@ -2,14 +2,28 @@
 (function(){
   BK_PRICES.load();
   BK_PRODUCTS.load();
-BK_PRICES.load();
-BK_PRODUCTS.load();
-BK_IMAGES.load();
   BK_IMAGES.load();
   const had = BK_STATE.load();
   if(!had) BK_STATE.addSlot();
 
   const forceSlot = !!(window.BK_SYNC_FORCE_SLOT && typeof window.BK_SYNC_FORCE_SLOT === 'string');
+
+
+  function removeDuplicateIds(ids){
+    ids.forEach(id=>{
+      const nodes = document.querySelectorAll(`[id="${id}"]`);
+      nodes.forEach((n, i)=>{ if(i>0) n.remove(); });
+    });
+  }
+
+  // Schutz gegen fehlerhafte Merge-Duplikate in index.html
+  removeDuplicateIds([
+    'tabOrder','tabMake','tabPay',
+    'btnSummary','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup',
+    'btnUndo','btnReset','btnClearDisc','btnClearStorage',
+    'btnAddSlot','btnRenameSlot','btnDeleteSlot','activeSlotLabel',
+    'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalReceipt'
+  ]);
 
   // Buttons
   document.getElementById('btnUndo').onclick = ()=>{ BK_STATE.undo(); BK_UI.renderOrder(); BK_UI.renderMake(); BK_UI.refreshTotals(); };
@@ -77,18 +91,6 @@ BK_IMAGES.load();
   document.getElementById('iClose').onclick    = ()=> BK_UI.closeImages();
   document.getElementById('iSave').onclick     = ()=> BK_UI.saveImages();
   document.getElementById('iReset').onclick    = ()=> BK_UI.resetImages();
-// Products
-document.getElementById('btnProducts').onclick = ()=> BK_UI.openProducts();
-document.getElementById('prodClose').onclick   = ()=> BK_UI.closeProducts();
-document.getElementById('prodAdd').onclick     = ()=> BK_UI.addProductRow();
-document.getElementById('prodSave').onclick    = ()=> BK_UI.saveProducts();
-document.getElementById('prodReset').onclick   = ()=> BK_UI.resetProducts();
-
-// Images
-document.getElementById('btnImages').onclick = ()=> BK_UI.openImages();
-document.getElementById('iClose').onclick    = ()=> BK_UI.closeImages();
-document.getElementById('iSave').onclick     = ()=> BK_UI.saveImages();
-document.getElementById('iReset').onclick    = ()=> BK_UI.resetImages();
 
   // Group
   document.getElementById('btnGroup').onclick = ()=> BK_UI.openGroup();
