@@ -95,6 +95,7 @@ if(img){
 b.innerHTML = `<div class="name">${it.name}</div>
                <div class="price">${it.cat==='burger'?'Single':'Price'}: ${BK_PRICES.getPrice(it.id)} GHS</div>
                <span class="badge">+1</span>`;
+      
                      <div class="price">${it.cat==='burger'?'Single':'Price'}: ${BK_PRICES.getPrice(it.id)} GHS</div>
                      <span class="badge">+1</span>`;
       b.onclick = ()=>{
@@ -296,6 +297,12 @@ b.innerHTML = `<div class="name">${it.name}</div>
   const savePrices = ()=> BK_PRICES.save();
   const resetPrices = ()=> BK_PRICES.reset();
 
+// Products modal
+const openProducts = ()=> BK_PRODUCTS.openEditor();
+const closeProducts = ()=> BK_PRODUCTS.closeEditor();
+const addProductRow = ()=> BK_PRODUCTS.addRow();
+const saveProducts = ()=> BK_PRODUCTS.save();
+const resetProducts = ()=> BK_PRODUCTS.reset();
   // Images modal
   const openImages = ()=> BK_IMAGES.openEditor();
   const closeImages = ()=> BK_IMAGES.closeEditor();
@@ -395,6 +402,9 @@ b.innerHTML = `<div class="name">${it.name}</div>
     openSummary, closeSummary,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
+openPrices, closePrices, savePrices, resetPrices,
+openProducts, closeProducts, addProductRow, saveProducts, resetProducts,
+openImages, closeImages, saveImages, resetImages,
     openImages, closeImages, saveImages, resetImages,
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,

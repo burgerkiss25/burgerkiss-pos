@@ -1,6 +1,9 @@
 // Bootstrapping & Event-Wiring
 (function(){
   BK_PRICES.load();
+BK_PRICES.load();
+BK_PRODUCTS.load();
+BK_IMAGES.load();
   BK_IMAGES.load();
   const had = BK_STATE.load();
   if(!had) BK_STATE.addSlot();
@@ -61,11 +64,18 @@
   document.getElementById('pSave').onclick     = ()=> BK_UI.savePrices();
   document.getElementById('pReset').onclick    = ()=> BK_UI.resetPrices();
 
-  // Images
-  document.getElementById('btnImages').onclick = ()=> BK_UI.openImages();
-  document.getElementById('iClose').onclick    = ()=> BK_UI.closeImages();
-  document.getElementById('iSave').onclick     = ()=> BK_UI.saveImages();
-  document.getElementById('iReset').onclick    = ()=> BK_UI.resetImages();
+// Products
+document.getElementById('btnProducts').onclick = ()=> BK_UI.openProducts();
+document.getElementById('prodClose').onclick   = ()=> BK_UI.closeProducts();
+document.getElementById('prodAdd').onclick     = ()=> BK_UI.addProductRow();
+document.getElementById('prodSave').onclick    = ()=> BK_UI.saveProducts();
+document.getElementById('prodReset').onclick   = ()=> BK_UI.resetProducts();
+
+// Images
+document.getElementById('btnImages').onclick = ()=> BK_UI.openImages();
+document.getElementById('iClose').onclick    = ()=> BK_UI.closeImages();
+document.getElementById('iSave').onclick     = ()=> BK_UI.saveImages();
+document.getElementById('iReset').onclick    = ()=> BK_UI.resetImages();
 
   // Group
   document.getElementById('btnGroup').onclick = ()=> BK_UI.openGroup();
