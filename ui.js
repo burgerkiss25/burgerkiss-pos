@@ -3,6 +3,51 @@
   let currentCat = 'all';
   let groupSel = new Set();
 
+  const STOCK_DEFAULT = {
+    INGREDIENTS: {
+      bun: { name: 'Burger Bun', qty: 80, unit: 'pcs' },
+      beef_patty: { name: 'Beef Patty', qty: 60, unit: 'pcs' },
+      cheese_slice: { name: 'Cheese Slice', qty: 120, unit: 'pcs' },
+      chicken_wing: { name: 'Chicken Wing', qty: 300, unit: 'pcs' },
+      fries_portion: { name: 'Fries Portion', qty: 120, unit: 'portion' },
+      coconut_fresh: { name: 'Coconut Fresh', qty: 25, unit: 'pcs' },
+      soda_can: { name: 'Soft Drink', qty: 120, unit: 'pcs' },
+      ice_tea: { name: 'Ice Tea', qty: 30, unit: 'cups' },
+      coconut_water_bottle: { name: 'Coconut Water Bottle', qty: 30, unit: 'btl' },
+      beer: { name: 'Beer', qty: 48, unit: 'btl' },
+      egg: { name: 'Egg', qty: 48, unit: 'pcs' },
+      bacon_slice: { name: 'Bacon Slice', qty: 120, unit: 'slice' }
+    },
+    RECIPES: {
+      hamburger: { bun: 1, beef_patty: 1 },
+      cheeseburger: { bun: 1, beef_patty: 1, cheese_slice: 1 },
+      w6: { chicken_wing: 6 },
+      w12: { chicken_wing: 12 },
+      w24: { chicken_wing: 24 },
+      fr_std: { fries_portion: 1 },
+      fr_lg: { fries_portion: 2 },
+      x_patty: { beef_patty: 1 },
+      x_cheese: { cheese_slice: 1 },
+      x_bacon: { bacon_slice: 1 },
+      x_egg: { egg: 1 },
+      x_omelet: { egg: 2 },
+      d_coconut: { coconut_fresh: 1 },
+      d_coke: { soda_can: 1 },
+      d_fanta_o: { soda_can: 1 },
+      d_fanta_l: { soda_can: 1 },
+      d_sprite: { soda_can: 1 },
+      d_ice_tea: { ice_tea: 1 },
+      d_cw_btl: { coconut_water_bottle: 1 },
+      d_club_s: { beer: 1 },
+      d_club_l: { beer: 1 },
+      d_guin: { beer: 1 }
+    }
+  };
+
+  function stockDefs(){
+    return (window.BK_DATA && BK_DATA.STOCK) || STOCK_DEFAULT;
+  }
+
   function htmlGroupedRows(items){
     return BK_LOGIC.groupedLines(items).map(({name, qty, note, total}) => `
       <div class="row" style="border-top:1px dashed #2a2f39;padding:6px 0">
@@ -121,7 +166,11 @@
     const bar = document.getElementById('slotsBar');
     bar.querySelectorAll('.slot-chip').forEach(n=>n.remove());
 
-    const ctl = Array.from(bar.children).slice(-4);
+    const controlIds = ['btnAddSlot', 'btnRenameSlot', 'btnDeleteSlot', 'activeSlotLabel'];
+    const ctl = controlIds
+      .map(id => document.getElementById(id))
+      .filter(Boolean)
+      .filter(el => el.parentElement === bar);
     ctl.forEach(c=>bar.removeChild(c));
     slots.forEach((s,i)=>{
       const el = document.createElement('span');
@@ -225,6 +274,54 @@
     document.getElementById('allSubtotal').textContent = `${g.grandSubtotal} GHS`;
     document.getElementById('allDiscount').textContent = `-${g.discount} GHS`;
     document.getElementById('allGrand').textContent = `${g.grand} GHS`;
+    renderStock();
+  }
+
+  function renderStock(){
+    const payList = document.getElementById('payList');
+    if(!payList) return;
+    let host = document.getElementById('stockCard');
+    if(!host){
+      host = document.createElement('div');
+      host.id = 'stockCard';
+      host.className = 'slot-card';
+      payList.appendChild(host);
+    }
+    const {slots} = BK_STATE.getState();
+    const defs = stockDefs();
+    const usage = {};
+    Object.keys(defs.INGREDIENTS || {}).forEach(k=>{ usage[k] = 0; });
+    slots.forEach(s=>{
+      s.items.forEach(it=>{
+        const rec = (defs.RECIPES || {})[it.itemId];
+        if(!rec) return;
+        Object.entries(rec).forEach(([id, qty])=>{
+          const n = Number(qty);
+          if(Number.isFinite(n) && n > 0) usage[id] = (usage[id] || 0) + n;
+        });
+      });
+    });
+    const rows = Object.entries(defs.INGREDIENTS || {}).map(([id, def])=>({
+      id,
+      name: (def && def.name) || id,
+      qty: Number(def && def.qty) || 0,
+      unit: (def && def.unit) || ''
+    }));
+
+    host.innerHTML = '<div class="slot-head"><div><span class="label">Stock</span> · used / left</div></div>';
+    rows.forEach(r=>{
+      const row = document.createElement('div');
+      row.className = 'row';
+      const start = Number(r.qty) || 0;
+      const used = usage[r.id] || 0;
+      const left = Math.max(0, start - used);
+      const low = start > 0 ? (left / start) <= 0.2 : false;
+      row.innerHTML = `
+        <span class="left"><b>${r.name}</b> <small>${start} ${r.unit || ''}</small></span>
+        <span style="${low ? 'color:#ffb347' : ''}">used ${used} · left ${left} ${r.unit || ''}</span>
+      `;
+      host.appendChild(row);
+    });
   }
 
   function openSummary(){
@@ -398,6 +495,7 @@
 
   window.BK_UI = {
     renderAll, renderOrder, renderMake, renderPay, refreshTotals,
+    renderStock,
     openSummary, closeSummary,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,

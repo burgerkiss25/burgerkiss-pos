@@ -103,6 +103,11 @@
   document.getElementById('iSave').onclick     = ()=> BK_UI.saveImages();
   document.getElementById('iReset').onclick    = ()=> BK_UI.resetImages();
 
+  ;['btnPrices','btnProducts','btnImages'].forEach(id=>{
+    const prev = document.getElementById(id).onclick;
+    document.getElementById(id).onclick = ()=>{ editMenu.classList.remove('open'); if(typeof prev==='function') prev(); };
+  });
+
   // Group
   document.getElementById('btnGroup').onclick = ()=> BK_UI.openGroup();
   document.getElementById('gClose').onclick   = ()=> BK_UI.closeGroup();
