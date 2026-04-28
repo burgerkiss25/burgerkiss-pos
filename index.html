@@ -52,7 +52,14 @@
         <button id="tabPay">Pay</button>
         <button class="x" id="btnSummary">Summary</button>
         <button class="x" id="btnReceipt">Receipt</button>
-        <button class="x" id="btnPrices">Edit Prices</button>
+        <div class="edit-menu-wrap" id="editMenuWrap">
+          <button class="x" id="btnEditMenu">Edit ▾</button>
+          <div class="edit-menu" id="editMenu">
+            <button class="x" id="btnPrices">Edit Prices</button>
+            <button class="x" id="btnProducts">Edit Products</button>
+            <button class="x" id="btnImages">Edit Images</button>
+          </div>
+        </div>
         <button class="x" id="btnGroup">Group Ticket</button>
       </div>
     </header>
@@ -127,6 +134,10 @@
         <h3>Payment status</h3>
       </div>
       <div class="panel" style="margin-top:10px">
+        <h3>Stock (used / left)</h3>
+        <div class="rows" id="stockRows"></div>
+      </div>
+      <div class="panel" style="margin-top:10px">
         <div class="sumline"><span>All Slots Subtotal</span><b id="allSubtotal">0 GHS</b></div>
         <div class="sumline"><span>Global Discount</span><b id="allDiscount">0 GHS</b></div>
         <div class="sumline"><span>Grand Total</span><b id="allGrand">0 GHS</b></div>
@@ -179,6 +190,40 @@
     </div>
   </div>
 
+
+
+
+  <!-- PRODUCTS MODAL -->
+  <div class="modal" id="modalProducts">
+    <div class="sheet">
+      <header>
+        <b>Edit Products</b>
+        <div>
+          <button class="x" id="prodAdd">+ Add</button>
+          <button class="x" id="prodSave">Save</button>
+          <button class="x" id="prodReset">Reset</button>
+          <button class="x" id="prodClose">Close</button>
+        </div>
+      </header>
+      <div class="body" id="productsBody"></div>
+    </div>
+  </div>
+
+  <!-- IMAGES MODAL -->
+  <div class="modal" id="modalImages">
+    <div class="sheet">
+      <header>
+        <b>Edit Images</b>
+        <div>
+          <button class="x" id="iSave">Save</button>
+          <button class="x" id="iReset">Reset</button>
+          <button class="x" id="iClose">Close</button>
+        </div>
+      </header>
+      <div class="body" id="imagesBody"></div>
+    </div>
+  </div>
+
   <!-- GROUP MODAL -->
   <div class="modal" id="modalGroup">
     <div class="sheet">
@@ -197,8 +242,11 @@
   <!-- ====================== App-Skripte ====================== -->
   <script src="https://burgerkiss25.github.io/burgerkiss-pos/data.js?v=11"></script>
   <script src="https://burgerkiss25.github.io/burgerkiss-pos/prices.js?v=11"></script>
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/products.js?v=11"></script>
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/images.js?v=11"></script>
   <script src="https://burgerkiss25.github.io/burgerkiss-pos/state.js?v=11"></script>
   <script src="https://burgerkiss25.github.io/burgerkiss-pos/logic.js?v=11"></script>
+  <script src="https://burgerkiss25.github.io/burgerkiss-pos/stock.js?v=11"></script>
   <script src="https://burgerkiss25.github.io/burgerkiss-pos/ui.js?v=11"></script>
   <script src="https://burgerkiss25.github.io/burgerkiss-pos/main.js?v=11"></script>
 
