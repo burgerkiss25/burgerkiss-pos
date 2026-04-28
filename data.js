@@ -31,3 +31,6 @@ window.BK_DATA = {
     included: { drink: 15, fries: 20 } // Upgrades = Differenz
   }
 };
+
+// Snapshot der Standardprodukte für lokale Resets
+window.BK_DATA.DEFAULT_BASE = JSON.parse(JSON.stringify(window.BK_DATA.BASE));
