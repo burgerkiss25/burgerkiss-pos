@@ -29,46 +29,6 @@ window.BK_DATA = {
     cheeseburger: 135,
     wings12: 110,
     included: { drink: 15, fries: 20 } // Upgrades = Differenz
-  },
-  STOCK: {
-    INGREDIENTS: {
-      bun: { name: 'Burger Bun', qty: 80, unit: 'pcs' },
-      beef_patty: { name: 'Beef Patty', qty: 60, unit: 'pcs' },
-      cheese_slice: { name: 'Cheese Slice', qty: 120, unit: 'pcs' },
-      chicken_wing: { name: 'Chicken Wing', qty: 300, unit: 'pcs' },
-      fries_portion: { name: 'Fries Portion', qty: 120, unit: 'portion' },
-      coconut_fresh: { name: 'Coconut Fresh', qty: 25, unit: 'pcs' },
-      soda_can: { name: 'Soft Drink', qty: 120, unit: 'pcs' },
-      ice_tea: { name: 'Ice Tea', qty: 30, unit: 'cups' },
-      coconut_water_bottle: { name: 'Coconut Water Bottle', qty: 30, unit: 'btl' },
-      beer: { name: 'Beer', qty: 48, unit: 'btl' },
-      egg: { name: 'Egg', qty: 48, unit: 'pcs' },
-      bacon_slice: { name: 'Bacon Slice', qty: 120, unit: 'slice' }
-    },
-    RECIPES: {
-      hamburger: { bun: 1, beef_patty: 1 },
-      cheeseburger: { bun: 1, beef_patty: 1, cheese_slice: 1 },
-      w6: { chicken_wing: 6 },
-      w12: { chicken_wing: 12 },
-      w24: { chicken_wing: 24 },
-      fr_std: { fries_portion: 1 },
-      fr_lg: { fries_portion: 2 },
-      x_patty: { beef_patty: 1 },
-      x_cheese: { cheese_slice: 1 },
-      x_bacon: { bacon_slice: 1 },
-      x_egg: { egg: 1 },
-      x_omelet: { egg: 2 },
-      d_coconut: { coconut_fresh: 1 },
-      d_coke: { soda_can: 1 },
-      d_fanta_o: { soda_can: 1 },
-      d_fanta_l: { soda_can: 1 },
-      d_sprite: { soda_can: 1 },
-      d_ice_tea: { ice_tea: 1 },
-      d_cw_btl: { coconut_water_bottle: 1 },
-      d_club_s: { beer: 1 },
-      d_club_l: { beer: 1 },
-      d_guin: { beer: 1 }
-    }
   }
 };
 
