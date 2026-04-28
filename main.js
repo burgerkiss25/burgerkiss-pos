@@ -22,7 +22,7 @@
     'btnSummary','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup',
     'btnUndo','btnReset','btnClearDisc','btnClearStorage',
     'btnAddSlot','btnRenameSlot','btnDeleteSlot','activeSlotLabel',
-    'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalReceipt','editMenuWrap','btnEditMenu','editMenu'
+    'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalReceipt'
   ]);
 
   // Buttons
@@ -102,11 +102,6 @@
   document.getElementById('iClose').onclick    = ()=> BK_UI.closeImages();
   document.getElementById('iSave').onclick     = ()=> BK_UI.saveImages();
   document.getElementById('iReset').onclick    = ()=> BK_UI.resetImages();
-
-  ;['btnPrices','btnProducts','btnImages'].forEach(id=>{
-    const prev = document.getElementById(id).onclick;
-    document.getElementById(id).onclick = ()=>{ editMenu.classList.remove('open'); prev(); };
-  });
 
   // Group
   document.getElementById('btnGroup').onclick = ()=> BK_UI.openGroup();
