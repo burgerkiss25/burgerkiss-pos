@@ -13,15 +13,38 @@
       .replace(/[^a-z0-9_\-]/g, '');
   }
 
+
+  function sanitizeRows(rows){
+    if(!Array.isArray(rows)) return [];
+    const out = [];
+    const used = new Set();
+    rows.forEach(r=>{
+      const id = normalizeId(r && r.id);
+      const name = String((r && r.name) || '').trim();
+      const price = Number(r && r.price);
+      const cat = String((r && r.cat) || '').trim().toLowerCase();
+      if(!id || !name || !Number.isFinite(price) || price < 0 || !cat || used.has(id)) return;
+      used.add(id);
+      out.push({id, name, price, cat});
+    });
+    return out;
+  }
+
   function load(){
     try{
       const raw = localStorage.getItem(KEY);
       if(!raw) return;
       const arr = JSON.parse(raw);
-      if(Array.isArray(arr) && arr.length){
-        window.BK_DATA.BASE = arr;
+      const clean = sanitizeRows(arr);
+      if(clean.length){
+        window.BK_DATA.BASE = clean;
+      }else{
+        // beschädigte lokale Produktliste zurücksetzen
+        localStorage.removeItem(KEY);
       }
-    }catch(e){}
+    }catch(e){
+      localStorage.removeItem(KEY);
+    }
   }
 
   function collectRows(){
@@ -81,7 +104,7 @@
   }
 
   function save(){
-    const rows = collectRows().filter(r=> r.id || r.name);
+    const rows = sanitizeRows(collectRows().filter(r=> r.id || r.name));
     if(!rows.length){ alert('Add at least one product.'); return; }
 
     const idSet = new Set();

@@ -61,7 +61,6 @@ button.item > *{position:relative;z-index:1}
 
 .img-preview{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #2a2f39;margin-right:8px}
 
-
 .toolbar{display:flex;gap:8px;flex-wrap:wrap}
 .toolbar .danger{background:#23181a;border-color:#3b1f23;color:#ffd6dc}
 .toolbar .ghost{background:#1a2023;border-color:#223136}
@@ -107,6 +106,7 @@ button.item > *{position:relative;z-index:1}
 #productsBody input{
   width:100%;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:6px
 }
+
 /* Print */
 @media print{
   .hud-wrap,.wrap > section:not(#printArea){display:none}
