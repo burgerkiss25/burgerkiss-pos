@@ -219,7 +219,7 @@
 
     const c = BK_LOGIC.computeSlot(s);
     setSlotTotals(c.subtotal, 0, c.subtotal);
-    ensureFlowAction('lines', '➡️ Go to Payment', ()=> goTab('pay'));
+    ensureFlowAction('lines', '➡️ Send to Kitchen (Make)', ()=> goTab('make'));
   }
 
   function renderMake(){
@@ -254,7 +254,8 @@
         list.appendChild(li);
       });
     });
-    ensureFlowAction('makeList', '➡️ Go to Issue', ()=> goTab('issue'));
+    ensureFlowAction('makeList', '➡️ Continue to Pay', ()=> goTab('pay'));
+    appendFlowAction('makeList', '＋ Start Next Order', ()=> addNewOrderFromKitchen());
   }
 
   function renderPay(){
@@ -283,7 +284,7 @@
         </div>`;
       box.appendChild(card);
     });
-    ensureFlowAction('payList', '➡️ Go to Make', ()=> goTab('make'));
+    ensureFlowAction('payList', '➡️ Continue to Issue', ()=> goTab('issue'));
   }
 
   function renderIssue(){
@@ -336,6 +337,23 @@
     row.innerHTML = '';
     const btn = document.createElement('button');
     btn.className = 'x';
+    btn.textContent = label;
+    btn.onclick = onClick;
+    row.appendChild(btn);
+  }
+  function appendFlowAction(hostId, label, onClick){
+    const host = document.getElementById(hostId);
+    if(!host) return;
+    let row = host.querySelector('.flow-action');
+    if(!row){
+      row = document.createElement('div');
+      row.className = 'flow-action';
+      row.style.marginTop = '10px';
+      host.appendChild(row);
+    }
+    const btn = document.createElement('button');
+    btn.className = 'x';
+    btn.style.marginLeft = '8px';
     btn.textContent = label;
     btn.onclick = onClick;
     row.appendChild(btn);
@@ -394,6 +412,11 @@
       infoDialog('Please confirm payment first, then use + Slot to start the next order.');
       return;
     }
+    BK_STATE.addSlot();
+    renderAll();
+    goTab('order');
+  }
+  function addNewOrderFromKitchen(){
     BK_STATE.addSlot();
     renderAll();
     goTab('order');
@@ -764,6 +787,6 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, addNewOrderFromKitchen, markIssued
   };
 })();
