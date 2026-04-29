@@ -94,24 +94,28 @@
   <div class="wrap">
     <!-- ORDER -->
     <section id="tab-order">
-      <div class="grid" id="buttons"></div>
+      <div class="order-layout">
+        <div class="order-main">
+          <div class="grid" id="buttons"></div>
 
-      <div class="note-box">
-        <input id="noteInput" placeholder="Note for NEXT item (e.g. 'no onion')" />
-        <div class="quick">
-          <span class="chip quick-note">No onion</span>
-          <span class="chip quick-note">Extra onion</span>
-          <span class="chip quick-note">No lettuce</span>
-          <span class="chip quick-note">Extra spicy</span>
+          <div class="note-box">
+            <input id="noteInput" placeholder="Note for NEXT item (e.g. 'no onion')" />
+            <div class="quick">
+              <span class="chip quick-note">No onion</span>
+              <span class="chip quick-note">Extra onion</span>
+              <span class="chip quick-note">No lettuce</span>
+              <span class="chip quick-note">Extra spicy</span>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div class="panel">
-        <h3>Current items (active slot)</h3>
-        <div class="rows" id="lines"></div>
-        <div class="sumline"><span>Subtotal</span><b id="subtotal">0 GHS</b></div>
-        <div class="sumline"><span>Discount</span><b id="discount">0 GHS</b></div>
-        <div class="sumline"><span>Total</span><b id="total">0 GHS</b></div>
+        <aside class="order-side panel">
+          <h3>Current items (active slot)</h3>
+          <div class="rows" id="lines"></div>
+          <div class="sumline"><span>Subtotal</span><b id="subtotal">0 GHS</b></div>
+          <div class="sumline"><span>Discount</span><b id="discount">0 GHS</b></div>
+          <div class="sumline"><span>Total</span><b id="total">0 GHS</b></div>
+        </aside>
       </div>
     </section>
 

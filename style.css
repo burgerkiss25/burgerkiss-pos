@@ -7,7 +7,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-
 
 /* Sticky HUD */
 .hud-wrap{position:sticky;top:0;z-index:50;background:var(--hud);border-bottom:1px solid #1c1f25}
-header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:10px 10px 6px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;padding:10px 10px 6px}
 .totals h1{margin:0;font-size:26px;font-weight:800;letter-spacing:.2px}
 .stats{display:flex;gap:8px;flex-wrap:wrap}
 .pill{display:inline-block;padding:6px 10px;border-radius:99px;background:#1a1d23;border:1px solid #262a31;color:#dfe3e8;font-size:12px}
@@ -17,7 +17,7 @@ header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:10px 10px
 }
 .hud-rows .disabled{opacity:.45;filter:saturate(.5)}
 .chip.active{outline:2px solid #3a3f48}
-.tabbar{display:flex;gap:8px;margin-left:auto}
+.tabbar{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
 .tabbar button{background:#151920;border:1px solid #28303a;cursor:pointer}
 .tabbar .active{background:#1b2027;border-color:#384352}
 
@@ -42,7 +42,7 @@ header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:10px 10px
 }
 .catbar .tab.active{ background:#1b2027; border-color:#384352 }
 
-.wrap{padding:12px}
+.wrap{padding:12px;max-width:1700px;margin:0 auto}
 
 /* Grid (4 Spalten) */
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
@@ -98,6 +98,24 @@ button.item > *{position:relative;z-index:1}
 .pay-status button{margin-left:6px}
 
 .hidden{display:none}
+
+/* Order screen layout */
+.order-layout{
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) 420px;
+  gap:12px;
+  align-items:start;
+}
+.order-main{min-width:0}
+.order-side{
+  margin-top:0;
+  position:sticky;
+  top:148px;
+}
+@media (max-width:1180px){
+  .order-layout{grid-template-columns:1fr}
+  .order-side{position:static}
+}
 
 /* Modals */
 .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:var(--backdrop);z-index:200}
