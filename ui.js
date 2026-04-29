@@ -175,7 +175,7 @@
     slots.forEach((s,i)=>{
       const el = document.createElement('span');
       el.className='chip slot-chip' + (i===active?' active':'');
-      el.textContent = s.name;
+      el.textContent = `${s.name} · ${s.orderNo || '-'}`;
       el.onclick = ()=>{ BK_STATE.setActive(i); renderOrder(); refreshTotals(); };
       bar.appendChild(el);
     });
@@ -218,7 +218,7 @@
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
         <div class="slot-head">
-          <div><span class="label">${s.name}</span> · ${c.subtotal} GHS · Combos: ${c.combos}</div>
+          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS · Combos: ${c.combos}</div>
           <div><button onclick="BK_STATE.setActive(${i}); BK_UI.renderOrder(); BK_UI.refreshTotals();">Focus</button></div>
         </div>
         <div class="todo" id="todo-${i}"></div>`;
@@ -246,7 +246,7 @@
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
         <div class="slot-head">
-          <div><span class="label">${s.name}</span> · ${c.subtotal} GHS</div>
+          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS</div>
           <div class="pay-status">
             <span>Status: ${s.pay.toUpperCase()}</span>
             <button onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Unpaid</button>
@@ -270,7 +270,7 @@
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
         <div class="slot-head">
-          <div><span class="label">${s.name}</span> · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'}</div>
+          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'}</div>
           <div class="pay-status">
             <span>Status: ${s.issued ? 'ISSUED' : 'WAITING'}</span>
             <button ${canIssue ? '' : 'disabled'} onclick="BK_STATE.setIssued(${i}, true); BK_UI.renderIssue();">Mark Issued</button>
@@ -325,7 +325,8 @@
       name: slot.name,
       items: [],
       pay: 'unpaid',
-      issued: false
+      issued: false,
+      orderNo: BK_STATE.nextOrderNo()
     };
     BK_STATE.setState(st);
     renderAll();
@@ -420,7 +421,7 @@
   function receiptSectionHtml(slot){
     const c = BK_LOGIC.computeSlot(slot);
     return `<div style="margin:6px 0 10px">
-      <div><b>${slot.name}</b></div>
+      <div><b>${slot.name}</b> · <small>#${slot.orderNo || '-'}</small></div>
       ${htmlGroupedRows(slot.items)}
       <div class="sumline"><span>${slot.name} Subtotal</span><b>${c.subtotal} GHS</b></div>
     </div>`;
