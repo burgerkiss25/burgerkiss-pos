@@ -19,7 +19,7 @@
 
   // Schutz gegen fehlerhafte Merge-Duplikate in index.html
   removeDuplicateIds([
-    'tabOrder','tabMake','tabPay',
+    'tabOrder','tabMake','tabPay','tabIssue',
     'btnSummary','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup',
     'btnUndo','btnReset','btnClearDisc','btnClearStorage',
     'btnAddSlot','btnRenameSlot','btnDeleteSlot','activeSlotLabel',
@@ -55,13 +55,16 @@
     document.getElementById('tab-order').classList.toggle('hidden', name!=='order');
     document.getElementById('tab-make').classList.toggle('hidden',  name!=='make');
     document.getElementById('tab-pay').classList.toggle('hidden',   name!=='pay');
+    document.getElementById('tab-issue').classList.toggle('hidden', name!=='issue');
     document.getElementById('tabOrder').classList.toggle('active',  name==='order');
     document.getElementById('tabMake').classList.toggle('active',   name==='make');
     document.getElementById('tabPay').classList.toggle('active',    name==='pay');
+    document.getElementById('tabIssue').classList.toggle('active',  name==='issue');
   };
   document.getElementById('tabOrder').onclick = ()=> showTab('order');
   document.getElementById('tabMake').onclick  = ()=> showTab('make');
   document.getElementById('tabPay').onclick   = ()=> showTab('pay');
+  document.getElementById('tabIssue').onclick = ()=> showTab('issue');
 
   // Summary
   document.getElementById('btnSummary').onclick = ()=> BK_UI.openSummary();
