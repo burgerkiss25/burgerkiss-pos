@@ -206,6 +206,7 @@
 
     const c = BK_LOGIC.computeSlot(s);
     setSlotTotals(c.subtotal, 0, c.subtotal);
+    ensureFlowAction('lines', '➡️ Weiter zur Bezahlung', ()=> goTab('pay'));
   }
 
   function renderMake(){
@@ -227,12 +228,13 @@
         const p = BK_DATA.BASE.find(x=>x.id===it.itemId);
         const li = document.createElement('div'); li.className='li';
         li.innerHTML = `
-          <input type="checkbox" ${it.done?'checked':''} onchange="BK_STATE.toggleDone(${i},${idx},this.checked)">
+          <input type="checkbox" ${it.done?'checked':''} onchange="BK_STATE.toggleDone(${i},${idx},this.checked); BK_UI.renderIssue();">
           <span>${p ? p.name : it.itemId}${it.note?` · <small>${it.note}</small>`:''}</span>
           <span style="margin-left:auto">${BK_PRICES.getPrice((p&&p.id)||it.itemId)} GHS</span>`;
         list.appendChild(li);
       });
     });
+    ensureFlowAction('makeList', '➡️ Weiter zur Herausgabe', ()=> goTab('issue'));
   }
 
   function renderPay(){
@@ -247,13 +249,62 @@
           <div><span class="label">${s.name}</span> · ${c.subtotal} GHS</div>
           <div class="pay-status">
             <span>Status: ${s.pay.toUpperCase()}</span>
-            <button onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.refreshTotals();">Unpaid</button>
-            <button onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.refreshTotals();">Paid Cash</button>
-            <button onclick="BK_STATE.setPay(${i},'momo'); BK_UI.renderPay(); BK_UI.refreshTotals();">Paid MoMo</button>
+            <button onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Unpaid</button>
+            <button onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
+            <button onclick="BK_STATE.setPay(${i},'momo'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid MoMo</button>
           </div>
         </div>`;
       box.appendChild(card);
     });
+    ensureFlowAction('payList', '➡️ Weiter zur Herstellung', ()=> goTab('make'));
+  }
+
+  function renderIssue(){
+    const {slots} = BK_STATE.getState();
+    const box = document.getElementById('issueList');
+    if(!box) return;
+    box.querySelectorAll('.slot-card').forEach(n=>n.remove());
+    slots.forEach((s,i)=>{
+      const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
+      const canIssue = s.pay !== 'unpaid' && allDone;
+      const card = document.createElement('div'); card.className='slot-card';
+      card.innerHTML = `
+        <div class="slot-head">
+          <div><span class="label">${s.name}</span> · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'}</div>
+          <div class="pay-status">
+            <span>Status: ${s.issued ? 'ISSUED' : 'WAITING'}</span>
+            <button ${canIssue ? '' : 'disabled'} onclick="BK_STATE.setIssued(${i}, true); BK_UI.renderIssue();">Mark Issued</button>
+            <button onclick="BK_STATE.setIssued(${i}, false); BK_UI.renderIssue();">Undo</button>
+          </div>
+        </div>`;
+      box.appendChild(card);
+    });
+    ensureFlowAction('issueList', '⬅️ Neue Bestellung starten', ()=> goTab('order'));
+  }
+
+  function goTab(name){
+    const map = { order:'tabOrder', pay:'tabPay', make:'tabMake', issue:'tabIssue' };
+    const id = map[name];
+    const el = id && document.getElementById(id);
+    if(el) el.click();
+  }
+
+  function ensureFlowAction(hostId, label, onClick){
+    const host = document.getElementById(hostId);
+    if(!host) return;
+    let row = host.querySelector('.flow-action');
+    if(!row){
+      row = document.createElement('div');
+      row.className = 'flow-action';
+      row.style.marginTop = '10px';
+      host.appendChild(row);
+    }
+    row.innerHTML = '';
+    const btn = document.createElement('button');
+    btn.className = 'x';
+    btn.textContent = label;
+    btn.onclick = onClick;
+    row.appendChild(btn);
   }
 
   function setSlotTotals(sub, disc, tot){
@@ -491,11 +542,12 @@
     renderOrder();
     renderMake();
     renderPay();
+    renderIssue();
     refreshTotals();
   }
 
   window.BK_UI = {
-    renderAll, renderOrder, renderMake, renderPay, refreshTotals,
+    renderAll, renderOrder, renderMake, renderPay, renderIssue, refreshTotals,
     renderStock,
     openSummary, closeSummary,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
