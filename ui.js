@@ -206,7 +206,7 @@
 
     const c = BK_LOGIC.computeSlot(s);
     setSlotTotals(c.subtotal, 0, c.subtotal);
-    ensureFlowAction('lines', '➡️ Weiter zur Bezahlung', ()=> goTab('pay'));
+    ensureFlowAction('lines', '➡️ Continue to Payment', ()=> goTab('pay'));
   }
 
   function renderMake(){
@@ -234,7 +234,7 @@
         list.appendChild(li);
       });
     });
-    ensureFlowAction('makeList', '➡️ Weiter zur Herausgabe', ()=> goTab('issue'));
+    ensureFlowAction('makeList', '➡️ Continue to Issue', ()=> goTab('issue'));
   }
 
   function renderPay(){
@@ -256,7 +256,7 @@
         </div>`;
       box.appendChild(card);
     });
-    ensureFlowAction('payList', '➡️ Weiter zur Herstellung', ()=> goTab('make'));
+    ensureFlowAction('payList', '➡️ Continue to Kitchen', ()=> goTab('make'));
   }
 
   function renderIssue(){
@@ -279,7 +279,7 @@
         </div>`;
       box.appendChild(card);
     });
-    ensureFlowAction('issueList', '⬅️ Neue Bestellung starten', ()=> startNextOrder());
+    ensureFlowAction('issueList', '⬅️ Start New Order', ()=> startNextOrder());
   }
 
   function goTab(name){
@@ -318,7 +318,7 @@
     const allDone = slot.items.length > 0 && slot.items.every(it=>!!it.done);
     const canReset = slot.issued && slot.pay !== 'unpaid' && allDone;
     if(!canReset){
-      infoDialog('Bitte erst vollständig abschließen: bezahlt, Küche fertig, und als ausgegeben markieren.');
+      infoDialog('Please complete all required steps first: paid, kitchen done, and marked as issued.');
       return;
     }
     st.slots[i] = {
