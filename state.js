@@ -1,9 +1,10 @@
 // Slots/Discount/Undo + Persistenz
 (function(){
   const SAVE_KEY = 'bk_state_v5';
-  let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo'}]
+  let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo', issued:false}]
   let active = 0;
   let discountRate = 0;
+  let orderSeq = 0;
   const history = [];
   const PAY_SET = new Set(['unpaid', 'cash', 'momo']);
 
@@ -26,27 +27,43 @@
     return {
       name: (slot && typeof slot.name==='string' && slot.name.trim()) ? slot.name.trim() : `SN${idx+1}`,
       items: rawItems.map(normalizeItem).filter(Boolean),
-      pay: PAY_SET.has(slot && slot.pay) ? slot.pay : 'unpaid'
+      pay: PAY_SET.has(slot && slot.pay) ? slot.pay : 'unpaid',
+      issued: !!(slot && slot.issued),
+      orderNo: (slot && typeof slot.orderNo==='string' && slot.orderNo.trim()) ? slot.orderNo.trim() : null,
+      createdAt: Number(slot && slot.createdAt) > 0 ? Number(slot.createdAt) : Date.now()
     };
   }
   function normalizeState(st){
     const rawSlots = Array.isArray(st && st.slots) ? st.slots : [];
     const nextSlots = rawSlots.map((slot, i)=> normalizeSlot(slot, i));
-    if(!nextSlots.length) nextSlots.push({name:'SN1', items:[], pay:'unpaid'});
+    if(!nextSlots.length) nextSlots.push({name:'SN1', items:[], pay:'unpaid', createdAt: Date.now()});
     const nextActive = clamp(Number(st && st.active) || 0, 0, Math.max(0, nextSlots.length-1));
     const nextDiscount = normalizeDiscount(st && st.discountRate);
-    return { slots: nextSlots, active: nextActive, discountRate: nextDiscount };
+    const nextSeq = Math.max(0, Number(st && st.orderSeq) || 0);
+    return { slots: nextSlots, active: nextActive, discountRate: nextDiscount, orderSeq: nextSeq };
+  }
+  function genOrderNo(seq){
+    const d = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    const date = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+    return `BK-${date}-${String(seq).padStart(4,'0')}`;
+  }
+  function nextOrderNo(){
+    orderSeq += 1;
+    return genOrderNo(orderSeq);
   }
 
   function save(){
-    try{ localStorage.setItem(SAVE_KEY, JSON.stringify({slots, active, discountRate, v:5})); }catch(e){}
+    try{ localStorage.setItem(SAVE_KEY, JSON.stringify({slots, active, discountRate, orderSeq, v:5})); }catch(e){}
   }
   function load(){
     try{
       const raw = localStorage.getItem(SAVE_KEY);
       if(!raw) return false;
       const n = normalizeState(JSON.parse(raw));
-      slots = n.slots; active = n.active; discountRate = n.discountRate;
+      slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq;
+      slots.forEach(s=>{ if(!s.orderNo) s.orderNo = nextOrderNo(); });
+      save();
       return true;
     }catch(e){ return false; }
   }
@@ -64,7 +81,7 @@
   function ensureSlot(){ if(!slots.length) addSlot(); }
   function addSlot(label){
     const idx = slots.length+1;
-    slots.push({name: label || `SN${idx}`, items: [], pay:'unpaid'});
+    slots.push({name: label || `SN${idx}`, items: [], pay:'unpaid', issued:false, orderNo: nextOrderNo(), createdAt: Date.now()});
     active = slots.length-1;
     save();
   }
@@ -123,6 +140,11 @@
     slots[i].pay = PAY_SET.has(status) ? status : 'unpaid';
     save();
   }
+  function setIssued(i, v){
+    if(!slots[i]) return;
+    slots[i].issued = !!v;
+    save();
+  }
   function toggleDone(i, j, v){ slots[i].items[j].done = !!v; save(); }
 
   function setDiscount(r){ discountRate = normalizeDiscount(r); save(); }
@@ -131,7 +153,8 @@
   function getState(){ return {slots, active, discountRate}; }
   function setState(st){
     const n = normalizeState(st || {});
-    slots = n.slots; active = n.active; discountRate = n.discountRate;
+    slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq;
+    slots.forEach(s=>{ if(!s.orderNo) s.orderNo = nextOrderNo(); });
     save();
   }
 
@@ -140,8 +163,8 @@
     load, save, clearAll, clearStorage,
     addSlot, renameActive, deleteActive, setActive,
     setActiveName,
-    addItem, undo, decItemForKey, setPay, toggleDone,
+    addItem, undo, decItemForKey, setPay, setIssued, toggleDone,
     setDiscount,
-    getState, setState
+    getState, setState, nextOrderNo
   };
 })();
