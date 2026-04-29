@@ -55,7 +55,10 @@
   }
   function clearStorage(){
     localStorage.removeItem(SAVE_KEY);
-    localStorage.removeItem(window.BK_PRICES.KEY);
+    if(window.BK_PRICES && window.BK_PRICES.KEY) localStorage.removeItem(window.BK_PRICES.KEY);
+    if(window.BK_PRODUCTS && window.BK_PRODUCTS.KEY) localStorage.removeItem(window.BK_PRODUCTS.KEY);
+    if(window.BK_IMAGES && window.BK_IMAGES.KEY) localStorage.removeItem(window.BK_IMAGES.KEY);
+    if(window.BK_STOCK && window.BK_STOCK.KEY) localStorage.removeItem(window.BK_STOCK.KEY);
   }
 
   function ensureSlot(){ if(!slots.length) addSlot(); }

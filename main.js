@@ -1,6 +1,9 @@
 // Bootstrapping & Event-Wiring
 (function(){
   BK_PRICES.load();
+  BK_PRODUCTS.load();
+  BK_IMAGES.load();
+  BK_STOCK.load();
   const had = BK_STATE.load();
   if(!had) BK_STATE.addSlot();
 
@@ -53,12 +56,6 @@
   document.getElementById('rCopy').onclick      = ()=> BK_UI.copyReceipt();
   document.getElementById('rWA').onclick        = ()=> BK_UI.shareWA();
   document.getElementById('rPrint').onclick     = ()=> BK_UI.printReceipt();
-
-  // Prices
-  document.getElementById('btnPrices').onclick = ()=> BK_UI.openPrices();
-  document.getElementById('pClose').onclick    = ()=> BK_UI.closePrices();
-  document.getElementById('pSave').onclick     = ()=> BK_UI.savePrices();
-  document.getElementById('pReset').onclick    = ()=> BK_UI.resetPrices();
 
   // Group
   document.getElementById('btnGroup').onclick = ()=> BK_UI.openGroup();
