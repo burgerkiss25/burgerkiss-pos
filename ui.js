@@ -444,7 +444,15 @@
     if(hist.length===0){
       body.innerHTML = '<div class="empty-state">No completed orders in history yet.</div>';
     }else{
-      body.innerHTML = hist.slice(0,100).map(h=>`
+      const totalSales = hist.reduce((a,h)=> a + Number(h.subtotal||0), 0);
+      const cashCount = hist.filter(h=>h.pay==='cash').length;
+      const momoCount = hist.filter(h=>h.pay==='momo').length;
+      body.innerHTML = `
+        <div class="row" style="border-top:none;padding:8px 0 14px">
+          <span><b>Orders:</b> ${hist.length} · <b>Cash:</b> ${cashCount} · <b>MoMo:</b> ${momoCount}</span>
+          <span><b>Sales:</b> ${totalSales} GHS</span>
+        </div>
+      ` + hist.slice(0,100).map(h=>`
         <div class="row" style="border-top:1px dashed #2a2f39;padding:8px 0">
           <span><b>${h.orderNo}</b> · ${h.slotName} · ${h.pay.toUpperCase()} · ${new Date(h.closedAt).toLocaleString()}</span>
           <span>${h.subtotal} GHS</span>
@@ -470,6 +478,11 @@
   }
   function filterHistoryToday(){
     historyFilterToday = !historyFilterToday;
+    openHistory();
+  }
+  function clearHistory(){
+    if(!confirm('Clear saved order history?')) return;
+    saveHistory([]);
     openHistory();
   }
   function closeHistory(){ document.getElementById('modalHistory').classList.remove('open'); }
@@ -742,7 +755,7 @@
   window.BK_UI = {
     renderAll, renderOrder, renderMake, renderPay, renderIssue, refreshTotals,
     renderStock,
-    openSummary, closeSummary, openHistory, closeHistory, exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday,
+    openSummary, closeSummary, openHistory, closeHistory, exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, clearHistory,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
     openProducts, closeProducts, addProductRow, saveProducts, resetProducts,
