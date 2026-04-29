@@ -47,10 +47,12 @@
         </div>
       </div>
       <div class="tabbar">
-        <button id="tabOrder" class="active">Order</button>
-        <button id="tabMake">Make</button>
-        <button id="tabPay">Pay</button>
+        <button id="tabOrder" class="active workflow-step"><span class="step-no">1</span> Order</button>
+        <button id="tabMake" class="workflow-step"><span class="step-no">2</span> Make</button>
+        <button id="tabIssue" class="workflow-step"><span class="step-no">3</span> Issue</button>
+        <button id="tabPay" class="workflow-step"><span class="step-no">4</span> Pay</button>
         <button class="x" id="btnSummary">Summary</button>
+        <button class="x" id="btnHistory">History</button>
         <button class="x" id="btnReceipt">Receipt</button>
         <a class="x" href="admin.html" style="text-decoration:none;display:inline-flex;align-items:center">Admin</a>
         <button class="x" id="btnGroup">Group Ticket</button>
@@ -93,24 +95,28 @@
   <div class="wrap">
     <!-- ORDER -->
     <section id="tab-order">
-      <div class="grid" id="buttons"></div>
+      <div class="order-layout">
+        <div class="order-main">
+          <div class="grid" id="buttons"></div>
 
-      <div class="note-box">
-        <input id="noteInput" placeholder="Note for NEXT item (e.g. 'no onion')" />
-        <div class="quick">
-          <span class="chip quick-note">No onion</span>
-          <span class="chip quick-note">Extra onion</span>
-          <span class="chip quick-note">No lettuce</span>
-          <span class="chip quick-note">Extra spicy</span>
+          <div class="note-box">
+            <input id="noteInput" placeholder="Note for NEXT item (e.g. 'no onion')" />
+            <div class="quick">
+              <span class="chip quick-note">No onion</span>
+              <span class="chip quick-note">Extra onion</span>
+              <span class="chip quick-note">No lettuce</span>
+              <span class="chip quick-note">Extra spicy</span>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div class="panel">
-        <h3>Current items (active slot)</h3>
-        <div class="rows" id="lines"></div>
-        <div class="sumline"><span>Subtotal</span><b id="subtotal">0 GHS</b></div>
-        <div class="sumline"><span>Discount</span><b id="discount">0 GHS</b></div>
-        <div class="sumline"><span>Total</span><b id="total">0 GHS</b></div>
+        <aside class="order-side panel">
+          <h3>Current items (active slot)</h3>
+          <div class="rows" id="lines"></div>
+          <div class="sumline"><span>Subtotal</span><b id="subtotal">0 GHS</b></div>
+          <div class="sumline"><span>Discount</span><b id="discount">0 GHS</b></div>
+          <div class="sumline"><span>Total</span><b id="total">0 GHS</b></div>
+        </aside>
       </div>
     </section>
 
@@ -133,6 +139,13 @@
       </div>
     </section>
 
+    <!-- ISSUE -->
+    <section id="tab-issue" class="hidden">
+      <div id="issueList" class="panel">
+        <h3>Issue / Handover</h3>
+      </div>
+    </section>
+
     <!-- PRINT AREA -->
     <section id="printArea" class="hidden"></section>
   </div>
@@ -145,6 +158,21 @@
         <div><button class="x" id="sumClose">Close</button></div>
       </header>
       <div class="body" id="sumBody"></div>
+    </div>
+  </div>
+
+  <!-- HISTORY MODAL -->
+  <div class="modal" id="modalHistory">
+    <div class="sheet">
+      <header>
+        <b>Order History</b>
+        <div>
+          <button class="x" id="hExportJson">Export JSON</button>
+          <button class="x" id="hExportCsv">Export CSV</button>
+          <button class="x" id="hClose">Close</button>
+        </div>
+      </header>
+      <div class="body" id="historyBody"></div>
     </div>
   </div>
 
