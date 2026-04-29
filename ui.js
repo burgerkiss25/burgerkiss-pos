@@ -218,7 +218,7 @@
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
         <div class="slot-head">
-          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS · Combos: ${c.combos}</div>
+          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS · Combos: ${c.combos} · In kitchen: ${formatAge(s.createdAt)}</div>
           <div><button onclick="BK_STATE.setActive(${i}); BK_UI.renderOrder(); BK_UI.refreshTotals();">Focus</button></div>
         </div>
         <div class="todo" id="todo-${i}"></div>`;
@@ -234,7 +234,7 @@
         list.appendChild(li);
       });
     });
-    ensureFlowAction('makeList', '➡️ Continue to Issue', ()=> goTab('issue'));
+    ensureFlowAction('makeList', '➡️ Go to Issue', ()=> goTab('issue'));
   }
 
   function renderPay(){
@@ -251,13 +251,13 @@
             <span>Status: ${s.pay.toUpperCase()}</span>
             <button onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Unpaid</button>
             <button onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
-            <button onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals(); BK_UI.quickStartNext(${i});">Paid Cash + Start Now</button>
+            <button onclick="BK_UI.paidAndNewOrder(${i}, 'cash');">Paid + New Order</button>
             <button onclick="BK_STATE.setPay(${i},'momo'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid MoMo</button>
           </div>
         </div>`;
       box.appendChild(card);
     });
-    ensureFlowAction('payList', '➡️ Continue to Kitchen', ()=> goTab('make'));
+    ensureFlowAction('payList', '➡️ Go to Make', ()=> goTab('make'));
   }
 
   function renderIssue(){
@@ -271,7 +271,7 @@
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
         <div class="slot-head">
-          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'}</div>
+          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
           <div class="pay-status">
             <span>Status: ${s.issued ? 'ISSUED' : 'WAITING'}</span>
             <button ${canIssue ? '' : 'disabled'} onclick="BK_STATE.setIssued(${i}, true); BK_UI.renderIssue();">Mark Issued</button>
@@ -319,7 +319,7 @@
     const allDone = slot.items.length > 0 && slot.items.every(it=>!!it.done);
     const canReset = slot.issued && slot.pay !== 'unpaid' && allDone;
     if(!canReset){
-      infoDialog('Complete order first: paid, kitchen done, and marked as issued. Use "Paid + Start Now" if you want to force a new order.');
+      infoDialog('Complete order first: paid, kitchen done, and marked as issued. Use "Paid + New Order" to continue taking orders while kitchen is working.');
       return;
     }
     st.slots[i] = {
@@ -327,7 +327,8 @@
       items: [],
       pay: 'unpaid',
       issued: false,
-      orderNo: BK_STATE.nextOrderNo()
+      orderNo: BK_STATE.nextOrderNo(),
+      createdAt: Date.now()
     };
     BK_STATE.setState(st);
     renderAll();
@@ -345,11 +346,32 @@
       items: [],
       pay: 'unpaid',
       issued: false,
-      orderNo: BK_STATE.nextOrderNo()
+      orderNo: BK_STATE.nextOrderNo(),
+      createdAt: Date.now()
     };
     BK_STATE.setState(st);
     renderAll();
     goTab('order');
+  }
+
+  function paidAndNewOrder(slotIndex, payMode){
+    const st = BK_STATE.getState();
+    const i = Number(slotIndex);
+    if(!st.slots[i]) return;
+    st.slots[i].pay = payMode === 'momo' ? 'momo' : 'cash';
+    BK_STATE.setState(st);
+    BK_STATE.addSlot();
+    renderAll();
+    goTab('order');
+  }
+
+  function formatAge(createdAt){
+    const ts = Number(createdAt) || Date.now();
+    const mins = Math.max(0, Math.floor((Date.now() - ts) / 60000));
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if(h<=0) return `${m}m`;
+    return `${h}h ${m}m`;
   }
 
   function setSlotTotals(sub, disc, tot){
@@ -603,6 +625,6 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, paidAndNewOrder
   };
 })();

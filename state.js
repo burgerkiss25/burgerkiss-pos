@@ -29,13 +29,14 @@
       items: rawItems.map(normalizeItem).filter(Boolean),
       pay: PAY_SET.has(slot && slot.pay) ? slot.pay : 'unpaid',
       issued: !!(slot && slot.issued),
-      orderNo: (slot && typeof slot.orderNo==='string' && slot.orderNo.trim()) ? slot.orderNo.trim() : null
+      orderNo: (slot && typeof slot.orderNo==='string' && slot.orderNo.trim()) ? slot.orderNo.trim() : null,
+      createdAt: Number(slot && slot.createdAt) > 0 ? Number(slot.createdAt) : Date.now()
     };
   }
   function normalizeState(st){
     const rawSlots = Array.isArray(st && st.slots) ? st.slots : [];
     const nextSlots = rawSlots.map((slot, i)=> normalizeSlot(slot, i));
-    if(!nextSlots.length) nextSlots.push({name:'SN1', items:[], pay:'unpaid'});
+    if(!nextSlots.length) nextSlots.push({name:'SN1', items:[], pay:'unpaid', createdAt: Date.now()});
     const nextActive = clamp(Number(st && st.active) || 0, 0, Math.max(0, nextSlots.length-1));
     const nextDiscount = normalizeDiscount(st && st.discountRate);
     const nextSeq = Math.max(0, Number(st && st.orderSeq) || 0);
@@ -80,7 +81,7 @@
   function ensureSlot(){ if(!slots.length) addSlot(); }
   function addSlot(label){
     const idx = slots.length+1;
-    slots.push({name: label || `SN${idx}`, items: [], pay:'unpaid', issued:false, orderNo: nextOrderNo()});
+    slots.push({name: label || `SN${idx}`, items: [], pay:'unpaid', issued:false, orderNo: nextOrderNo(), createdAt: Date.now()});
     active = slots.length-1;
     save();
   }
