@@ -1,7 +1,7 @@
 // Slots/Discount/Undo + Persistenz
 (function(){
   const SAVE_KEY = 'bk_state_v5';
-  let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo'}]
+  let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo', issued:false}]
   let active = 0;
   let discountRate = 0;
   const history = [];
@@ -26,7 +26,8 @@
     return {
       name: (slot && typeof slot.name==='string' && slot.name.trim()) ? slot.name.trim() : `SN${idx+1}`,
       items: rawItems.map(normalizeItem).filter(Boolean),
-      pay: PAY_SET.has(slot && slot.pay) ? slot.pay : 'unpaid'
+      pay: PAY_SET.has(slot && slot.pay) ? slot.pay : 'unpaid',
+      issued: !!(slot && slot.issued)
     };
   }
   function normalizeState(st){
@@ -64,7 +65,7 @@
   function ensureSlot(){ if(!slots.length) addSlot(); }
   function addSlot(label){
     const idx = slots.length+1;
-    slots.push({name: label || `SN${idx}`, items: [], pay:'unpaid'});
+    slots.push({name: label || `SN${idx}`, items: [], pay:'unpaid', issued:false});
     active = slots.length-1;
     save();
   }
@@ -123,6 +124,11 @@
     slots[i].pay = PAY_SET.has(status) ? status : 'unpaid';
     save();
   }
+  function setIssued(i, v){
+    if(!slots[i]) return;
+    slots[i].issued = !!v;
+    save();
+  }
   function toggleDone(i, j, v){ slots[i].items[j].done = !!v; save(); }
 
   function setDiscount(r){ discountRate = normalizeDiscount(r); save(); }
@@ -140,7 +146,7 @@
     load, save, clearAll, clearStorage,
     addSlot, renameActive, deleteActive, setActive,
     setActiveName,
-    addItem, undo, decItemForKey, setPay, toggleDone,
+    addItem, undo, decItemForKey, setPay, setIssued, toggleDone,
     setDiscount,
     getState, setState
   };
