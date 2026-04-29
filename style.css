@@ -16,6 +16,7 @@
   --fz-xl:26px;
 }
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+*{box-sizing:border-box}
 
 /* Sticky HUD */
 .hud-wrap{position:sticky;top:0;z-index:50;background:var(--hud);border-bottom:1px solid #1c1f25}
@@ -78,6 +79,7 @@ button.item{
   color:#ecf0f1;padding:10px;text-align:left;position:relative;overflow:hidden;cursor:pointer
 }
 button.item:active{transform:scale(.98)}
+button.item:hover{border-color:#3a4150;transform:translateY(-1px)}
 button.item.item-with-bg{background-size:cover;background-position:center;background-repeat:no-repeat}
 button.item.item-with-bg::before{
   content:'';position:absolute;inset:0;
@@ -149,6 +151,33 @@ button.item > *{position:relative;z-index:1}
 .sheet header{position:sticky;top:0;background:#0f1217;border-bottom:1px solid #212732;display:flex;justify-content:space-between;align-items:center;padding:10px 12px}
 .sheet .body{padding:10px 12px}
 .x{border:none;min-height:38px;background:#1b1f27;border:1px solid #2d3440;color:#eaeef2;padding:8px 12px;border-radius:var(--radius-md);cursor:pointer;font-weight:700;font-size:var(--fz-md)}
+.x:hover,.tabbar button:hover,.hud-rows button:hover,.catbar .tab:hover{filter:brightness(1.08)}
+
+button:focus-visible,
+.chip:focus-visible,
+input:focus-visible,
+a:focus-visible{
+  outline:2px solid #6ea8ff;
+  outline-offset:2px;
+}
+
+.empty-state{
+  margin:10px;
+  padding:14px;
+  border:1px dashed #31394a;
+  border-radius:var(--radius-md);
+  color:#9fb0c8;
+  background:#0f141d;
+  font-size:var(--fz-sm);
+}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation:none !important;
+    transition:none !important;
+    scroll-behavior:auto !important;
+  }
+}
 
 #productsBody input{
   width:100%;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:6px

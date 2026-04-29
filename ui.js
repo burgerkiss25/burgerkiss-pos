@@ -192,7 +192,14 @@
     const s = slots[active];
 
     const counts = BK_LOGIC.groupCounts(s.items);
-    Object.entries(counts).forEach(([key,qty])=>{
+    const entries = Object.entries(counts);
+    if(entries.length===0){
+      const row = document.createElement('div');
+      row.className = 'empty-state';
+      row.textContent = 'No items yet. Select products to start this order.';
+      lines.appendChild(row);
+    }
+    entries.forEach(([key,qty])=>{
       const [id, note=''] = BK_LOGIC.parseItemKey(key);
       const prod = BK_DATA.BASE.find(x=>x.id===id);
       const row = document.createElement('div'); row.className='row';
@@ -216,6 +223,13 @@
     const {slots} = BK_STATE.getState();
     const box = document.getElementById('makeList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
+    if(!slots.length){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No active orders in kitchen.';
+      box.appendChild(empty);
+      return;
+    }
     slots.forEach((s,i)=>{
       const c = BK_LOGIC.computeSlot(s);
       const card = document.createElement('div'); card.className='slot-card';
@@ -244,6 +258,13 @@
     const {slots} = BK_STATE.getState();
     const box = document.getElementById('payList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
+    if(!slots.length){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No active orders to pay.';
+      box.appendChild(empty);
+      return;
+    }
     slots.forEach((s,i)=>{
       const c = BK_LOGIC.computeSlot(s);
       const card = document.createElement('div'); card.className='slot-card';
@@ -267,6 +288,13 @@
     const box = document.getElementById('issueList');
     if(!box) return;
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
+    if(!slots.length){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No orders waiting for handover.';
+      box.appendChild(empty);
+      return;
+    }
     slots.forEach((s,i)=>{
       const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
       const canIssue = s.pay !== 'unpaid' && allDone;
