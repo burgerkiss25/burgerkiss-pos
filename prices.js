@@ -7,9 +7,12 @@
     try{ const raw = localStorage.getItem(KEY); if(raw) MAP = JSON.parse(raw)||{}; }catch(e){}
   }
   function getPrice(id){
-    const base = BK_DATA.BASE.find(x=>x.id===id).price;
+    const fromBase = (BK_DATA.BASE || []).find(x=>x.id===id);
+    const fromDefault = (BK_DATA.DEFAULT_BASE || []).find(x=>x.id===id);
+    const base = Number((fromBase && fromBase.price) ?? (fromDefault && fromDefault.price));
     const ov = MAP[id];
-    return (typeof ov==='number' && !isNaN(ov)) ? ov : base;
+    if(typeof ov==='number' && !isNaN(ov)) return ov;
+    return Number.isFinite(base) ? base : 0;
   }
   function openEditor(force){
     const modal = document.getElementById('modalPrices');

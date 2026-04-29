@@ -1,6 +1,9 @@
 // Bootstrapping & Event-Wiring
 (function(){
   BK_PRICES.load();
+  BK_PRODUCTS.load();
+  BK_IMAGES.load();
+  BK_STOCK.load();
   const had = BK_STATE.load();
   if(!had) BK_STATE.addSlot();
 
@@ -54,11 +57,46 @@
   document.getElementById('rWA').onclick        = ()=> BK_UI.shareWA();
   document.getElementById('rPrint').onclick     = ()=> BK_UI.printReceipt();
 
+  // Edit dropdown
+  const editMenuWrap = document.getElementById('editMenuWrap');
+  const editMenu = document.getElementById('editMenu');
+  document.getElementById('btnEditMenu').onclick = (e)=>{
+    e.stopPropagation();
+    editMenu.classList.toggle('open');
+  };
+  document.addEventListener('click', (e)=>{
+    if(!editMenuWrap.contains(e.target)) editMenu.classList.remove('open');
+  });
+
   // Prices
   document.getElementById('btnPrices').onclick = ()=> BK_UI.openPrices();
   document.getElementById('pClose').onclick    = ()=> BK_UI.closePrices();
   document.getElementById('pSave').onclick     = ()=> BK_UI.savePrices();
   document.getElementById('pReset').onclick    = ()=> BK_UI.resetPrices();
+
+  // Products
+  document.getElementById('btnProducts').onclick = ()=> BK_UI.openProducts();
+  document.getElementById('prodClose').onclick   = ()=> BK_UI.closeProducts();
+  document.getElementById('prodAdd').onclick     = ()=> BK_UI.addProductRow();
+  document.getElementById('prodSave').onclick    = ()=> BK_UI.saveProducts();
+  document.getElementById('prodReset').onclick   = ()=> BK_UI.resetProducts();
+
+  // Images
+  document.getElementById('btnImages').onclick = ()=> BK_UI.openImages();
+  document.getElementById('iClose').onclick    = ()=> BK_UI.closeImages();
+  document.getElementById('iSave').onclick     = ()=> BK_UI.saveImages();
+  document.getElementById('iReset').onclick    = ()=> BK_UI.resetImages();
+
+  // Stock
+  document.getElementById('btnStock').onclick = ()=> BK_UI.openStock();
+  document.getElementById('sClose').onclick   = ()=> BK_UI.closeStock();
+  document.getElementById('sSave').onclick    = ()=> BK_UI.saveStock();
+  document.getElementById('sReset').onclick   = ()=> BK_UI.resetStock();
+
+  ;['btnPrices','btnProducts','btnImages','btnStock'].forEach(id=>{
+    const prev = document.getElementById(id).onclick;
+    document.getElementById(id).onclick = ()=>{ editMenu.classList.remove('open'); if(typeof prev==='function') prev(); };
+  });
 
   // Group
   document.getElementById('btnGroup').onclick = ()=> BK_UI.openGroup();
