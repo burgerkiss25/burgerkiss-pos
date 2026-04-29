@@ -74,6 +74,8 @@
   document.getElementById('sumClose').onclick   = ()=> BK_UI.closeSummary();
   document.getElementById('btnHistory').onclick = ()=> BK_UI.openHistory();
   document.getElementById('hClose').onclick     = ()=> BK_UI.closeHistory();
+  document.getElementById('hToday').onclick     = ()=> BK_UI.filterHistoryToday();
+  document.getElementById('hSearch').oninput    = (e)=> BK_UI.filterHistoryText(e.target.value);
   document.getElementById('hExportJson').onclick= ()=> BK_UI.exportHistoryJson();
   document.getElementById('hExportCsv').onclick = ()=> BK_UI.exportHistoryCsv();
 

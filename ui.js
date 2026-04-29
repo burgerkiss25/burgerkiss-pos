@@ -3,6 +3,8 @@
   let currentCat = 'all';
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
+  let historyFilterText = '';
+  let historyFilterToday = false;
 
   const STOCK_DEFAULT = {
     INGREDIENTS: {
@@ -438,7 +440,7 @@
 
   function openHistory(){
     const body = document.getElementById('historyBody');
-    const hist = getHistory();
+    const hist = getFilteredHistory();
     if(hist.length===0){
       body.innerHTML = '<div class="empty-state">No completed orders in history yet.</div>';
     }else{
@@ -450,6 +452,25 @@
       `).join('');
     }
     document.getElementById('modalHistory').classList.add('open');
+  }
+  function getFilteredHistory(){
+    const text = historyFilterText.trim().toLowerCase();
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    return getHistory().filter(h=>{
+      if(historyFilterToday && Number(h.closedAt || 0) < today.getTime()) return false;
+      if(!text) return true;
+      return String(h.orderNo || '').toLowerCase().includes(text)
+        || String(h.slotName || '').toLowerCase().includes(text);
+    });
+  }
+  function filterHistoryText(v){
+    historyFilterText = String(v || '');
+    openHistory();
+  }
+  function filterHistoryToday(){
+    historyFilterToday = !historyFilterToday;
+    openHistory();
   }
   function closeHistory(){ document.getElementById('modalHistory').classList.remove('open'); }
   function downloadFile(name, content, type){
@@ -721,7 +742,7 @@
   window.BK_UI = {
     renderAll, renderOrder, renderMake, renderPay, renderIssue, refreshTotals,
     renderStock,
-    openSummary, closeSummary, openHistory, closeHistory, exportHistoryJson, exportHistoryCsv,
+    openSummary, closeSummary, openHistory, closeHistory, exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
     openProducts, closeProducts, addProductRow, saveProducts, resetProducts,
