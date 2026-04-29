@@ -385,10 +385,10 @@
     const {slots, discountRate, active} = BK_STATE.getState();
     const g = BK_LOGIC.computeAll(slots, discountRate);
     const activeSlot = slots[active];
-    const c = activeSlot ? BK_LOGIC.computeSlot(activeSlot) : {subtotal:0};
+    const c = activeSlot ? BK_LOGIC.computeSlot(activeSlot) : {subtotal:0, combos:0};
     setSlotTotals(c.subtotal, 0, c.subtotal);
-    document.getElementById('grand').textContent = `${g.grand} GHS`;
-    document.getElementById('combosPill').textContent = `Combos: ${g.totalCombos}`;
+    document.getElementById('grand').textContent = `${c.subtotal} GHS`;
+    document.getElementById('combosPill').textContent = `Combos: ${c.combos || 0}`;
     document.getElementById('discountTag').textContent = g.discount>0 ? `Discount: ${Math.round(discountRate*100)}%` : 'No discount';
     document.getElementById('allSubtotal').textContent = `${g.grandSubtotal} GHS`;
     document.getElementById('allDiscount').textContent = `-${g.discount} GHS`;
