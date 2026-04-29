@@ -2,6 +2,7 @@
 (function(){
   let currentCat = 'all';
   let groupSel = new Set();
+  const HISTORY_KEY = 'bk_order_history_v1';
 
   const STOCK_DEFAULT = {
     INGREDIENTS: {
@@ -304,7 +305,7 @@
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
           <div class="pay-status">
             <span>Status: ${s.issued ? 'ISSUED' : 'WAITING'}</span>
-            <button ${canIssue ? '' : 'disabled'} onclick="BK_STATE.setIssued(${i}, true); BK_UI.renderIssue();">Mark Issued</button>
+            <button ${canIssue ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark Issued</button>
             <button onclick="BK_STATE.setIssued(${i}, false); BK_UI.renderIssue();">Undo</button>
           </div>
         </div>`;
@@ -394,6 +395,79 @@
     BK_STATE.addSlot();
     renderAll();
     goTab('order');
+  }
+
+  function getHistory(){
+    try{
+      const raw = localStorage.getItem(HISTORY_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    }catch(e){ return []; }
+  }
+  function saveHistory(list){
+    try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); }catch(e){}
+  }
+  function slotSnapshot(slot){
+    const c = BK_LOGIC.computeSlot(slot);
+    return {
+      id: `${slot.orderNo || 'ORD'}-${Date.now()}`,
+      orderNo: slot.orderNo || '-',
+      slotName: slot.name || '-',
+      pay: slot.pay || 'unpaid',
+      issued: !!slot.issued,
+      createdAt: slot.createdAt || Date.now(),
+      closedAt: Date.now(),
+      subtotal: c.subtotal,
+      combos: c.combos,
+      items: BK_LOGIC.groupedLines(slot.items || []).map(x=>({name:x.name, qty:x.qty, note:x.note, total:x.total}))
+    };
+  }
+  function pushHistory(entry){
+    const hist = getHistory();
+    hist.unshift(entry);
+    saveHistory(hist.slice(0, 1000));
+  }
+  function markIssued(i){
+    const st = BK_STATE.getState();
+    const slot = st.slots[i];
+    if(!slot) return;
+    BK_STATE.setIssued(i, true);
+    pushHistory(slotSnapshot({...slot, issued:true}));
+    renderIssue();
+  }
+
+  function openHistory(){
+    const body = document.getElementById('historyBody');
+    const hist = getHistory();
+    if(hist.length===0){
+      body.innerHTML = '<div class="empty-state">No completed orders in history yet.</div>';
+    }else{
+      body.innerHTML = hist.slice(0,100).map(h=>`
+        <div class="row" style="border-top:1px dashed #2a2f39;padding:8px 0">
+          <span><b>${h.orderNo}</b> · ${h.slotName} · ${h.pay.toUpperCase()} · ${new Date(h.closedAt).toLocaleString()}</span>
+          <span>${h.subtotal} GHS</span>
+        </div>
+      `).join('');
+    }
+    document.getElementById('modalHistory').classList.add('open');
+  }
+  function closeHistory(){ document.getElementById('modalHistory').classList.remove('open'); }
+  function downloadFile(name, content, type){
+    const blob = new Blob([content], {type});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+  }
+  function exportHistoryJson(){
+    downloadFile(`bk-history-${Date.now()}.json`, JSON.stringify(getHistory(), null, 2), 'application/json');
+  }
+  function exportHistoryCsv(){
+    const hist = getHistory();
+    const rows = [['orderNo','slotName','pay','issued','createdAt','closedAt','subtotal','combos']];
+    hist.forEach(h=> rows.push([h.orderNo,h.slotName,h.pay,h.issued,h.createdAt,h.closedAt,h.subtotal,h.combos]));
+    const csv = rows.map(r=> r.map(v=> `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    downloadFile(`bk-history-${Date.now()}.csv`, csv, 'text/csv');
   }
 
   function formatAge(createdAt){
@@ -647,7 +721,7 @@
   window.BK_UI = {
     renderAll, renderOrder, renderMake, renderPay, renderIssue, refreshTotals,
     renderStock,
-    openSummary, closeSummary,
+    openSummary, closeSummary, openHistory, closeHistory, exportHistoryJson, exportHistoryCsv,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
     openProducts, closeProducts, addProductRow, saveProducts, resetProducts,
@@ -656,6 +730,6 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued
   };
 })();

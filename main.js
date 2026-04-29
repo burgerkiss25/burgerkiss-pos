@@ -20,10 +20,10 @@
   // Schutz gegen fehlerhafte Merge-Duplikate in index.html
   removeDuplicateIds([
     'tabOrder','tabMake','tabPay','tabIssue',
-    'btnSummary','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup',
+    'btnSummary','btnHistory','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup',
     'btnUndo','btnReset','btnClearDisc','btnClearStorage',
     'btnAddSlot','btnRenameSlot','btnDeleteSlot','activeSlotLabel',
-    'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalReceipt'
+    'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalHistory','modalReceipt'
   ]);
 
   // Buttons
@@ -72,6 +72,10 @@
   // Summary
   document.getElementById('btnSummary').onclick = ()=> BK_UI.openSummary();
   document.getElementById('sumClose').onclick   = ()=> BK_UI.closeSummary();
+  document.getElementById('btnHistory').onclick = ()=> BK_UI.openHistory();
+  document.getElementById('hClose').onclick     = ()=> BK_UI.closeHistory();
+  document.getElementById('hExportJson').onclick= ()=> BK_UI.exportHistoryJson();
+  document.getElementById('hExportCsv').onclick = ()=> BK_UI.exportHistoryCsv();
 
   // Receipt
   document.getElementById('btnReceipt').onclick = ()=> BK_UI.openReceipt();

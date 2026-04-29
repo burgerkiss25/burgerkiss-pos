@@ -52,6 +52,7 @@
         <button id="tabIssue" class="workflow-step"><span class="step-no">3</span> Issue</button>
         <button id="tabPay" class="workflow-step"><span class="step-no">4</span> Pay</button>
         <button class="x" id="btnSummary">Summary</button>
+        <button class="x" id="btnHistory">History</button>
         <button class="x" id="btnReceipt">Receipt</button>
         <a class="x" href="admin.html" style="text-decoration:none;display:inline-flex;align-items:center">Admin</a>
         <button class="x" id="btnGroup">Group Ticket</button>
@@ -157,6 +158,21 @@
         <div><button class="x" id="sumClose">Close</button></div>
       </header>
       <div class="body" id="sumBody"></div>
+    </div>
+  </div>
+
+  <!-- HISTORY MODAL -->
+  <div class="modal" id="modalHistory">
+    <div class="sheet">
+      <header>
+        <b>Order History</b>
+        <div>
+          <button class="x" id="hExportJson">Export JSON</button>
+          <button class="x" id="hExportCsv">Export CSV</button>
+          <button class="x" id="hClose">Close</button>
+        </div>
+      </header>
+      <div class="body" id="historyBody"></div>
     </div>
   </div>
 
