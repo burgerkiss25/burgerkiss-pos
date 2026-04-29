@@ -19,11 +19,11 @@
 
   // Schutz gegen fehlerhafte Merge-Duplikate in index.html
   removeDuplicateIds([
-    'tabOrder','tabMake','tabPay',
-    'btnSummary','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup',
+    'tabOrder','tabMake','tabPay','tabIssue',
+    'btnSummary','btnHistory','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup',
     'btnUndo','btnReset','btnClearDisc','btnClearStorage',
     'btnAddSlot','btnRenameSlot','btnDeleteSlot','activeSlotLabel',
-    'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalReceipt'
+    'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalHistory','modalReceipt'
   ]);
 
   // Buttons
@@ -33,16 +33,19 @@
   document.getElementById('btnClearDisc').onclick = ()=>{ BK_STATE.setDiscount(0); BK_UI.refreshTotals(); };
   document.getElementById('btnClearStorage').onclick = ()=> BK_UI.clearStorageWithConfirm();
 
-  document.getElementById('btnAddSlot').onclick = ()=>{ BK_STATE.addSlot(); BK_UI.renderAll(); };
+  document.getElementById('btnAddSlot').onclick = ()=> BK_UI.addNewOrderSlot();
   document.getElementById('btnRenameSlot').onclick = ()=> BK_UI.renameActiveSlot();
   document.getElementById('btnDeleteSlot').onclick = ()=> BK_UI.deleteActiveSlot();
 
   if(forceSlot){
-    ['btnAddSlot', 'btnRenameSlot', 'btnDeleteSlot'].forEach(id=>{
+    ['btnRenameSlot', 'btnDeleteSlot'].forEach(id=>{
       const el = document.getElementById(id);
       el.classList.add('disabled');
       el.onclick = ()=> BK_UI.infoDialog(`Slot management disabled while force-slot mode is active (${window.BK_SYNC_FORCE_SLOT}).`);
     });
+    const add = document.getElementById('btnAddSlot');
+    add.classList.remove('disabled');
+    add.onclick = ()=> BK_UI.addNewOrderSlot();
   }
 
   // Quick notes
@@ -55,17 +58,27 @@
     document.getElementById('tab-order').classList.toggle('hidden', name!=='order');
     document.getElementById('tab-make').classList.toggle('hidden',  name!=='make');
     document.getElementById('tab-pay').classList.toggle('hidden',   name!=='pay');
+    document.getElementById('tab-issue').classList.toggle('hidden', name!=='issue');
     document.getElementById('tabOrder').classList.toggle('active',  name==='order');
     document.getElementById('tabMake').classList.toggle('active',   name==='make');
     document.getElementById('tabPay').classList.toggle('active',    name==='pay');
+    document.getElementById('tabIssue').classList.toggle('active',  name==='issue');
   };
   document.getElementById('tabOrder').onclick = ()=> showTab('order');
   document.getElementById('tabMake').onclick  = ()=> showTab('make');
   document.getElementById('tabPay').onclick   = ()=> showTab('pay');
+  document.getElementById('tabIssue').onclick = ()=> showTab('issue');
 
   // Summary
   document.getElementById('btnSummary').onclick = ()=> BK_UI.openSummary();
   document.getElementById('sumClose').onclick   = ()=> BK_UI.closeSummary();
+  document.getElementById('btnHistory').onclick = ()=> BK_UI.openHistory();
+  document.getElementById('hClose').onclick     = ()=> BK_UI.closeHistory();
+  document.getElementById('hToday').onclick     = ()=> BK_UI.filterHistoryToday();
+  document.getElementById('hClear').onclick     = ()=> BK_UI.clearHistory();
+  document.getElementById('hSearch').oninput    = (e)=> BK_UI.filterHistoryText(e.target.value);
+  document.getElementById('hExportJson').onclick= ()=> BK_UI.exportHistoryJson();
+  document.getElementById('hExportCsv').onclick = ()=> BK_UI.exportHistoryCsv();
 
   // Receipt
   document.getElementById('btnReceipt').onclick = ()=> BK_UI.openReceipt();
