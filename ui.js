@@ -155,6 +155,7 @@
 
   function setCategory(cat){
     currentCat = cat || 'all';
+    goTab('order');
     document.querySelectorAll('.catbar .tab').forEach(btn=>{
       btn.classList.toggle('active', btn.dataset.cat===currentCat);
     });
@@ -176,7 +177,7 @@
       const el = document.createElement('span');
       el.className='chip slot-chip' + (i===active?' active':'');
       el.textContent = `${s.name} · ${s.orderNo || '-'}`;
-      el.onclick = ()=>{ BK_STATE.setActive(i); renderOrder(); refreshTotals(); };
+      el.onclick = ()=>{ BK_STATE.setActive(i); renderOrder(); refreshTotals(); goTab('order'); };
       bar.appendChild(el);
     });
     ctl.forEach(c=>bar.appendChild(c));
