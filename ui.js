@@ -279,7 +279,7 @@
         </div>`;
       box.appendChild(card);
     });
-    ensureFlowAction('issueList', '⬅️ Neue Bestellung starten', ()=> goTab('order'));
+    ensureFlowAction('issueList', '⬅️ Neue Bestellung starten', ()=> startNextOrder());
   }
 
   function goTab(name){
@@ -305,6 +305,31 @@
     btn.textContent = label;
     btn.onclick = onClick;
     row.appendChild(btn);
+  }
+
+  function startNextOrder(){
+    const st = BK_STATE.getState();
+    const i = st.active;
+    const slot = st.slots[i];
+    if(!slot){
+      goTab('order');
+      return;
+    }
+    const allDone = slot.items.length > 0 && slot.items.every(it=>!!it.done);
+    const canReset = slot.issued && slot.pay !== 'unpaid' && allDone;
+    if(!canReset){
+      infoDialog('Bitte erst vollständig abschließen: bezahlt, Küche fertig, und als ausgegeben markieren.');
+      return;
+    }
+    st.slots[i] = {
+      name: slot.name,
+      items: [],
+      pay: 'unpaid',
+      issued: false
+    };
+    BK_STATE.setState(st);
+    renderAll();
+    goTab('order');
   }
 
   function setSlotTotals(sub, disc, tot){
@@ -558,6 +583,6 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog
+    infoDialog, confirmDialog, startNextOrder
   };
 })();
