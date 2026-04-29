@@ -219,7 +219,7 @@
 
     const c = BK_LOGIC.computeSlot(s);
     setSlotTotals(c.subtotal, 0, c.subtotal);
-    ensureFlowAction('lines', '➡️ Send to Kitchen (Make)', ()=> goTab('make'));
+    ensureFlowAction('lines', '➡️ Go to Payment', ()=> goTab('pay'));
   }
 
   function renderMake(){
@@ -254,8 +254,10 @@
         list.appendChild(li);
       });
     });
-    ensureFlowAction('makeList', '➡️ Continue to Pay', ()=> goTab('pay'));
-    appendFlowAction('makeList', '＋ Start Next Order', ()=> addNewOrderFromKitchen());
+    setFlowActions('makeList', [
+      { label:'⬅️ Back to Order', onClick:()=> goTab('order') },
+      { label:'➡️ Go to Issue', onClick:()=> goTab('issue') }
+    ]);
   }
 
   function renderPay(){
@@ -281,10 +283,17 @@
             <button onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
             <button onclick="BK_STATE.setPay(${i},'momo'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid MoMo</button>
           </div>
-        </div>`;
+        </div>
+        <details style="margin-top:8px">
+          <summary style="cursor:pointer;color:#9fb0c8">View order items</summary>
+          <div style="padding-top:6px">${htmlGroupedRows(s.items)}</div>
+        </details>`;
       box.appendChild(card);
     });
-    ensureFlowAction('payList', '➡️ Continue to Issue', ()=> goTab('issue'));
+    setFlowActions('payList', [
+      { label:'⬅️ Back to Make', onClick:()=> goTab('make') },
+      { label:'➡️ Go to Issue', onClick:()=> goTab('issue') }
+    ]);
   }
 
   function renderIssue(){
@@ -311,10 +320,17 @@
             <button ${canIssue ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark Issued</button>
             <button onclick="BK_STATE.setIssued(${i}, false); BK_UI.renderIssue();">Undo</button>
           </div>
-        </div>`;
+        </div>
+        <details style="margin-top:8px">
+          <summary style="cursor:pointer;color:#9fb0c8">View order items</summary>
+          <div style="padding-top:6px">${htmlGroupedRows(s.items)}</div>
+        </details>`;
       box.appendChild(card);
     });
-    ensureFlowAction('issueList', '⬅️ Start Next Order', ()=> startNextOrder());
+    setFlowActions('issueList', [
+      { label:'⬅️ Back to Pay', onClick:()=> goTab('pay') },
+      { label:'⬅️ Start Next Order', onClick:()=> startNextOrder() }
+    ]);
   }
 
   function goTab(name){
@@ -341,7 +357,7 @@
     btn.onclick = onClick;
     row.appendChild(btn);
   }
-  function appendFlowAction(hostId, label, onClick){
+  function setFlowActions(hostId, actions){
     const host = document.getElementById(hostId);
     if(!host) return;
     let row = host.querySelector('.flow-action');
@@ -351,12 +367,15 @@
       row.style.marginTop = '10px';
       host.appendChild(row);
     }
-    const btn = document.createElement('button');
-    btn.className = 'x';
-    btn.style.marginLeft = '8px';
-    btn.textContent = label;
-    btn.onclick = onClick;
-    row.appendChild(btn);
+    row.innerHTML = '';
+    actions.forEach(({label, onClick})=>{
+      const btn = document.createElement('button');
+      btn.className = 'x';
+      btn.style.marginRight = '8px';
+      btn.textContent = label;
+      btn.onclick = onClick;
+      row.appendChild(btn);
+    });
   }
 
   function startNextOrder(){
@@ -416,11 +435,6 @@
     renderAll();
     goTab('order');
   }
-  function addNewOrderFromKitchen(){
-    BK_STATE.addSlot();
-    renderAll();
-    goTab('order');
-  }
 
   function getHistory(){
     try{
@@ -456,9 +470,16 @@
     const st = BK_STATE.getState();
     const slot = st.slots[i];
     if(!slot) return;
-    BK_STATE.setIssued(i, true);
     pushHistory(slotSnapshot({...slot, issued:true}));
-    renderIssue();
+    st.slots.splice(i,1);
+    if(!st.slots.length){
+      BK_STATE.setState({slots:[{name:'SN1', items:[], pay:'unpaid', issued:false, orderNo:BK_STATE.nextOrderNo(), createdAt:Date.now()}], active:0, discountRate:st.discountRate});
+    }else{
+      st.active = Math.max(0, Math.min(st.active, st.slots.length-1));
+      BK_STATE.setState(st);
+    }
+    renderAll();
+    goTab('order');
   }
 
   function openHistory(){
@@ -787,6 +808,6 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, addNewOrderFromKitchen, markIssued
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued
   };
 })();
