@@ -175,8 +175,10 @@
     ctl.forEach(c=>bar.removeChild(c));
     slots.forEach((s,i)=>{
       const el = document.createElement('span');
-      el.className='chip slot-chip' + (i===active?' active':'');
-      el.textContent = `${s.name} · ${s.orderNo || '-'}`;
+      const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
+      const status = s.issued ? 'issued' : (s.pay==='unpaid' ? 'unpaid' : (allDone ? 'ready' : 'kitchen'));
+      el.className='chip slot-chip status-' + status + (i===active?' active':'');
+      el.innerHTML = `<span class="status-dot"></span>${s.name} · ${s.orderNo || '-'}`;
       el.onclick = ()=>{ BK_STATE.setActive(i); renderOrder(); refreshTotals(); goTab('order'); };
       bar.appendChild(el);
     });

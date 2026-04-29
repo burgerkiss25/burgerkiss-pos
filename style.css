@@ -29,9 +29,22 @@ header{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;padding:10px 
 }
 .hud-rows .disabled{opacity:.45;filter:saturate(.5)}
 .chip.active{outline:2px solid #3a3f48}
+.slot-chip{display:inline-flex;align-items:center;gap:8px}
+.slot-chip .status-dot{width:8px;height:8px;border-radius:999px;background:#5c6573;flex:0 0 auto}
+.slot-chip.status-unpaid .status-dot{background:#e67e22}
+.slot-chip.status-kitchen .status-dot{background:#3498db}
+.slot-chip.status-ready .status-dot{background:#2ecc71}
+.slot-chip.status-issued .status-dot{background:#9b59b6}
 .tabbar{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
 .tabbar button{min-height:40px;padding:8px 12px;border-radius:var(--radius-md);background:#151920;border:1px solid #28303a;cursor:pointer;font-weight:700;font-size:var(--fz-md)}
 .tabbar .active{background:#1b2027;border-color:#384352}
+.workflow-step{display:inline-flex;align-items:center;gap:8px}
+.workflow-step .step-no{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:20px;height:20px;border-radius:999px;
+  border:1px solid #3a4452;background:#10141b;color:#d6dde7;font-size:11px;font-weight:800;
+}
+.tabbar .active.workflow-step .step-no{background:#1f2632;border-color:#5b6b84;color:#fff}
 
 .edit-menu-wrap{position:relative;display:inline-flex}
 .edit-menu{
