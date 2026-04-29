@@ -234,7 +234,7 @@
         list.appendChild(li);
       });
     });
-    ensureFlowAction('makeList', '➡️ Go to Issue', ()=> goTab('issue'));
+    ensureFlowAction('makeList', '➡️ Continue to Issue', ()=> goTab('issue'));
   }
 
   function renderPay(){
@@ -257,7 +257,7 @@
         </div>`;
       box.appendChild(card);
     });
-    ensureFlowAction('payList', '➡️ Go to Make', ()=> goTab('make'));
+    ensureFlowAction('payList', '➡️ Continue to Kitchen', ()=> goTab('make'));
   }
 
   function renderIssue(){
@@ -319,7 +319,7 @@
     const allDone = slot.items.length > 0 && slot.items.every(it=>!!it.done);
     const canReset = slot.issued && slot.pay !== 'unpaid' && allDone;
     if(!canReset){
-      infoDialog('Complete order first: paid, kitchen done, and marked as issued. Use "Paid Cash + Start Now" if you want to force a new order.');
+      infoDialog('Complete order first: paid, kitchen done, and marked as issued. Use "Paid + Start Now" if you want to force a new order.');
       return;
     }
     st.slots[i] = {
