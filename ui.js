@@ -251,7 +251,6 @@
             <span>Status: ${s.pay.toUpperCase()}</span>
             <button onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Unpaid</button>
             <button onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
-            <button onclick="BK_UI.paidAndNewOrder(${i}, 'cash');">Paid + New Order</button>
             <button onclick="BK_STATE.setPay(${i},'momo'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid MoMo</button>
           </div>
         </div>`;
@@ -319,7 +318,7 @@
     const allDone = slot.items.length > 0 && slot.items.every(it=>!!it.done);
     const canReset = slot.issued && slot.pay !== 'unpaid' && allDone;
     if(!canReset){
-      infoDialog('Complete order first: paid, kitchen done, and marked as issued. Use "Paid + New Order" to continue taking orders while kitchen is working.');
+      infoDialog('Complete order first: paid, kitchen done, and marked as issued. Use + Slot in header after payment to take a new order while kitchen keeps working.');
       return;
     }
     st.slots[i] = {
@@ -354,12 +353,13 @@
     goTab('order');
   }
 
-  function paidAndNewOrder(slotIndex, payMode){
+  function addNewOrderSlot(){
     const st = BK_STATE.getState();
-    const i = Number(slotIndex);
-    if(!st.slots[i]) return;
-    st.slots[i].pay = payMode === 'momo' ? 'momo' : 'cash';
-    BK_STATE.setState(st);
+    const slot = st.slots[st.active];
+    if(slot && slot.items.length>0 && slot.pay === 'unpaid'){
+      infoDialog('Please confirm payment first, then use + Slot to start the next order.');
+      return;
+    }
     BK_STATE.addSlot();
     renderAll();
     goTab('order');
@@ -625,6 +625,6 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, paidAndNewOrder
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot
   };
 })();

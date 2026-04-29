@@ -33,7 +33,7 @@
   document.getElementById('btnClearDisc').onclick = ()=>{ BK_STATE.setDiscount(0); BK_UI.refreshTotals(); };
   document.getElementById('btnClearStorage').onclick = ()=> BK_UI.clearStorageWithConfirm();
 
-  document.getElementById('btnAddSlot').onclick = ()=>{ BK_STATE.addSlot(); BK_UI.renderAll(); };
+  document.getElementById('btnAddSlot').onclick = ()=> BK_UI.addNewOrderSlot();
   document.getElementById('btnRenameSlot').onclick = ()=> BK_UI.renameActiveSlot();
   document.getElementById('btnDeleteSlot').onclick = ()=> BK_UI.deleteActiveSlot();
 
@@ -43,13 +43,9 @@
       el.classList.add('disabled');
       el.onclick = ()=> BK_UI.infoDialog(`Slot management disabled while force-slot mode is active (${window.BK_SYNC_FORCE_SLOT}).`);
     });
-    const addEl = document.getElementById('btnAddSlot');
-    addEl.classList.remove('disabled');
-    addEl.onclick = ()=>{
-      BK_STATE.addSlot();
-      BK_UI.renderAll();
-      BK_UI.infoDialog('New local order slot created. Note: only the active slot is mirrored in force-slot sync mode.');
-    };
+    const add = document.getElementById('btnAddSlot');
+    add.classList.remove('disabled');
+    add.onclick = ()=> BK_UI.addNewOrderSlot();
   }
 
   // Quick notes
