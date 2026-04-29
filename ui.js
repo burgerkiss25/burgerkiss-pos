@@ -278,53 +278,6 @@
   }
 
   function renderStock(){
-    const payList = document.getElementById('payList');
-    if(!payList) return;
-    let host = document.getElementById('stockCard');
-    if(!host){
-      host = document.createElement('div');
-      host.id = 'stockCard';
-      host.className = 'slot-card';
-      payList.appendChild(host);
-    }
-    const {slots} = BK_STATE.getState();
-    const defs = stockDefs();
-    const usage = {};
-    Object.keys(defs.INGREDIENTS || {}).forEach(k=>{ usage[k] = 0; });
-    slots.forEach(s=>{
-      s.items.forEach(it=>{
-        const rec = (defs.RECIPES || {})[it.itemId];
-        if(!rec) return;
-        Object.entries(rec).forEach(([id, qty])=>{
-          const n = Number(qty);
-          if(Number.isFinite(n) && n > 0) usage[id] = (usage[id] || 0) + n;
-        });
-      });
-    });
-    const rows = Object.entries(defs.INGREDIENTS || {}).map(([id, def])=>({
-      id,
-      name: (def && def.name) || id,
-      qty: Number(def && def.qty) || 0,
-      unit: (def && def.unit) || ''
-    }));
-
-    host.innerHTML = '<div class="slot-head"><div><span class="label">Stock</span> · used / left</div></div>';
-    rows.forEach(r=>{
-      const row = document.createElement('div');
-      row.className = 'row';
-      const start = Number(r.qty) || 0;
-      const used = usage[r.id] || 0;
-      const left = Math.max(0, start - used);
-      const low = start > 0 ? (left / start) <= 0.2 : false;
-      row.innerHTML = `
-        <span class="left"><b>${r.name}</b> <small>${start} ${r.unit || ''}</small></span>
-        <span style="${low ? 'color:#ffb347' : ''}">used ${used} · left ${left} ${r.unit || ''}</span>
-      `;
-      host.appendChild(row);
-    });
-  }
-
-  function renderStock(){
     if(!window.BK_STOCK) return;
     const payList = document.getElementById('payList');
     if(!payList) return;
@@ -338,13 +291,18 @@
     const {slots} = BK_STATE.getState();
     const rows = BK_STOCK.getSnapshot(slots);
 
-    host.innerHTML = '<div class="slot-head"><div><span class="label">Stock</span> · used / left</div></div>';
+    host.innerHTML = '<div class="slot-head"><div><span class="label">Stock</span> · truck first, then storage</div></div>';
     rows.forEach(r=>{
+      if(r.track === false) return;
       const row = document.createElement('div');
       row.className = 'row';
+      const alerts = [
+        r.refillNeeded ? 'REFILL FROM STORAGE' : '',
+        r.buyNeeded ? 'BUY / ORDER' : ''
+      ].filter(Boolean).join(' · ');
       row.innerHTML = `
-        <span class="left"><b>${r.name}</b> <small>${r.start} ${r.unit || ''}</small></span>
-        <span style="${r.low ? 'color:#ffb347' : ''}">used ${r.used} · left ${r.left} ${r.unit || ''}</span>
+        <span class="left"><b>${r.name}</b> <small>used ${r.used} ${r.unit || ''}</small></span>
+        <span style="${alerts ? 'color:#ffb347' : ''}">truck ${r.leftTruck} · storage ${r.leftStorage} ${r.unit || ''}${alerts ? ` · ${alerts}` : ''}</span>
       `;
       host.appendChild(row);
     });
