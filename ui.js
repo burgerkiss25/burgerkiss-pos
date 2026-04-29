@@ -206,7 +206,7 @@
 
     const c = BK_LOGIC.computeSlot(s);
     setSlotTotals(c.subtotal, 0, c.subtotal);
-    ensureFlowAction('lines', '➡️ Continue to Payment', ()=> goTab('pay'));
+    ensureFlowAction('lines', '➡️ Go to Payment', ()=> goTab('pay'));
   }
 
   function renderMake(){
@@ -251,6 +251,7 @@
             <span>Status: ${s.pay.toUpperCase()}</span>
             <button onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Unpaid</button>
             <button onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
+            <button onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals(); BK_UI.quickStartNext(${i});">Paid Cash + Start Now</button>
             <button onclick="BK_STATE.setPay(${i},'momo'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid MoMo</button>
           </div>
         </div>`;
@@ -279,7 +280,7 @@
         </div>`;
       box.appendChild(card);
     });
-    ensureFlowAction('issueList', '⬅️ Start New Order', ()=> startNextOrder());
+    ensureFlowAction('issueList', '⬅️ Start Next Order', ()=> startNextOrder());
   }
 
   function goTab(name){
@@ -318,9 +319,27 @@
     const allDone = slot.items.length > 0 && slot.items.every(it=>!!it.done);
     const canReset = slot.issued && slot.pay !== 'unpaid' && allDone;
     if(!canReset){
-      infoDialog('Please complete all required steps first: paid, kitchen done, and marked as issued.');
+      infoDialog('Complete order first: paid, kitchen done, and marked as issued. Use "Paid + Start Now" if you want to force a new order.');
       return;
     }
+    st.slots[i] = {
+      name: slot.name,
+      items: [],
+      pay: 'unpaid',
+      issued: false,
+      orderNo: BK_STATE.nextOrderNo()
+    };
+    BK_STATE.setState(st);
+    renderAll();
+    goTab('order');
+  }
+
+  function quickStartNext(slotIndex){
+    const st = BK_STATE.getState();
+    const i = Number.isInteger(slotIndex) ? slotIndex : st.active;
+    const slot = st.slots[i];
+    if(!slot) return;
+    st.active = i;
     st.slots[i] = {
       name: slot.name,
       items: [],
@@ -584,6 +603,6 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder
+    infoDialog, confirmDialog, startNextOrder, quickStartNext
   };
 })();
