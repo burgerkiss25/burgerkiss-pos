@@ -38,11 +38,18 @@
   document.getElementById('btnDeleteSlot').onclick = ()=> BK_UI.deleteActiveSlot();
 
   if(forceSlot){
-    ['btnAddSlot', 'btnRenameSlot', 'btnDeleteSlot'].forEach(id=>{
+    ['btnRenameSlot', 'btnDeleteSlot'].forEach(id=>{
       const el = document.getElementById(id);
       el.classList.add('disabled');
       el.onclick = ()=> BK_UI.infoDialog(`Slot management disabled while force-slot mode is active (${window.BK_SYNC_FORCE_SLOT}).`);
     });
+    const addEl = document.getElementById('btnAddSlot');
+    addEl.classList.remove('disabled');
+    addEl.onclick = ()=>{
+      BK_STATE.addSlot();
+      BK_UI.renderAll();
+      BK_UI.infoDialog('New local order slot created. Note: only the active slot is mirrored in force-slot sync mode.');
+    };
   }
 
   // Quick notes
