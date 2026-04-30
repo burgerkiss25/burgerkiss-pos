@@ -243,7 +243,7 @@
 
     const c = BK_LOGIC.computeSlot(s);
     setSlotTotals(c.subtotal, 0, c.subtotal);
-    ensureFlowAction('lines', '➡️ Go to Make', ()=> goTab('make'));
+    ensureFlowActions('orderFlowNav', [{ label:'➡️ Go to Make', onClick:()=> goTab('make') }]);
   }
 
   function renderMake(){
@@ -349,8 +349,9 @@
       card.appendChild(checklist);
       box.appendChild(card);
     });
+    const activeIssued = BK_STATE.getState().slots[BK_STATE.getState().active]?.issued;
     ensureFlowActions('issueList', [
-      { label:'⬅️ Back to Payment', onClick:()=> goTab('pay') },
+      { label:'⬅️ Back to Payment', onClick:()=> goTab('pay'), disabled: !!activeIssued },
       { label:'🆕 Start Next Order', onClick:()=> startNextOrder() }
     ]);
   }
@@ -358,6 +359,12 @@
   function goTab(name){
     const valid = new Set(['order','make','pay','issue']);
     const target = valid.has(name) ? name : 'order';
+    const st = BK_STATE.getState();
+    const activeSlot = st.slots[st.active];
+    if(activeSlot?.issued && target !== 'issue'){
+      infoDialog('This order is already issued and locked. Start a new order slot for further changes.');
+      return;
+    }
 
     const sectionMap = {
       order: 'tab-order',
@@ -388,10 +395,10 @@
     host.querySelector('.flow-action')?.remove();
   }
 
-  function ensureFlowAction(hostId, label, onClick){
+  function ensureFlowActions(hostId, actions){
     const host = document.getElementById(hostId);
     if(!host) return;
-    let row = host.querySelector('.flow-action');
+    let row = host.classList.contains('flow-action') ? host : host.querySelector('.flow-action');
     if(!row){
       row = document.createElement('div');
       row.className = 'flow-action';
@@ -399,10 +406,11 @@
       host.appendChild(row);
     }
     row.innerHTML = '';
-    (actions || []).forEach(({label, onClick})=>{
+    (actions || []).forEach(({label, onClick, disabled})=>{
       const btn = document.createElement('button');
       btn.className = 'x';
       btn.textContent = label;
+      btn.disabled = !!disabled;
       btn.onclick = onClick;
       row.appendChild(btn);
     });
@@ -843,6 +851,6 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab
   };
 })();
