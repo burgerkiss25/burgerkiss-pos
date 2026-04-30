@@ -20,31 +20,41 @@
       coconut_water_bottle: { name: 'Coconut Water Bottle', qty: 30, unit: 'btl' },
       beer: { name: 'Beer', qty: 48, unit: 'btl' },
       egg: { name: 'Egg', qty: 48, unit: 'pcs' },
-      bacon_slice: { name: 'Bacon Slice', qty: 120, unit: 'slice' }
+      bacon_slice: { name: 'Bacon Slice', qty: 120, unit: 'slice' },
+      ketchup: { name: 'Ketchup', qty: 2000, unit: 'g' },
+      mayonnaise: { name: 'Mayonnaise', qty: 2000, unit: 'g' },
+      chicken_burger_sauce: { name: 'Chicken Burger Sauce', qty: 800, unit: 'g' },
+      chicken_wings_sauce: { name: 'Chicken Wings Sauce', qty: 800, unit: 'g' },
+      onion_diced: { name: 'Onion Diced', qty: 1000, unit: 'g' }
     },
     RECIPES: {
       hamburger: { bun: 1, beef_patty: 1 },
       cheeseburger: { bun: 1, beef_patty: 1, cheese_slice: 1 },
-      w6: { chicken_wing: 6 },
-      w12: { chicken_wing: 12 },
-      w24: { chicken_wing: 24 },
-      fr_std: { fries_portion: 1 },
-      fr_lg: { fries_portion: 2 },
-      x_patty: { beef_patty: 1 },
+      wings_6: { chicken_wing: 6 },
+      wings_12: { chicken_wing: 12 },
+      wings_24: { chicken_wing: 24 },
+      fries_standard: { fries_portion: 1 },
+      fries_large: { fries_portion: 2 },
+      x_beef_patty: { beef_patty: 1 },
       x_cheese: { cheese_slice: 1 },
       x_bacon: { bacon_slice: 1 },
-      x_egg: { egg: 1 },
-      x_omelet: { egg: 2 },
-      d_coconut: { coconut_fresh: 1 },
-      d_coke: { soda_can: 1 },
-      d_fanta_o: { soda_can: 1 },
-      d_fanta_l: { soda_can: 1 },
+      x_fried_egg: { egg: 1 },
+      x_omelette: { egg: 2 },
+      x_sauce_ketchup: { ketchup: 20 },
+      x_sauce_mayonnaise: { mayonnaise: 20 },
+      x_sauce_chipotle: { mayonnaise: 15, chicken_burger_sauce: 5 },
+      x_sauce_dutch_special: { mayonnaise: 10, ketchup: 10, onion_diced: 5 },
+      x_sauce_chicken_wings: { chicken_wings_sauce: 20 },
+      d_coconut_fresh: { coconut_fresh: 1 },
+      d_cola: { soda_can: 1 },
+      d_fanta_orange: { soda_can: 1 },
+      d_fanta_coktail: { soda_can: 1 },
       d_sprite: { soda_can: 1 },
-      d_ice_tea: { ice_tea: 1 },
-      d_cw_btl: { coconut_water_bottle: 1 },
-      d_club_s: { beer: 1 },
-      d_club_l: { beer: 1 },
-      d_guin: { beer: 1 }
+      d_iced_tea_lime: { ice_tea: 1 },
+      d_coconut_water_bottle: { coconut_water_bottle: 1 },
+      d_club_beer_std: { beer: 1 },
+      d_club_beer_large: { beer: 1 },
+      d_guinness: { beer: 1 }
     }
   };
 
@@ -132,6 +142,7 @@
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
     const query = productQuery.trim().toLowerCase();
     const items = base.filter(it => (currentCat==='all' ? true : it.cat===currentCat))
+      .filter(it => !String(it.id || '').startsWith('x_sauce_'))
       .filter(it => query ? it.name.toLowerCase().includes(query) : true);
     items.forEach(it=>{
       const b = document.createElement('button');
@@ -147,16 +158,78 @@
       b.innerHTML = `<div class="name">${it.name}</div>
                      <div class="price">${it.cat==='burger'?'Single':'Price'}: ${BK_PRICES.getPrice(it.id)} GHS</div>
                      <span class="badge">+1</span>`;
-      b.onclick = ()=>{
-        const note = (document.getElementById('noteInput').value||'').trim();
-        BK_STATE.addItem(it.id, note);
-        document.getElementById('noteInput').value='';
-        renderOrder();
-        renderMake();
-        refreshTotals();
-      };
+      b.onclick = ()=> addProductWithFlow(it);
       grid.appendChild(b);
     });
+  }
+
+  async function pickFromList(title, options){
+    const host = ensureDialogHost();
+    document.getElementById('appDialogTitle').textContent = title;
+    document.getElementById('appDialogBody').innerHTML = `
+      <div style="display:grid;gap:8px" id="dlgOpts"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="x" id="dlgCancel">Cancel</button></div>
+    `;
+    const wrap = document.getElementById('dlgOpts');
+    return new Promise(resolve=>{
+      host.classList.add('open');
+      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(null); };
+      (options || []).forEach(opt=>{
+        const btn = document.createElement('button');
+        btn.className = 'x';
+        btn.textContent = opt.label;
+        btn.onclick = ()=>{ closeDialog(); resolve(opt.value); };
+        wrap.appendChild(btn);
+      });
+    });
+  }
+
+  async function addProductWithFlow(product){
+    const note = (document.getElementById('noteInput').value||'').trim();
+    BK_STATE.addItem(product.id, note);
+
+    if(product.id === 'fries_standard'){
+      const sauce = await pickFromList('Bitte Sauce für Fries wählen', [
+        {label:'Ketchup', value:'x_sauce_ketchup'},
+        {label:'Mayonnaise', value:'x_sauce_mayonnaise'},
+        {label:'Chipotle', value:'x_sauce_chipotle'},
+        {label:'Dutch Special', value:'x_sauce_dutch_special'},
+        {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'},
+        {label:'No Sauce Wanted', value:null}
+      ]);
+      if(sauce) BK_STATE.addItem(sauce, 'included');
+      const extra = await pickFromList('Extra Sauce gewünscht?', [
+        {label:'No Extra Sauce Wanted', value:null},
+        {label:'+1 Extra Sauce Cup (5 GHS)', value:'extra1'}
+      ]);
+      if(extra === 'extra1'){
+        const extraType = await pickFromList('Welche Extra-Sauce?', [
+          {label:'Ketchup', value:'x_sauce_ketchup'},
+          {label:'Mayonnaise', value:'x_sauce_mayonnaise'},
+          {label:'Chipotle', value:'x_sauce_chipotle'},
+          {label:'Dutch Special', value:'x_sauce_dutch_special'},
+          {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'}
+        ]);
+        if(extraType) BK_STATE.addItem(extraType, 'extra');
+      }
+    }
+
+    if(product.id === 'hamburger'){
+      if(await confirmDialog('Hamburger Add-on', 'Extra Beef Patty hinzufügen?')) BK_STATE.addItem('x_beef_patty', '');
+      if(await confirmDialog('Hamburger Add-on', 'Extra Cheese hinzufügen?')) BK_STATE.addItem('x_cheese', '');
+      const egg = await pickFromList('Ei auswählen', [
+        {label:'Kein Ei', value:null},
+        {label:'Fried Egg', value:'x_fried_egg'},
+        {label:'Omelette', value:'x_omelette'}
+      ]);
+      if(egg) BK_STATE.addItem(egg, '');
+      if(await confirmDialog('Hamburger Add-on', 'Bacon hinzufügen?')) BK_STATE.addItem('x_bacon', '');
+    }
+
+    document.getElementById('noteInput').value='';
+    renderOrder();
+    renderMake();
+    refreshTotals();
   }
 
 

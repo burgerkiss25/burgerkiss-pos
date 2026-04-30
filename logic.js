@@ -22,12 +22,12 @@
     let total = sumLeft(); let combos = 0;
 
     function pickFries(){
-      if(counts['fr_std']>0){ consume('fr_std'); return {surcharge:0, id:'fr_std'}; }
-      if(counts['fr_lg']>0){ consume('fr_lg'); return {surcharge:(BK_PRICES.getPrice('fr_lg') - BK_DATA.MENU.included.fries), id:'fr_lg'}; }
+      if(counts['fries_standard']>0){ consume('fries_standard'); return {surcharge:0, id:'fries_standard'}; }
+      if(counts['fries_large']>0){ consume('fries_large'); return {surcharge:(BK_PRICES.getPrice('fries_large') - BK_DATA.MENU.included.fries), id:'fries_large'}; }
       return null;
     }
     function pickDrink(){
-      const pref=['d_coconut','d_coke','d_fanta_o','d_fanta_l','d_sprite','d_ice_tea','d_cw_btl','d_club_s','d_club_l','d_guin'];
+      const pref=['d_coconut_fresh','d_cola','d_fanta_orange','d_fanta_coktail','d_biggoo_grape','d_sprite','d_iced_tea_lime','d_iced_tea_ginger','d_iced_tea_strawberry','d_iced_tea_pineapple','d_iced_tea_mint','d_iced_tea_apple','d_iced_tea_green_mint','d_iced_tea_vannile','d_coconut_water_bottle','d_club_beer_std','d_club_beer_large','d_guinness'];
       for(const id of pref){
         if(consume(id)){
           const up = Math.max(0, BK_PRICES.getPrice(id) - BK_DATA.MENU.included.drink);
@@ -44,21 +44,25 @@
     }
     function buildBurgerCombos(bid, mprice){
       while(counts[bid]>0){
-        if(counts['fr_std']+counts['fr_lg']<=0) break;
+        if(counts['fries_standard']+counts['fries_large']<=0) break;
         const d = pickDrink(); if(!d) break;
         const f = pickFries(); if(!f){ counts[d.id]++; break; }
         consume(bid); applyMenu([bid, f.id, d.id], mprice, f.surcharge + d.surcharge);
       }
     }
+    buildBurgerCombos('double_cheeseburger', BK_DATA.MENU.double_cheeseburger);
+    buildBurgerCombos('double_burger', BK_DATA.MENU.double_burger);
     buildBurgerCombos('cheeseburger', BK_DATA.MENU.cheeseburger);
-    buildBurgerCombos('hamburger',   BK_DATA.MENU.hamburger);
+    buildBurgerCombos('hamburger', BK_DATA.MENU.hamburger);
 
-    while(counts['w12']>0){
-      if(counts['fr_std']+counts['fr_lg']<=0) break;
+    ['wings_24','wings_12','wings_6'].forEach(wid=>{
+      while(counts[wid]>0){
+      if(counts['fries_standard']+counts['fries_large']<=0) break;
       const d = pickDrink(); if(!d) break;
       const f = pickFries(); if(!f){ counts[d.id]++; break; }
-      consume('w12'); applyMenu(['w12', f.id, d.id], BK_DATA.MENU.wings12, f.surcharge + d.surcharge);
+      consume(wid); applyMenu([wid, f.id, d.id], BK_DATA.MENU[wid], f.surcharge + d.surcharge);
     }
+    });
 
     return {subtotal: total, combos};
   }
