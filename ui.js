@@ -356,10 +356,30 @@
   }
 
   function goTab(name){
-    const map = { order:'tabOrder', pay:'tabPay', make:'tabMake', issue:'tabIssue' };
-    const id = map[name];
-    const el = id && document.getElementById(id);
-    if(el) el.click();
+    const valid = new Set(['order','make','pay','issue']);
+    const target = valid.has(name) ? name : 'order';
+
+    const sectionMap = {
+      order: 'tab-order',
+      make: 'tab-make',
+      pay: 'tab-pay',
+      issue: 'tab-issue'
+    };
+    Object.entries(sectionMap).forEach(([key, id])=>{
+      const sec = document.getElementById(id);
+      if(sec) sec.classList.toggle('hidden', key !== target);
+    });
+
+    const tabMap = {
+      order: 'tabOrder',
+      make: 'tabMake',
+      pay: 'tabPay',
+      issue: 'tabIssue'
+    };
+    Object.entries(tabMap).forEach(([key, id])=>{
+      const tab = document.getElementById(id);
+      if(tab) tab.classList.toggle('active', key === target);
+    });
   }
 
   function clearFlowAction(hostId){
