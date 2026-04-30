@@ -302,6 +302,7 @@
     entries.forEach(([key,qty])=>{
       const [id, note=''] = BK_LOGIC.parseItemKey(key);
       const prod = BK_DATA.BASE.find(x=>x.id===id);
+      const unitPrice = (note==='included' && String(id).startsWith('x_sauce_')) ? 0 : BK_PRICES.getPrice(id);
       const row = document.createElement('div'); row.className='row';
       const safeKey = encodeURIComponent(key);
       row.innerHTML = `
@@ -309,7 +310,7 @@
           <button class="mini" ${s.issued ? 'disabled' : ''} onclick="BK_STATE.decItemForKey(decodeURIComponent('${safeKey}')); BK_UI.renderOrder(); BK_UI.renderMake(); BK_UI.refreshTotals();">−1</button>
           <b>${prod ? prod.name : id}</b> <small>× ${qty}${note?` · ${note}`:''}</small>
         </span>
-        <span>${qty*BK_PRICES.getPrice(id)} GHS</span>
+        <span>${qty*unitPrice} GHS</span>
       `;
       lines.appendChild(row);
     });

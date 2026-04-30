@@ -3,6 +3,9 @@
   function makeItemKey(itemId, note){
     return JSON.stringify([itemId, note || '']);
   }
+  function isIncludedSauce(itemId, note){
+    return String(note || '').toLowerCase() === 'included' && String(itemId || '').startsWith('x_sauce_');
+  }
   function parseItemKey(key){
     try{
       const arr = JSON.parse(key);
@@ -19,7 +22,11 @@
     slot.items.forEach(it=> counts[it.itemId]++);
     const consume = id => { if(counts[id]>0){ counts[id]--; return true; } return false; }
     const sumLeft = () => BK_DATA.BASE.reduce((a,x)=>a + counts[x.id]*BK_PRICES.getPrice(x.id),0);
-    let total = sumLeft(); let combos = 0;
+    let total = slot.items.reduce((acc, it)=>{
+      const price = BK_PRICES.getPrice(it.itemId);
+      return acc + (isIncludedSauce(it.itemId, it.note) ? 0 : price);
+    }, 0);
+    let combos = 0;
 
     function pickFries(){
       if(counts['fries_standard']>0){ consume('fries_standard'); return {surcharge:0, id:'fries_standard'}; }
@@ -93,7 +100,8 @@
     return Object.entries(counts).map(([key,qty])=>{
       const [id, note=''] = parseItemKey(key);
       const p = BK_DATA.BASE.find(x=>x.id===id);
-      return { id, note, qty, name: p ? p.name : id, total: qty*BK_PRICES.getPrice(id), key };
+      const unit = isIncludedSauce(id, note) ? 0 : BK_PRICES.getPrice(id);
+      return { id, note, qty, name: p ? p.name : id, total: qty*unit, key };
     });
   }
   function textLines(items){
