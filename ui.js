@@ -254,7 +254,7 @@
         list.appendChild(li);
       });
     });
-    ensureFlowAction('makeList', '➡️ Go to Pay', ()=> goTab('pay'));
+    ensureFlowAction('makeList', '➡️ Go to Issue', ()=> goTab('issue'));
   }
 
   function renderPay(){
@@ -283,7 +283,7 @@
         </div>`;
       box.appendChild(card);
     });
-    ensureFlowAction('payList', '➡️ Go to Issue', ()=> goTab('issue'));
+    ensureFlowAction('payList', '➡️ Go to Make', ()=> goTab('make'));
   }
 
   function renderIssue(){
@@ -302,6 +302,7 @@
       const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
       const canIssue = s.pay !== 'unpaid' && allDone;
       const card = document.createElement('div'); card.className='slot-card';
+      const checkItems = BK_LOGIC.groupedLines(s.items).map(x=>`${x.qty}x ${x.name}${x.note ? ` (${x.note})` : ''}`).join(' · ');
       card.innerHTML = `
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
@@ -311,6 +312,12 @@
             <button onclick="BK_STATE.setIssued(${i}, false); BK_UI.renderIssue();">Undo</button>
           </div>
         </div>`;
+      const checklist = document.createElement('div');
+      checklist.className = 'row';
+      checklist.style.borderTop = '1px dashed #2a2f39';
+      checklist.style.padding = '8px 0';
+      checklist.innerHTML = `<span><small>Final check:</small> ${checkItems || 'No items'}</span>`;
+      card.appendChild(checklist);
       box.appendChild(card);
     });
     ensureFlowAction('issueList', '⬅️ Start Next Order', ()=> startNextOrder());
@@ -433,9 +440,20 @@
     const st = BK_STATE.getState();
     const slot = st.slots[i];
     if(!slot) return;
-    BK_STATE.setIssued(i, true);
-    pushHistory(slotSnapshot({...slot, issued:true}));
-    renderIssue();
+    const lines = BK_LOGIC.groupedLines(slot.items || []);
+    const checkHtml = lines.length
+      ? lines.map(x=>`<div>${x.qty}x <b>${x.name}</b>${x.note ? ` <small>(${x.note})</small>` : ''}</div>`).join('')
+      : '<div>No items in this order.</div>';
+    confirmDialog(
+      `Final handover check – ${slot.orderNo || slot.name}`,
+      `<div style="margin-bottom:8px">Please confirm all items are packed correctly before issuing to customer.</div>${checkHtml}`
+    ).then(ok=>{
+      if(!ok) return;
+      BK_STATE.setIssued(i, true);
+      pushHistory(slotSnapshot({...slot, issued:true}));
+      renderIssue();
+      infoDialog('Order marked as issued.');
+    });
   }
 
   function openHistory(){
