@@ -100,14 +100,29 @@
   function recipeRowHtml(p){ return `<div class="row" data-recipe-row><span class="left" style="display:grid;grid-template-columns:1.1fr 1fr;gap:8px;flex:1"><span><b>${p.name}</b> <small>(${p.id})</small></span><input data-product-id="${p.id}" data-recipe-input placeholder="ingredient_id:qty, ingredient_id2:qty" value="${recipeToText(RECIPES[p.id] || {})}"></span></div>`; }
   function bindIngredientActions(body){ body.querySelectorAll('[data-remove]').forEach(btn=>{ btn.onclick = ()=>{ const row = btn.closest('[data-ing-row]'); if(row) row.remove(); }; }); }
 
-  function openEditor(){
+  function openEditor(mode){
     const body = document.getElementById('stockBody'); if(!body) return;
     const productList = Array.isArray(window.BK_DATA && BK_DATA.BASE) ? BK_DATA.BASE : [];
-    body.innerHTML = `<h4 style="margin:4px 0 8px">Ingredients</h4><div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button class="x" id="sAddIngredient">+ Ingredient</button></div><div style="font-size:12px;color:#9aa3ad;margin-bottom:8px">Columns: id, name, category, unit, location, stock(storage/truck), MOQ(storage/truck), track</div><div id="stockIngredients"></div><hr style="border:0;border-top:1px solid #2a2f39;margin:12px 0"><h4 style="margin:4px 0 8px">Product Recipes</h4><div style="font-size:12px;color:#9aa3ad;margin-bottom:8px">Format: ingredient_id:qty, ingredient_id2:qty</div><div id="stockRecipes"></div>`;
-    const ingWrap = document.getElementById('stockIngredients');
-    ingWrap.innerHTML = Object.entries(INGREDIENTS).map(([id, def])=> ingredientRowHtml(id, def)).join(''); bindIngredientActions(ingWrap);
-    const recipeWrap = document.getElementById('stockRecipes'); recipeWrap.innerHTML = productList.map(recipeRowHtml).join('');
-    document.getElementById('sAddIngredient').onclick = ()=>{ ingWrap.insertAdjacentHTML('beforeend', ingredientRowHtml('', {name:'', category:'general', unit:'', track_stock:true, stock_location:'both', current_stock_storage:0, current_stock_foodtruck:0, moq_storage:0, moq_foodtruck:0})); bindIngredientActions(ingWrap); };
+    const showIngredients = !mode || mode === 'all' || mode === 'ingredients';
+    const showRecipes = !mode || mode === 'all' || mode === 'recipes' || mode === 'addons';
+    const recipeProducts = mode === 'addons'
+      ? productList.filter(p=> p && (p.cat === 'extra' || p.cat === 'sauce'))
+      : productList;
+    body.innerHTML = `
+      ${showIngredients ? '<h4 style="margin:4px 0 8px">Ingredients</h4><div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button class="x" id="sAddIngredient">+ Ingredient</button></div><div style="font-size:12px;color:#9aa3ad;margin-bottom:8px">Columns: id, name, category, unit, location, stock(storage/truck), MOQ(storage/truck), track</div><div id="stockIngredients"></div>' : ''}
+      ${(showIngredients && showRecipes) ? '<hr style="border:0;border-top:1px solid #2a2f39;margin:12px 0">' : ''}
+      ${showRecipes ? `<h4 style="margin:4px 0 8px">${mode === 'addons' ? 'Add-on Recipes' : 'Product Recipes'}</h4><div style="font-size:12px;color:#9aa3ad;margin-bottom:8px">Format: ingredient_id:qty, ingredient_id2:qty</div><div id="stockRecipes"></div>` : ''}
+    `;
+    if(showIngredients){
+      const ingWrap = document.getElementById('stockIngredients');
+      ingWrap.innerHTML = Object.entries(INGREDIENTS).map(([id, def])=> ingredientRowHtml(id, def)).join('');
+      bindIngredientActions(ingWrap);
+      document.getElementById('sAddIngredient').onclick = ()=>{ ingWrap.insertAdjacentHTML('beforeend', ingredientRowHtml('', {name:'', category:'general', unit:'', track_stock:true, stock_location:'both', current_stock_storage:0, current_stock_foodtruck:0, moq_storage:0, moq_foodtruck:0})); bindIngredientActions(ingWrap); };
+    }
+    if(showRecipes){
+      const recipeWrap = document.getElementById('stockRecipes');
+      recipeWrap.innerHTML = recipeProducts.map(recipeRowHtml).join('');
+    }
     document.getElementById('modalStock').classList.add('open');
   }
 
