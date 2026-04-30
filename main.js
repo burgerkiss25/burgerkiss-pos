@@ -94,9 +94,18 @@
   document.getElementById('gPaid').onclick    = ()=> BK_UI.groupMarkPaid();
 
   // Category tabs
-  document.querySelectorAll('.catbar .tab').forEach(btn=>{
+  document.querySelectorAll('.catbar .tab[data-cat]').forEach(btn=>{
     btn.onclick = () => BK_UI.setCategory(btn.dataset.cat);
   });
+
+
+
+  // Persistent workflow nav buttons (independent of dynamic list rendering)
+  document.getElementById('btnOrderToMake')?.addEventListener('click', ()=> document.getElementById('tabMake')?.click());
+  document.getElementById('btnMakeToOrder')?.addEventListener('click', ()=> document.getElementById('tabOrder')?.click());
+  document.getElementById('btnMakeToIssue')?.addEventListener('click', ()=> document.getElementById('tabIssue')?.click());
+  document.getElementById('btnIssueToMake')?.addEventListener('click', ()=> document.getElementById('tabMake')?.click());
+  document.getElementById('btnIssueToPay')?.addEventListener('click', ()=> document.getElementById('tabPay')?.click());
 
   // initial render
   BK_UI.renderAll();
