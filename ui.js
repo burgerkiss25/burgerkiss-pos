@@ -233,7 +233,7 @@
       const safeKey = encodeURIComponent(key);
       row.innerHTML = `
         <span class="left">
-          <button class="mini" onclick="BK_STATE.decItemForKey(decodeURIComponent('${safeKey}')); BK_UI.renderOrder(); BK_UI.renderMake(); BK_UI.refreshTotals();">−1</button>
+          <button class="mini" ${s.issued ? 'disabled' : ''} onclick="BK_STATE.decItemForKey(decodeURIComponent('${safeKey}')); BK_UI.renderOrder(); BK_UI.renderMake(); BK_UI.refreshTotals();">−1</button>
           <b>${prod ? prod.name : id}</b> <small>× ${qty}${note?` · ${note}`:''}</small>
         </span>
         <span>${qty*BK_PRICES.getPrice(id)} GHS</span>
@@ -272,13 +272,16 @@
         const p = BK_DATA.BASE.find(x=>x.id===it.itemId);
         const li = document.createElement('div'); li.className='li';
         li.innerHTML = `
-          <input type="checkbox" ${it.done?'checked':''} onchange="BK_STATE.toggleDone(${i},${idx},this.checked); BK_UI.renderIssue();">
+          <input type="checkbox" ${it.done?'checked':''} ${s.issued ? 'disabled' : ''} onchange="BK_STATE.toggleDone(${i},${idx},this.checked); BK_UI.renderIssue();">
           <span>${p ? p.name : it.itemId}${it.note?` · <small>${it.note}</small>`:''}</span>
           <span style="margin-left:auto">${BK_PRICES.getPrice((p&&p.id)||it.itemId)} GHS</span>`;
         list.appendChild(li);
       });
     });
-    ensureFlowAction('makeList', '➡️ Go to Issue', ()=> goTab('issue'));
+    ensureFlowActions('makeList', [
+      { label:'⬅️ Back to Order', onClick:()=> goTab('order') },
+      { label:'➡️ Go to Payment', onClick:()=> goTab('pay') }
+    ]);
   }
 
   function renderPay(){
@@ -300,14 +303,17 @@
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS</div>
           <div class="pay-status">
             <span>Status: ${s.pay.toUpperCase()}</span>
-            <button onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Unpaid</button>
-            <button onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
-            <button onclick="BK_STATE.setPay(${i},'momo'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid MoMo</button>
+            <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Unpaid</button>
+            <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
+            <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'momo'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid MoMo</button>
           </div>
         </div>`;
       box.appendChild(card);
     });
-    ensureFlowAction('payList', '➡️ Go to Make', ()=> goTab('make'));
+    ensureFlowActions('payList', [
+      { label:'⬅️ Back to Make', onClick:()=> goTab('make') },
+      { label:'➡️ Go to Issue / Handover', onClick:()=> goTab('issue') }
+    ]);
   }
 
   function renderIssue(){
@@ -332,8 +338,7 @@
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
           <div class="pay-status">
             <span>Status: ${s.issued ? 'ISSUED' : 'WAITING'}</span>
-            <button ${canIssue ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark Issued</button>
-            <button onclick="BK_STATE.setIssued(${i}, false); BK_UI.renderIssue();">Undo</button>
+            <button ${(canIssue && !s.issued) ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark Issued</button>
           </div>
         </div>`;
       const checklist = document.createElement('div');
@@ -344,7 +349,10 @@
       card.appendChild(checklist);
       box.appendChild(card);
     });
-    ensureFlowAction('issueList', '⬅️ Start Next Order', ()=> startNextOrder());
+    ensureFlowActions('issueList', [
+      { label:'⬅️ Back to Payment', onClick:()=> goTab('pay') },
+      { label:'🆕 Start Next Order', onClick:()=> startNextOrder() }
+    ]);
   }
 
   function goTab(name){
@@ -352,6 +360,12 @@
     const id = map[name];
     const el = id && document.getElementById(id);
     if(el) el.click();
+  }
+
+  function clearFlowAction(hostId){
+    const host = document.getElementById(hostId);
+    if(!host) return;
+    host.querySelector('.flow-action')?.remove();
   }
 
   function ensureFlowAction(hostId, label, onClick){
@@ -365,11 +379,13 @@
       host.appendChild(row);
     }
     row.innerHTML = '';
-    const btn = document.createElement('button');
-    btn.className = 'x';
-    btn.textContent = label;
-    btn.onclick = onClick;
-    row.appendChild(btn);
+    (actions || []).forEach(({label, onClick})=>{
+      const btn = document.createElement('button');
+      btn.className = 'x';
+      btn.textContent = label;
+      btn.onclick = onClick;
+      row.appendChild(btn);
+    });
   }
 
   function startNextOrder(){
