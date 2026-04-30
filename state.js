@@ -110,6 +110,7 @@
 
   function addItem(id, note){
     ensureSlot();
+    if(slots[active].issued) return;
     slots[active].items.push({itemId:id, note: (note||'').trim(), done:false});
     history.push({slot:active});
     save();
@@ -130,22 +131,27 @@
     return [legacy[0] || '', legacy[1] || ''];
   }
   function decItemForKey(key){
-    const s = slots[active]; if(!s) return;
+    const s = slots[active]; if(!s || s.issued) return;
     const [id, note=''] = parseItemKey(key);
     const idx = s.items.findIndex(it => it.itemId===id && (it.note||'')===note);
     if(idx>-1){ s.items.splice(idx,1); save(); }
   }
   function setPay(i,status){
-    if(!slots[i]) return;
+    if(!slots[i] || slots[i].issued) return;
     slots[i].pay = PAY_SET.has(status) ? status : 'unpaid';
     save();
   }
   function setIssued(i, v){
     if(!slots[i]) return;
+    if(slots[i].issued && v===false) return;
     slots[i].issued = !!v;
     save();
   }
-  function toggleDone(i, j, v){ slots[i].items[j].done = !!v; save(); }
+  function toggleDone(i, j, v){
+    if(!slots[i] || slots[i].issued || !slots[i].items[j]) return;
+    slots[i].items[j].done = !!v;
+    save();
+  }
 
   function setDiscount(r){ discountRate = normalizeDiscount(r); save(); }
 
