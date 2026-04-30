@@ -2,6 +2,9 @@
 (function(){
   let currentCat = 'all';
   let groupSel = new Set();
+  const HISTORY_KEY = 'bk_order_history_v1';
+  let historyFilterText = '';
+  let historyFilterToday = false;
 
   const STOCK_DEFAULT = {
     INGREDIENTS: {
@@ -155,6 +158,7 @@
 
   function setCategory(cat){
     currentCat = cat || 'all';
+    goTab('order');
     document.querySelectorAll('.catbar .tab').forEach(btn=>{
       btn.classList.toggle('active', btn.dataset.cat===currentCat);
     });
@@ -174,9 +178,11 @@
     ctl.forEach(c=>bar.removeChild(c));
     slots.forEach((s,i)=>{
       const el = document.createElement('span');
-      el.className='chip slot-chip' + (i===active?' active':'');
-      el.textContent = s.name;
-      el.onclick = ()=>{ BK_STATE.setActive(i); renderOrder(); refreshTotals(); };
+      const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
+      const status = s.issued ? 'issued' : (s.pay==='unpaid' ? 'unpaid' : (allDone ? 'ready' : 'kitchen'));
+      el.className='chip slot-chip status-' + status + (i===active?' active':'');
+      el.innerHTML = `<span class="status-dot"></span>${s.name} · ${s.orderNo || '-'}`;
+      el.onclick = ()=>{ BK_STATE.setActive(i); renderOrder(); refreshTotals(); goTab('order'); };
       bar.appendChild(el);
     });
     ctl.forEach(c=>bar.appendChild(c));
@@ -189,7 +195,14 @@
     const s = slots[active];
 
     const counts = BK_LOGIC.groupCounts(s.items);
-    Object.entries(counts).forEach(([key,qty])=>{
+    const entries = Object.entries(counts);
+    if(entries.length===0){
+      const row = document.createElement('div');
+      row.className = 'empty-state';
+      row.textContent = 'No items yet. Select products to start this order.';
+      lines.appendChild(row);
+    }
+    entries.forEach(([key,qty])=>{
       const [id, note=''] = BK_LOGIC.parseItemKey(key);
       const prod = BK_DATA.BASE.find(x=>x.id===id);
       const row = document.createElement('div'); row.className='row';
@@ -206,18 +219,26 @@
 
     const c = BK_LOGIC.computeSlot(s);
     setSlotTotals(c.subtotal, 0, c.subtotal);
+    ensureFlowAction('lines', '➡️ Go to Make', ()=> goTab('make'));
   }
 
   function renderMake(){
     const {slots} = BK_STATE.getState();
     const box = document.getElementById('makeList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
+    if(!slots.length){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No active orders in kitchen.';
+      box.appendChild(empty);
+      return;
+    }
     slots.forEach((s,i)=>{
       const c = BK_LOGIC.computeSlot(s);
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
         <div class="slot-head">
-          <div><span class="label">${s.name}</span> · ${c.subtotal} GHS · Combos: ${c.combos}</div>
+          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS · Combos: ${c.combos} · In kitchen: ${formatAge(s.createdAt)}</div>
           <div><button onclick="BK_STATE.setActive(${i}); BK_UI.renderOrder(); BK_UI.refreshTotals();">Focus</button></div>
         </div>
         <div class="todo" id="todo-${i}"></div>`;
@@ -227,33 +248,269 @@
         const p = BK_DATA.BASE.find(x=>x.id===it.itemId);
         const li = document.createElement('div'); li.className='li';
         li.innerHTML = `
-          <input type="checkbox" ${it.done?'checked':''} onchange="BK_STATE.toggleDone(${i},${idx},this.checked)">
+          <input type="checkbox" ${it.done?'checked':''} onchange="BK_STATE.toggleDone(${i},${idx},this.checked); BK_UI.renderIssue();">
           <span>${p ? p.name : it.itemId}${it.note?` · <small>${it.note}</small>`:''}</span>
           <span style="margin-left:auto">${BK_PRICES.getPrice((p&&p.id)||it.itemId)} GHS</span>`;
         list.appendChild(li);
       });
     });
+    ensureFlowAction('makeList', '➡️ Go to Issue', ()=> goTab('issue'));
   }
 
   function renderPay(){
     const {slots} = BK_STATE.getState();
     const box = document.getElementById('payList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
+    if(!slots.length){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No active orders to pay.';
+      box.appendChild(empty);
+      return;
+    }
     slots.forEach((s,i)=>{
       const c = BK_LOGIC.computeSlot(s);
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
         <div class="slot-head">
-          <div><span class="label">${s.name}</span> · ${c.subtotal} GHS</div>
+          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS</div>
           <div class="pay-status">
             <span>Status: ${s.pay.toUpperCase()}</span>
-            <button onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.refreshTotals();">Unpaid</button>
-            <button onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.refreshTotals();">Paid Cash</button>
-            <button onclick="BK_STATE.setPay(${i},'momo'); BK_UI.renderPay(); BK_UI.refreshTotals();">Paid MoMo</button>
+            <button onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Unpaid</button>
+            <button onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
+            <button onclick="BK_STATE.setPay(${i},'momo'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid MoMo</button>
           </div>
         </div>`;
       box.appendChild(card);
     });
+    ensureFlowAction('payList', '⬅️ Back to Order', ()=> goTab('order'));
+  }
+
+  function renderIssue(){
+    const {slots} = BK_STATE.getState();
+    const box = document.getElementById('issueList');
+    if(!box) return;
+    box.querySelectorAll('.slot-card').forEach(n=>n.remove());
+    if(!slots.length){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No orders waiting for handover.';
+      box.appendChild(empty);
+      return;
+    }
+    slots.forEach((s,i)=>{
+      const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
+      const canIssue = s.pay !== 'unpaid' && allDone;
+      const card = document.createElement('div'); card.className='slot-card';
+      card.innerHTML = `
+        <div class="slot-head">
+          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
+          <div class="pay-status">
+            <span>Status: ${s.issued ? 'ISSUED' : 'WAITING'}</span>
+            <button ${canIssue ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark Issued</button>
+            <button onclick="BK_STATE.setIssued(${i}, false); BK_UI.renderIssue();">Undo</button>
+          </div>
+        </div>`;
+      box.appendChild(card);
+    });
+    ensureFlowAction('issueList', '➡️ Go to Pay', ()=> goTab('pay'));
+  }
+
+  function goTab(name){
+    const map = { order:'tabOrder', pay:'tabPay', make:'tabMake', issue:'tabIssue' };
+    const id = map[name];
+    const el = id && document.getElementById(id);
+    if(el) el.click();
+  }
+
+  function ensureFlowAction(hostId, label, onClick){
+    const host = document.getElementById(hostId);
+    if(!host) return;
+    let row = host.querySelector('.flow-action');
+    if(!row){
+      row = document.createElement('div');
+      row.className = 'flow-action';
+      row.style.marginTop = '10px';
+      host.appendChild(row);
+    }
+    row.innerHTML = '';
+    const btn = document.createElement('button');
+    btn.className = 'x';
+    btn.textContent = label;
+    btn.onclick = onClick;
+    row.appendChild(btn);
+  }
+
+  function startNextOrder(){
+    const st = BK_STATE.getState();
+    const i = st.active;
+    const slot = st.slots[i];
+    if(!slot){
+      goTab('order');
+      return;
+    }
+    const allDone = slot.items.length > 0 && slot.items.every(it=>!!it.done);
+    const canReset = slot.issued && slot.pay !== 'unpaid' && allDone;
+    if(!canReset){
+      infoDialog('Complete order first: paid, kitchen done, and marked as issued. Use + Slot in header after payment to take a new order while kitchen keeps working.');
+      return;
+    }
+    st.slots[i] = {
+      name: slot.name,
+      items: [],
+      pay: 'unpaid',
+      issued: false,
+      orderNo: BK_STATE.nextOrderNo(),
+      createdAt: Date.now()
+    };
+    BK_STATE.setState(st);
+    renderAll();
+    goTab('order');
+  }
+
+  function quickStartNext(slotIndex){
+    const st = BK_STATE.getState();
+    const i = Number.isInteger(slotIndex) ? slotIndex : st.active;
+    const slot = st.slots[i];
+    if(!slot) return;
+    st.active = i;
+    st.slots[i] = {
+      name: slot.name,
+      items: [],
+      pay: 'unpaid',
+      issued: false,
+      orderNo: BK_STATE.nextOrderNo(),
+      createdAt: Date.now()
+    };
+    BK_STATE.setState(st);
+    renderAll();
+    goTab('order');
+  }
+
+  function addNewOrderSlot(){
+    const st = BK_STATE.getState();
+    const slot = st.slots[st.active];
+    if(slot && slot.items.length>0 && slot.pay === 'unpaid'){
+      infoDialog('Please confirm payment first, then use + Slot to start the next order.');
+      return;
+    }
+    BK_STATE.addSlot();
+    renderAll();
+    goTab('order');
+  }
+
+  function getHistory(){
+    try{
+      const raw = localStorage.getItem(HISTORY_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    }catch(e){ return []; }
+  }
+  function saveHistory(list){
+    try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); }catch(e){}
+  }
+  function slotSnapshot(slot){
+    const c = BK_LOGIC.computeSlot(slot);
+    return {
+      id: `${slot.orderNo || 'ORD'}-${Date.now()}`,
+      orderNo: slot.orderNo || '-',
+      slotName: slot.name || '-',
+      pay: slot.pay || 'unpaid',
+      issued: !!slot.issued,
+      createdAt: slot.createdAt || Date.now(),
+      closedAt: Date.now(),
+      subtotal: c.subtotal,
+      combos: c.combos,
+      items: BK_LOGIC.groupedLines(slot.items || []).map(x=>({name:x.name, qty:x.qty, note:x.note, total:x.total}))
+    };
+  }
+  function pushHistory(entry){
+    const hist = getHistory();
+    hist.unshift(entry);
+    saveHistory(hist.slice(0, 1000));
+  }
+  function markIssued(i){
+    const st = BK_STATE.getState();
+    const slot = st.slots[i];
+    if(!slot) return;
+    BK_STATE.setIssued(i, true);
+    pushHistory(slotSnapshot({...slot, issued:true}));
+    renderIssue();
+  }
+
+  function openHistory(){
+    const body = document.getElementById('historyBody');
+    const hist = getFilteredHistory();
+    if(hist.length===0){
+      body.innerHTML = '<div class="empty-state">No completed orders in history yet.</div>';
+    }else{
+      const totalSales = hist.reduce((a,h)=> a + Number(h.subtotal||0), 0);
+      const cashCount = hist.filter(h=>h.pay==='cash').length;
+      const momoCount = hist.filter(h=>h.pay==='momo').length;
+      body.innerHTML = `
+        <div class="row" style="border-top:none;padding:8px 0 14px">
+          <span><b>Orders:</b> ${hist.length} · <b>Cash:</b> ${cashCount} · <b>MoMo:</b> ${momoCount}</span>
+          <span><b>Sales:</b> ${totalSales} GHS</span>
+        </div>
+      ` + hist.slice(0,100).map(h=>`
+        <div class="row" style="border-top:1px dashed #2a2f39;padding:8px 0">
+          <span><b>${h.orderNo}</b> · ${h.slotName} · ${h.pay.toUpperCase()} · ${new Date(h.closedAt).toLocaleString()}</span>
+          <span>${h.subtotal} GHS</span>
+        </div>
+      `).join('');
+    }
+    document.getElementById('modalHistory').classList.add('open');
+  }
+  function getFilteredHistory(){
+    const text = historyFilterText.trim().toLowerCase();
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    return getHistory().filter(h=>{
+      if(historyFilterToday && Number(h.closedAt || 0) < today.getTime()) return false;
+      if(!text) return true;
+      return String(h.orderNo || '').toLowerCase().includes(text)
+        || String(h.slotName || '').toLowerCase().includes(text);
+    });
+  }
+  function filterHistoryText(v){
+    historyFilterText = String(v || '');
+    openHistory();
+  }
+  function filterHistoryToday(){
+    historyFilterToday = !historyFilterToday;
+    openHistory();
+  }
+  function clearHistory(){
+    if(!confirm('Clear saved order history?')) return;
+    saveHistory([]);
+    openHistory();
+  }
+  function closeHistory(){ document.getElementById('modalHistory').classList.remove('open'); }
+  function downloadFile(name, content, type){
+    const blob = new Blob([content], {type});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+  }
+  function exportHistoryJson(){
+    downloadFile(`bk-history-${Date.now()}.json`, JSON.stringify(getHistory(), null, 2), 'application/json');
+  }
+  function exportHistoryCsv(){
+    const hist = getHistory();
+    const rows = [['orderNo','slotName','pay','issued','createdAt','closedAt','subtotal','combos']];
+    hist.forEach(h=> rows.push([h.orderNo,h.slotName,h.pay,h.issued,h.createdAt,h.closedAt,h.subtotal,h.combos]));
+    const csv = rows.map(r=> r.map(v=> `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    downloadFile(`bk-history-${Date.now()}.csv`, csv, 'text/csv');
+  }
+
+  function formatAge(createdAt){
+    const ts = Number(createdAt) || Date.now();
+    const mins = Math.max(0, Math.floor((Date.now() - ts) / 60000));
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if(h<=0) return `${m}m`;
+    return `${h}h ${m}m`;
   }
 
   function setSlotTotals(sub, disc, tot){
@@ -266,10 +523,10 @@
     const {slots, discountRate, active} = BK_STATE.getState();
     const g = BK_LOGIC.computeAll(slots, discountRate);
     const activeSlot = slots[active];
-    const c = activeSlot ? BK_LOGIC.computeSlot(activeSlot) : {subtotal:0};
+    const c = activeSlot ? BK_LOGIC.computeSlot(activeSlot) : {subtotal:0, combos:0};
     setSlotTotals(c.subtotal, 0, c.subtotal);
-    document.getElementById('grand').textContent = `${g.grand} GHS`;
-    document.getElementById('combosPill').textContent = `Combos: ${g.totalCombos}`;
+    document.getElementById('grand').textContent = `${c.subtotal} GHS`;
+    document.getElementById('combosPill').textContent = `Combos: ${c.combos || 0}`;
     document.getElementById('discountTag').textContent = g.discount>0 ? `Discount: ${Math.round(discountRate*100)}%` : 'No discount';
     document.getElementById('allSubtotal').textContent = `${g.grandSubtotal} GHS`;
     document.getElementById('allDiscount').textContent = `-${g.discount} GHS`;
@@ -344,7 +601,7 @@
   function receiptSectionHtml(slot){
     const c = BK_LOGIC.computeSlot(slot);
     return `<div style="margin:6px 0 10px">
-      <div><b>${slot.name}</b></div>
+      <div><b>${slot.name}</b> · <small>#${slot.orderNo || '-'}</small></div>
       ${htmlGroupedRows(slot.items)}
       <div class="sumline"><span>${slot.name} Subtotal</span><b>${c.subtotal} GHS</b></div>
     </div>`;
@@ -491,13 +748,14 @@
     renderOrder();
     renderMake();
     renderPay();
+    renderIssue();
     refreshTotals();
   }
 
   window.BK_UI = {
-    renderAll, renderOrder, renderMake, renderPay, refreshTotals,
+    renderAll, renderOrder, renderMake, renderPay, renderIssue, refreshTotals,
     renderStock,
-    openSummary, closeSummary,
+    openSummary, closeSummary, openHistory, closeHistory, exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, clearHistory,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
     openProducts, closeProducts, addProductRow, saveProducts, resetProducts,
@@ -506,6 +764,6 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued
   };
 })();
