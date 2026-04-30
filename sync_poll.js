@@ -102,6 +102,7 @@
 
         const next = applyRemoteSlot(BK_STATE.getState(), val.slot);
         BK_STATE.setState(next);
+        if(window.BK_UI && typeof BK_UI.renderAll === "function") BK_UI.renderAll();
         lastLocalHash = remoteHash;
       }).catch(function(e){
         console.warn('sync pull failed', e && e.message);

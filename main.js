@@ -63,6 +63,12 @@
     document.getElementById('tabMake').classList.toggle('active',   name==='make');
     document.getElementById('tabPay').classList.toggle('active',    name==='pay');
     document.getElementById('tabIssue').classList.toggle('active',  name==='issue');
+
+    if(name==='order') BK_UI.renderOrder();
+    if(name==='make') BK_UI.renderMake();
+    if(name==='pay') BK_UI.renderPay();
+    if(name==='issue') BK_UI.renderIssue();
+    BK_UI.refreshTotals();
   };
   document.getElementById('tabOrder').onclick = ()=> showTab('order');
   document.getElementById('tabMake').onclick  = ()=> showTab('make');
@@ -94,9 +100,11 @@
   document.getElementById('gPaid').onclick    = ()=> BK_UI.groupMarkPaid();
 
   // Category tabs
-  document.querySelectorAll('.catbar .tab').forEach(btn=>{
+  document.querySelectorAll('.catbar .tab[data-cat]').forEach(btn=>{
     btn.onclick = () => BK_UI.setCategory(btn.dataset.cat);
   });
+
+
 
   // initial render
   BK_UI.renderAll();
