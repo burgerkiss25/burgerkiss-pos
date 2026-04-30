@@ -68,6 +68,13 @@ header{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;padding:10px 
 }
 .catbar .tab.active{ background:#1b2027; border-color:#384352 }
 
+.product-search{
+  min-height:38px;padding:8px 12px;border-radius:999px;
+  background:#151920;border:1px solid #28303a;color:#e9edf2;font-weight:600;font-size:var(--fz-sm);
+  min-width:220px;
+}
+.product-search::placeholder{color:#95a0ad}
+
 .wrap{padding:12px;max-width:1700px;margin:0 auto}
 
 /* Grid (4 Spalten) */
