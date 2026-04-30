@@ -142,6 +142,7 @@
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
     const query = productQuery.trim().toLowerCase();
     const items = base.filter(it => (currentCat==='all' ? true : it.cat===currentCat))
+      .filter(it => !String(it.id || '').startsWith('x_sauce_'))
       .filter(it => query ? it.name.toLowerCase().includes(query) : true);
     items.forEach(it=>{
       const b = document.createElement('button');
@@ -157,16 +158,78 @@
       b.innerHTML = `<div class="name">${it.name}</div>
                      <div class="price">${it.cat==='burger'?'Single':'Price'}: ${BK_PRICES.getPrice(it.id)} GHS</div>
                      <span class="badge">+1</span>`;
-      b.onclick = ()=>{
-        const note = (document.getElementById('noteInput').value||'').trim();
-        BK_STATE.addItem(it.id, note);
-        document.getElementById('noteInput').value='';
-        renderOrder();
-        renderMake();
-        refreshTotals();
-      };
+      b.onclick = ()=> addProductWithFlow(it);
       grid.appendChild(b);
     });
+  }
+
+  async function pickFromList(title, options){
+    const host = ensureDialogHost();
+    document.getElementById('appDialogTitle').textContent = title;
+    document.getElementById('appDialogBody').innerHTML = `
+      <div style="display:grid;gap:8px" id="dlgOpts"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="x" id="dlgCancel">Cancel</button></div>
+    `;
+    const wrap = document.getElementById('dlgOpts');
+    return new Promise(resolve=>{
+      host.classList.add('open');
+      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(null); };
+      (options || []).forEach(opt=>{
+        const btn = document.createElement('button');
+        btn.className = 'x';
+        btn.textContent = opt.label;
+        btn.onclick = ()=>{ closeDialog(); resolve(opt.value); };
+        wrap.appendChild(btn);
+      });
+    });
+  }
+
+  async function addProductWithFlow(product){
+    const note = (document.getElementById('noteInput').value||'').trim();
+    BK_STATE.addItem(product.id, note);
+
+    if(product.id === 'fries_standard'){
+      const sauce = await pickFromList('Bitte Sauce für Fries wählen', [
+        {label:'Ketchup', value:'x_sauce_ketchup'},
+        {label:'Mayonnaise', value:'x_sauce_mayonnaise'},
+        {label:'Chipotle', value:'x_sauce_chipotle'},
+        {label:'Dutch Special', value:'x_sauce_dutch_special'},
+        {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'},
+        {label:'No Sauce Wanted', value:null}
+      ]);
+      if(sauce) BK_STATE.addItem(sauce, 'included');
+      const extra = await pickFromList('Extra Sauce gewünscht?', [
+        {label:'No Extra Sauce Wanted', value:null},
+        {label:'+1 Extra Sauce Cup (5 GHS)', value:'extra1'}
+      ]);
+      if(extra === 'extra1'){
+        const extraType = await pickFromList('Welche Extra-Sauce?', [
+          {label:'Ketchup', value:'x_sauce_ketchup'},
+          {label:'Mayonnaise', value:'x_sauce_mayonnaise'},
+          {label:'Chipotle', value:'x_sauce_chipotle'},
+          {label:'Dutch Special', value:'x_sauce_dutch_special'},
+          {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'}
+        ]);
+        if(extraType) BK_STATE.addItem(extraType, 'extra');
+      }
+    }
+
+    if(product.id === 'hamburger'){
+      if(await confirmDialog('Hamburger Add-on', 'Extra Beef Patty hinzufügen?')) BK_STATE.addItem('x_beef_patty', '');
+      if(await confirmDialog('Hamburger Add-on', 'Extra Cheese hinzufügen?')) BK_STATE.addItem('x_cheese', '');
+      const egg = await pickFromList('Ei auswählen', [
+        {label:'Kein Ei', value:null},
+        {label:'Fried Egg', value:'x_fried_egg'},
+        {label:'Omelette', value:'x_omelette'}
+      ]);
+      if(egg) BK_STATE.addItem(egg, '');
+      if(await confirmDialog('Hamburger Add-on', 'Bacon hinzufügen?')) BK_STATE.addItem('x_bacon', '');
+    }
+
+    document.getElementById('noteInput').value='';
+    renderOrder();
+    renderMake();
+    refreshTotals();
   }
 
 
