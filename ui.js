@@ -219,7 +219,7 @@
 
     const c = BK_LOGIC.computeSlot(s);
     setSlotTotals(c.subtotal, 0, c.subtotal);
-    ensureFlowAction('lines', '➡️ Go to Make', ()=> goTab('make'));
+    ensureFlowAction('lines', '➡️ Go to Payment', ()=> goTab('pay'));
   }
 
   function renderMake(){
