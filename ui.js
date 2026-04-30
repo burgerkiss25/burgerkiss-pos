@@ -243,7 +243,7 @@
 
     const c = BK_LOGIC.computeSlot(s);
     setSlotTotals(c.subtotal, 0, c.subtotal);
-    ensureFlowActions('lines', [{ label:'➡️ Go to Make', onClick:()=> goTab('make') }]);
+    ensureFlowActions('orderFlowNav', [{ label:'➡️ Go to Make', onClick:()=> goTab('make') }]);
   }
 
   function renderMake(){
@@ -398,7 +398,7 @@
   function ensureFlowActions(hostId, actions){
     const host = document.getElementById(hostId);
     if(!host) return;
-    let row = host.querySelector('.flow-action');
+    let row = host.classList.contains('flow-action') ? host : host.querySelector('.flow-action');
     if(!row){
       row = document.createElement('div');
       row.className = 'flow-action';
