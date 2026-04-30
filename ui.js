@@ -1,6 +1,7 @@
 // UI & Interaktionen – nutzt BK_STATE, BK_PRICES, BK_LOGIC
 (function(){
   let currentCat = 'all';
+  let productQuery = '';
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
   let historyFilterText = '';
@@ -129,7 +130,9 @@
     grid.innerHTML = '';
     const base = (Array.isArray(BK_DATA.BASE) && BK_DATA.BASE.length) ? BK_DATA.BASE : (BK_DATA.DEFAULT_BASE || []);
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
-    const items = base.filter(it => currentCat==='all' ? true : it.cat===currentCat);
+    const query = productQuery.trim().toLowerCase();
+    const items = base.filter(it => (currentCat==='all' ? true : it.cat===currentCat))
+      .filter(it => query ? it.name.toLowerCase().includes(query) : true);
     items.forEach(it=>{
       const b = document.createElement('button');
       b.className='item';
@@ -154,6 +157,27 @@
       };
       grid.appendChild(b);
     });
+  }
+
+
+  function bindProductSearch(){
+    const input = document.getElementById('productSearch');
+    const clearBtn = document.getElementById('clearProductSearch');
+    if(!input || input.dataset.bound === '1') return;
+
+    const rerender = ()=>{
+      productQuery = (input.value || '').trim();
+      buildProducts();
+    };
+
+    input.addEventListener('input', rerender);
+    clearBtn?.addEventListener('click', ()=>{
+      input.value = '';
+      productQuery = '';
+      buildProducts();
+      input.focus();
+    });
+    input.dataset.bound = '1';
   }
 
   function setCategory(cat){
@@ -219,7 +243,9 @@
 
     const c = BK_LOGIC.computeSlot(s);
     setSlotTotals(c.subtotal, 0, c.subtotal);
-    ensureFlowAction('lines', '➡️ Go to Payment', ()=> goTab('pay'));
+    ensureFlowActions('lines', [
+      { label:'➡️ Send to Kitchen (Make)', onClick:()=> goTab('make') }
+    ]);
   }
 
   function renderMake(){
@@ -254,7 +280,10 @@
         list.appendChild(li);
       });
     });
-    ensureFlowAction('makeList', '➡️ Go to Issue', ()=> goTab('issue'));
+    ensureFlowActions('makeList', [
+      { label:'⬅️ Back to Order', onClick:()=> goTab('order') },
+      { label:'➡️ Go to Payment', onClick:()=> goTab('pay') }
+    ]);
   }
 
   function renderPay(){
@@ -283,7 +312,10 @@
         </div>`;
       box.appendChild(card);
     });
-    ensureFlowAction('payList', '➡️ Go to Make', ()=> goTab('make'));
+    ensureFlowActions('payList', [
+      { label:'⬅️ Back to Make', onClick:()=> goTab('make') },
+      { label:'➡️ Go to Issue / Handover', onClick:()=> goTab('issue') }
+    ]);
   }
 
   function renderIssue(){
@@ -320,7 +352,10 @@
       card.appendChild(checklist);
       box.appendChild(card);
     });
-    ensureFlowAction('issueList', '⬅️ Start Next Order', ()=> startNextOrder());
+    ensureFlowActions('issueList', [
+      { label:'⬅️ Back to Payment', onClick:()=> goTab('pay') },
+      { label:'🆕 Start Next Order', onClick:()=> startNextOrder() }
+    ]);
   }
 
   function goTab(name){
@@ -330,7 +365,7 @@
     if(el) el.click();
   }
 
-  function ensureFlowAction(hostId, label, onClick){
+  function ensureFlowActions(hostId, actions){
     const host = document.getElementById(hostId);
     if(!host) return;
     let row = host.querySelector('.flow-action');
@@ -341,11 +376,13 @@
       host.appendChild(row);
     }
     row.innerHTML = '';
-    const btn = document.createElement('button');
-    btn.className = 'x';
-    btn.textContent = label;
-    btn.onclick = onClick;
-    row.appendChild(btn);
+    (actions || []).forEach(({label, onClick})=>{
+      const btn = document.createElement('button');
+      btn.className = 'x';
+      btn.textContent = label;
+      btn.onclick = onClick;
+      row.appendChild(btn);
+    });
   }
 
   function startNextOrder(){
@@ -757,6 +794,7 @@
   }
 
   function renderAll(){
+    bindProductSearch();
     if(!document.querySelector('.catbar .tab.active')){
       const first = document.querySelector('.catbar .tab[data-cat="all"]');
       if(first) first.classList.add('active');
