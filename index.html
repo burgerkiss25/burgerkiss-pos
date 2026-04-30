@@ -115,6 +115,7 @@
         <aside class="order-side panel">
           <h3>Current items (active slot)</h3>
           <div class="rows" id="lines"></div>
+          <div class="flow-action" id="orderFlowNav"><button class="x" id="btnOrderToMake">➡️ Go to Make</button></div>
           <div class="sumline"><span>Subtotal</span><b id="subtotal">0 GHS</b></div>
           <div class="sumline"><span>Discount</span><b id="discount">0 GHS</b></div>
           <div class="sumline"><span>Total</span><b id="total">0 GHS</b></div>
@@ -126,6 +127,7 @@
     <section id="tab-make" class="hidden">
       <div id="makeList" class="panel">
         <h3>Preparation – mark items as done</h3>
+        <div class="flow-action" id="makeFlowNav"><button class="x" id="btnMakeToOrder">⬅️ Back to Order</button><button class="x" id="btnMakeToIssue">➡️ Go to Issue</button></div>
       </div>
     </section>
 
@@ -145,6 +147,7 @@
     <section id="tab-issue" class="hidden">
       <div id="issueList" class="panel">
         <h3>Issue / Handover</h3>
+        <div class="flow-action" id="issueFlowNav"><button class="x" id="btnIssueToMake">⬅️ Back to Make</button><button class="x" id="btnIssueToPay">➡️ Go to Pay</button></div>
       </div>
     </section>
 
