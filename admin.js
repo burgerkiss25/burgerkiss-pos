@@ -21,6 +21,9 @@
   document.getElementById('iReset').onclick    = ()=> BK_UI.resetImages();
 
   document.getElementById('btnStock').onclick = ()=> BK_UI.openStock();
+  document.getElementById('btnIngredients').onclick = ()=> BK_STOCK.openEditor('ingredients');
+  document.getElementById('btnRecipes').onclick = ()=> BK_STOCK.openEditor('recipes');
+  document.getElementById('btnAddons').onclick = ()=> BK_STOCK.openEditor('addons');
   document.getElementById('sClose').onclick   = ()=> BK_UI.closeStock();
   document.getElementById('sSave').onclick    = ()=> BK_UI.saveStock();
   document.getElementById('sReset').onclick   = ()=> BK_UI.resetStock();
