@@ -310,7 +310,11 @@
             <button ${canIssue ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark Issued</button>
             <button onclick="BK_STATE.setIssued(${i}, false); BK_UI.renderIssue();">Undo</button>
           </div>
-        </div>`;
+        </div>
+        <details style="margin-top:8px">
+          <summary style="cursor:pointer;color:#9fb0c8">View order items</summary>
+          <div style="padding-top:6px">${htmlGroupedRows(s.items)}</div>
+        </details>`;
       box.appendChild(card);
     });
     ensureFlowAction('issueList', '➡️ Go to Pay', ()=> goTab('pay'));
