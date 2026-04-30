@@ -94,7 +94,7 @@
   document.getElementById('gPaid').onclick    = ()=> BK_UI.groupMarkPaid();
 
   // Category tabs
-  document.querySelectorAll('.catbar .tab').forEach(btn=>{
+  document.querySelectorAll('.catbar .tab[data-cat]').forEach(btn=>{
     btn.onclick = () => BK_UI.setCategory(btn.dataset.cat);
   });
 

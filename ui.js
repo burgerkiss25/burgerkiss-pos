@@ -282,7 +282,10 @@
         list.appendChild(li);
       });
     });
-    ensureFlowAction('makeList', '➡️ Go to Issue', ()=> goTab('issue'));
+    ensureFlowActions('makeList', [
+      { label:'⬅️ Back to Order', onClick:()=> goTab('order') },
+      { label:'➡️ Go to Payment', onClick:()=> goTab('pay') }
+    ]);
   }
 
   function renderPay(){
@@ -311,7 +314,10 @@
         </div>`;
       box.appendChild(card);
     });
-    ensureFlowAction('payList', '➡️ Go to Make', ()=> goTab('make'));
+    ensureFlowActions('payList', [
+      { label:'⬅️ Back to Make', onClick:()=> goTab('make') },
+      { label:'➡️ Go to Issue / Handover', onClick:()=> goTab('issue') }
+    ]);
   }
 
   function renderIssue(){
@@ -347,7 +353,10 @@
       card.appendChild(checklist);
       box.appendChild(card);
     });
-    ensureFlowAction('issueList', '⬅️ Start Next Order', ()=> startNextOrder());
+    ensureFlowActions('issueList', [
+      { label:'⬅️ Back to Payment', onClick:()=> goTab('pay') },
+      { label:'🆕 Start Next Order', onClick:()=> startNextOrder() }
+    ]);
   }
 
   function goTab(name){
@@ -374,11 +383,13 @@
       host.appendChild(row);
     }
     row.innerHTML = '';
-    const btn = document.createElement('button');
-    btn.className = 'x';
-    btn.textContent = label;
-    btn.onclick = onClick;
-    row.appendChild(btn);
+    (actions || []).forEach(({label, onClick})=>{
+      const btn = document.createElement('button');
+      btn.className = 'x';
+      btn.textContent = label;
+      btn.onclick = onClick;
+      row.appendChild(btn);
+    });
   }
 
   function startNextOrder(){
