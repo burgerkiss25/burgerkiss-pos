@@ -254,7 +254,7 @@
         list.appendChild(li);
       });
     });
-    ensureFlowAction('makeList', '➡️ Go to Issue', ()=> goTab('issue'));
+    ensureFlowAction('makeList', '➡️ Go to Pay', ()=> goTab('pay'));
   }
 
   function renderPay(){
@@ -283,7 +283,7 @@
         </div>`;
       box.appendChild(card);
     });
-    ensureFlowAction('payList', '⬅️ Back to Order', ()=> goTab('order'));
+    ensureFlowAction('payList', '➡️ Go to Issue', ()=> goTab('issue'));
   }
 
   function renderIssue(){
@@ -310,14 +310,10 @@
             <button ${canIssue ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark Issued</button>
             <button onclick="BK_STATE.setIssued(${i}, false); BK_UI.renderIssue();">Undo</button>
           </div>
-        </div>
-        <details style="margin-top:8px">
-          <summary style="cursor:pointer;color:#9fb0c8">View order items</summary>
-          <div style="padding-top:6px">${htmlGroupedRows(s.items)}</div>
-        </details>`;
+        </div>`;
       box.appendChild(card);
     });
-    ensureFlowAction('issueList', '➡️ Go to Pay', ()=> goTab('pay'));
+    ensureFlowAction('issueList', '⬅️ Start Next Order', ()=> startNextOrder());
   }
 
   function goTab(name){
