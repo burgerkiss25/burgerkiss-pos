@@ -63,6 +63,12 @@
     document.getElementById('tabMake').classList.toggle('active',   name==='make');
     document.getElementById('tabPay').classList.toggle('active',    name==='pay');
     document.getElementById('tabIssue').classList.toggle('active',  name==='issue');
+
+    if(name==='order') BK_UI.renderOrder();
+    if(name==='make') BK_UI.renderMake();
+    if(name==='pay') BK_UI.renderPay();
+    if(name==='issue') BK_UI.renderIssue();
+    BK_UI.refreshTotals();
   };
   document.getElementById('tabOrder').onclick = ()=> showTab('order');
   document.getElementById('tabMake').onclick  = ()=> showTab('make');
@@ -99,13 +105,6 @@
   });
 
 
-
-  // Persistent workflow nav buttons (independent of dynamic list rendering)
-  document.getElementById('btnOrderToMake')?.addEventListener('click', ()=> document.getElementById('tabMake')?.click());
-  document.getElementById('btnMakeToOrder')?.addEventListener('click', ()=> document.getElementById('tabOrder')?.click());
-  document.getElementById('btnMakeToIssue')?.addEventListener('click', ()=> document.getElementById('tabIssue')?.click());
-  document.getElementById('btnIssueToMake')?.addEventListener('click', ()=> document.getElementById('tabMake')?.click());
-  document.getElementById('btnIssueToPay')?.addEventListener('click', ()=> document.getElementById('tabPay')?.click());
 
   // initial render
   BK_UI.renderAll();
