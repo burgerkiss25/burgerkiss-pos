@@ -1,6 +1,7 @@
 // UI & Interaktionen – nutzt BK_STATE, BK_PRICES, BK_LOGIC
 (function(){
   let currentCat = 'all';
+  let productQuery = '';
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
   let historyFilterText = '';
@@ -129,7 +130,9 @@
     grid.innerHTML = '';
     const base = (Array.isArray(BK_DATA.BASE) && BK_DATA.BASE.length) ? BK_DATA.BASE : (BK_DATA.DEFAULT_BASE || []);
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
-    const items = base.filter(it => currentCat==='all' ? true : it.cat===currentCat);
+    const query = productQuery.trim().toLowerCase();
+    const items = base.filter(it => (currentCat==='all' ? true : it.cat===currentCat))
+      .filter(it => query ? it.name.toLowerCase().includes(query) : true);
     items.forEach(it=>{
       const b = document.createElement('button');
       b.className='item';
@@ -154,6 +157,27 @@
       };
       grid.appendChild(b);
     });
+  }
+
+
+  function bindProductSearch(){
+    const input = document.getElementById('productSearch');
+    const clearBtn = document.getElementById('clearProductSearch');
+    if(!input || input.dataset.bound === '1') return;
+
+    const rerender = ()=>{
+      productQuery = (input.value || '').trim();
+      buildProducts();
+    };
+
+    input.addEventListener('input', rerender);
+    clearBtn?.addEventListener('click', ()=>{
+      input.value = '';
+      productQuery = '';
+      buildProducts();
+      input.focus();
+    });
+    input.dataset.bound = '1';
   }
 
   function setCategory(cat){
@@ -209,7 +233,7 @@
       const safeKey = encodeURIComponent(key);
       row.innerHTML = `
         <span class="left">
-          <button class="mini" onclick="BK_STATE.decItemForKey(decodeURIComponent('${safeKey}')); BK_UI.renderOrder(); BK_UI.renderMake(); BK_UI.refreshTotals();">−1</button>
+          <button class="mini" ${s.issued ? 'disabled' : ''} onclick="BK_STATE.decItemForKey(decodeURIComponent('${safeKey}')); BK_UI.renderOrder(); BK_UI.renderMake(); BK_UI.refreshTotals();">−1</button>
           <b>${prod ? prod.name : id}</b> <small>× ${qty}${note?` · ${note}`:''}</small>
         </span>
         <span>${qty*BK_PRICES.getPrice(id)} GHS</span>
@@ -219,7 +243,11 @@
 
     const c = BK_LOGIC.computeSlot(s);
     setSlotTotals(c.subtotal, 0, c.subtotal);
-    ensureFlowAction('lines', '➡️ Go to Payment', ()=> goTab('pay'));
+    if(!s.issued){
+      ensureFlowAction('lines', '➡️ Go to Payment', ()=> goTab('pay'));
+    } else {
+      clearFlowAction('lines');
+    }
   }
 
   function renderMake(){
@@ -248,7 +276,7 @@
         const p = BK_DATA.BASE.find(x=>x.id===it.itemId);
         const li = document.createElement('div'); li.className='li';
         li.innerHTML = `
-          <input type="checkbox" ${it.done?'checked':''} onchange="BK_STATE.toggleDone(${i},${idx},this.checked); BK_UI.renderIssue();">
+          <input type="checkbox" ${it.done?'checked':''} ${s.issued ? 'disabled' : ''} onchange="BK_STATE.toggleDone(${i},${idx},this.checked); BK_UI.renderIssue();">
           <span>${p ? p.name : it.itemId}${it.note?` · <small>${it.note}</small>`:''}</span>
           <span style="margin-left:auto">${BK_PRICES.getPrice((p&&p.id)||it.itemId)} GHS</span>`;
         list.appendChild(li);
@@ -276,9 +304,9 @@
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS</div>
           <div class="pay-status">
             <span>Status: ${s.pay.toUpperCase()}</span>
-            <button onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Unpaid</button>
-            <button onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
-            <button onclick="BK_STATE.setPay(${i},'momo'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid MoMo</button>
+            <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Unpaid</button>
+            <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
+            <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'momo'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid MoMo</button>
           </div>
         </div>`;
       box.appendChild(card);
@@ -308,8 +336,7 @@
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
           <div class="pay-status">
             <span>Status: ${s.issued ? 'ISSUED' : 'WAITING'}</span>
-            <button ${canIssue ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark Issued</button>
-            <button onclick="BK_STATE.setIssued(${i}, false); BK_UI.renderIssue();">Undo</button>
+            <button ${(canIssue && !s.issued) ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark Issued</button>
           </div>
         </div>`;
       const checklist = document.createElement('div');
@@ -328,6 +355,12 @@
     const id = map[name];
     const el = id && document.getElementById(id);
     if(el) el.click();
+  }
+
+  function clearFlowAction(hostId){
+    const host = document.getElementById(hostId);
+    if(!host) return;
+    host.querySelector('.flow-action')?.remove();
   }
 
   function ensureFlowAction(hostId, label, onClick){
@@ -757,6 +790,7 @@
   }
 
   function renderAll(){
+    bindProductSearch();
     if(!document.querySelector('.catbar .tab.active')){
       const first = document.querySelector('.catbar .tab[data-cat="all"]');
       if(first) first.classList.add('active');
