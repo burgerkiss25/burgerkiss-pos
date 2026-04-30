@@ -26,7 +26,12 @@ window.BK_DATA = {
     {id:'x_bacon',  name:'Bacon (per slice)', price:20, cat:'extra'},
     {id:'x_fried_egg', name:'Fried Egg', price:20, cat:'extra'},
     {id:'x_omelette',  name:'Omelette',  price:30, cat:'extra'},
-    {id:'x_sauce_cup', name:'Extra Sauce Cup', price:5, cat:'extra'},
+
+    {id:'x_sauce_ketchup', name:'Extra Ketchup Sauce Cup', price:5, cat:'sauce', sauce_type:'s_ketchup'},
+    {id:'x_sauce_mayonnaise', name:'Extra Mayonnaise Sauce Cup', price:5, cat:'sauce', sauce_type:'s_mayonnaise'},
+    {id:'x_sauce_chipotle', name:'Extra Chipotle Sauce Cup', price:5, cat:'sauce', sauce_type:'s_chipotle'},
+    {id:'x_sauce_dutch_special', name:'Extra Dutch Special Sauce Cup', price:5, cat:'sauce', sauce_type:'s_dutch_special'},
+    {id:'x_sauce_chicken_wings', name:'Extra Chicken Wings Sauce Cup', price:5, cat:'sauce', sauce_type:'s_chicken_wings'},
 
     {id:'d_coconut_fresh', name:'Coconut Fresh', price:7, cat:'drink'},
     {id:'d_coconut_water_bottle', name:'Coconut Water Bottle', price:15, cat:'drink'},
@@ -56,6 +61,15 @@ window.BK_DATA = {
     wings_12: 110,
     wings_24: 185,
     included: { drink: 15, fries: 20 }
+  },
+  SAUCES: {
+    sauce_cup_grams: 20,
+    s_ketchup: { name: 'Ketchup', consumes_stock: true, ingredients: { ketchup: 20 } },
+    s_mayonnaise: { name: 'Mayonnaise', consumes_stock: true, ingredients: { mayonnaise: 20 } },
+    s_chipotle: { name: 'Chipotle', consumes_stock: true, ingredients: { mayonnaise: 15, chicken_burger_sauce: 5 } },
+    s_dutch_special: { name: 'Dutch Special', consumes_stock: true, ingredients: { mayonnaise: 10, ketchup: 10, onion_diced: 5 } },
+    s_chicken_wings: { name: 'Chicken Wings Sauce', consumes_stock: true, ingredients: { chicken_wings_sauce: 20 } },
+    s_no_sauce: { name: 'No Sauce Wanted', consumes_stock: false, ingredients: {}, price: 0 }
   }
 };
 

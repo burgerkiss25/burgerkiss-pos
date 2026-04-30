@@ -20,7 +20,12 @@
       coconut_water_bottle: { name: 'Coconut Water Bottle', qty: 30, unit: 'btl' },
       beer: { name: 'Beer', qty: 48, unit: 'btl' },
       egg: { name: 'Egg', qty: 48, unit: 'pcs' },
-      bacon_slice: { name: 'Bacon Slice', qty: 120, unit: 'slice' }
+      bacon_slice: { name: 'Bacon Slice', qty: 120, unit: 'slice' },
+      ketchup: { name: 'Ketchup', qty: 2000, unit: 'g' },
+      mayonnaise: { name: 'Mayonnaise', qty: 2000, unit: 'g' },
+      chicken_burger_sauce: { name: 'Chicken Burger Sauce', qty: 800, unit: 'g' },
+      chicken_wings_sauce: { name: 'Chicken Wings Sauce', qty: 800, unit: 'g' },
+      onion_diced: { name: 'Onion Diced', qty: 1000, unit: 'g' }
     },
     RECIPES: {
       hamburger: { bun: 1, beef_patty: 1 },
@@ -35,6 +40,11 @@
       x_bacon: { bacon_slice: 1 },
       x_fried_egg: { egg: 1 },
       x_omelette: { egg: 2 },
+      x_sauce_ketchup: { ketchup: 20 },
+      x_sauce_mayonnaise: { mayonnaise: 20 },
+      x_sauce_chipotle: { mayonnaise: 15, chicken_burger_sauce: 5 },
+      x_sauce_dutch_special: { mayonnaise: 10, ketchup: 10, onion_diced: 5 },
+      x_sauce_chicken_wings: { chicken_wings_sauce: 20 },
       d_coconut_fresh: { coconut_fresh: 1 },
       d_cola: { soda_can: 1 },
       d_fanta_orange: { soda_can: 1 },
