@@ -219,7 +219,7 @@
 
     const c = BK_LOGIC.computeSlot(s);
     setSlotTotals(c.subtotal, 0, c.subtotal);
-    ensureFlowAction('lines', '➡️ Go to Payment', ()=> goTab('pay'));
+    ensureFlowAction('lines', '➡️ Go to Make', ()=> goTab('make'));
   }
 
   function renderMake(){
@@ -254,10 +254,7 @@
         list.appendChild(li);
       });
     });
-    setFlowActions('makeList', [
-      { label:'⬅️ Back to Order', onClick:()=> goTab('order') },
-      { label:'➡️ Go to Issue', onClick:()=> goTab('issue') }
-    ]);
+    ensureFlowAction('makeList', '➡️ Go to Issue', ()=> goTab('issue'));
   }
 
   function renderPay(){
@@ -283,17 +280,10 @@
             <button onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
             <button onclick="BK_STATE.setPay(${i},'momo'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid MoMo</button>
           </div>
-        </div>
-        <details style="margin-top:8px">
-          <summary style="cursor:pointer;color:#9fb0c8">View order items</summary>
-          <div style="padding-top:6px">${htmlGroupedRows(s.items)}</div>
-        </details>`;
+        </div>`;
       box.appendChild(card);
     });
-    setFlowActions('payList', [
-      { label:'⬅️ Back to Make', onClick:()=> goTab('make') },
-      { label:'➡️ Go to Issue', onClick:()=> goTab('issue') }
-    ]);
+    ensureFlowAction('payList', '⬅️ Back to Order', ()=> goTab('order'));
   }
 
   function renderIssue(){
@@ -327,10 +317,7 @@
         </details>`;
       box.appendChild(card);
     });
-    setFlowActions('issueList', [
-      { label:'⬅️ Back to Pay', onClick:()=> goTab('pay') },
-      { label:'⬅️ Start Next Order', onClick:()=> startNextOrder() }
-    ]);
+    ensureFlowAction('issueList', '➡️ Go to Pay', ()=> goTab('pay'));
   }
 
   function goTab(name){
@@ -356,26 +343,6 @@
     btn.textContent = label;
     btn.onclick = onClick;
     row.appendChild(btn);
-  }
-  function setFlowActions(hostId, actions){
-    const host = document.getElementById(hostId);
-    if(!host) return;
-    let row = host.querySelector('.flow-action');
-    if(!row){
-      row = document.createElement('div');
-      row.className = 'flow-action';
-      row.style.marginTop = '10px';
-      host.appendChild(row);
-    }
-    row.innerHTML = '';
-    actions.forEach(({label, onClick})=>{
-      const btn = document.createElement('button');
-      btn.className = 'x';
-      btn.style.marginRight = '8px';
-      btn.textContent = label;
-      btn.onclick = onClick;
-      row.appendChild(btn);
-    });
   }
 
   function startNextOrder(){
@@ -470,16 +437,9 @@
     const st = BK_STATE.getState();
     const slot = st.slots[i];
     if(!slot) return;
+    BK_STATE.setIssued(i, true);
     pushHistory(slotSnapshot({...slot, issued:true}));
-    st.slots.splice(i,1);
-    if(!st.slots.length){
-      BK_STATE.setState({slots:[{name:'SN1', items:[], pay:'unpaid', issued:false, orderNo:BK_STATE.nextOrderNo(), createdAt:Date.now()}], active:0, discountRate:st.discountRate});
-    }else{
-      st.active = Math.max(0, Math.min(st.active, st.slots.length-1));
-      BK_STATE.setState(st);
-    }
-    renderAll();
-    goTab('order');
+    renderIssue();
   }
 
   function openHistory(){
