@@ -16,6 +16,9 @@
         <button class="x" id="btnProducts">Edit Products</button>
         <button class="x" id="btnImages">Edit Images</button>
         <button class="x" id="btnStock">Edit Stock</button>
+        <button class="x" id="btnIngredients">Edit Ingredients</button>
+        <button class="x" id="btnRecipes">Edit Product Recipes</button>
+        <button class="x" id="btnAddons">Edit Add-ons</button>
       </div>
     </header>
   </div>
@@ -32,16 +35,18 @@
   <div class="modal" id="modalPrices"><div class="sheet"><header><b>Edit Prices</b><div><button class="x" id="pSave">Save</button><button class="x" id="pReset">Reset</button><button class="x" id="pClose">Close</button></div></header><div class="body" id="pricesBody"></div></div></div>
   <div class="modal" id="modalProducts"><div class="sheet"><header><b>Edit Products</b><div><button class="x" id="prodAdd">+ Add</button><button class="x" id="prodSave">Save</button><button class="x" id="prodReset">Reset</button><button class="x" id="prodClose">Close</button></div></header><div class="body" id="productsBody"></div></div></div>
   <div class="modal" id="modalImages"><div class="sheet"><header><b>Edit Images</b><div><button class="x" id="iSave">Save</button><button class="x" id="iReset">Reset</button><button class="x" id="iClose">Close</button></div></header><div class="body" id="imagesBody"></div></div></div>
-  <div class="modal" id="modalStock"><div class="sheet"><header><b>Edit Stock</b><div><button class="x" id="sSave">Save</button><button class="x" id="sReset">Reset</button><button class="x" id="sClose">Close</button></div></header><div class="body" id="stockBody"></div></div></div>
+  <div class="modal" id="modalStock"><div class="sheet"><header><b id="stockModalTitle">Edit Stock</b><div><button class="x" id="sSave">Save</button><button class="x" id="sReset">Reset</button><button class="x" id="sClose">Close</button></div></header><div class="body" id="stockBody"></div></div></div>
 
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/data.js?v=11"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/prices.js?v=11"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/products.js?v=11"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/images.js?v=11"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/stock.js?v=11"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/state.js?v=11"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/logic.js?v=11"></script>
-  <script src="https://burgerkiss25.github.io/burgerkiss-pos/ui.js?v=11"></script>
+  <script src="./data.js?v=13"></script>
+  <script src="./prices.js?v=13"></script>
+  <script src="./products.js?v=13"></script>
+  <script src="./images.js?v=13"></script>
+  <script src="./stock_data.js?v=13"></script>
+  <script src="./stock_utils.js?v=13"></script>
+  <script src="./stock.js?v=13"></script>
+  <script src="./state.js?v=13"></script>
+  <script src="./logic.js?v=13"></script>
+  <script src="./ui.js?v=13"></script>
   <script src="admin.js"></script>
 </body>
 </html>
