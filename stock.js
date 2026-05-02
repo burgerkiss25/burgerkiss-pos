@@ -131,9 +131,19 @@
 
   function openEditor(mode){
     const body = document.getElementById('stockBody'); if(!body) return;
+    const titleEl = document.getElementById('stockModalTitle');
     const productList = Array.isArray(window.BK_DATA && BK_DATA.BASE) ? BK_DATA.BASE : [];
     const showIngredients = !mode || mode === 'all' || mode === 'ingredients';
     const showRecipes = !mode || mode === 'all' || mode === 'recipes' || mode === 'addons';
+    if(titleEl){
+      titleEl.textContent = mode === 'ingredients'
+        ? 'Edit Ingredients'
+        : mode === 'recipes'
+          ? 'Edit Product Recipes'
+          : mode === 'addons'
+            ? 'Edit Add-ons'
+            : 'Edit Stock';
+    }
     const recipeProducts = mode === 'addons'
       ? productList.filter(p=> p && (p.cat === 'extra' || p.cat === 'sauce'))
       : productList;
