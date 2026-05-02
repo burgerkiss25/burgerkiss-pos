@@ -97,7 +97,36 @@
     </div>`;
   }
 
-  function recipeRowHtml(p){ return `<div class="row" data-recipe-row><span class="left" style="display:grid;grid-template-columns:1.1fr 1fr;gap:8px;flex:1"><span><b>${p.name}</b> <small>(${p.id})</small></span><input data-product-id="${p.id}" data-recipe-input placeholder="ingredient_id:qty, ingredient_id2:qty" value="${recipeToText(RECIPES[p.id] || {})}"></span></div>`; }
+  function recipeRowHtml(p, ingredientOptions){
+    return `<div class="row" data-recipe-row>
+      <span class="left" style="display:grid;grid-template-columns:1.1fr 1fr;gap:8px;flex:1">
+        <span><b>${p.name}</b> <small>(${p.id})</small></span>
+        <div>
+          <input data-product-id="${p.id}" data-recipe-input placeholder="ingredient_id:qty, ingredient_id2:qty" value="${recipeToText(RECIPES[p.id] || {})}">
+          <div style="display:grid;grid-template-columns:1fr 100px auto;gap:6px;margin-top:6px">
+            <select data-recipe-ing>${ingredientOptions}</select>
+            <input data-recipe-qty type="number" min="0.25" step="0.25" value="1">
+            <button class="mini" data-recipe-add>+ Add</button>
+          </div>
+        </div>
+      </span>
+    </div>`;
+  }
+  function bindRecipeBuilder(body){
+    body.querySelectorAll('[data-recipe-row]').forEach(row=>{
+      const addBtn = row.querySelector('[data-recipe-add]');
+      if(!addBtn) return;
+      addBtn.onclick = ()=>{
+        const input = row.querySelector('[data-recipe-input]');
+        const ing = row.querySelector('[data-recipe-ing]').value;
+        const qty = Number(row.querySelector('[data-recipe-qty]').value);
+        if(!ing || !Number.isFinite(qty) || qty <= 0) return;
+        const parsed = parseRecipeText(input.value);
+        parsed[ing] = qty;
+        input.value = recipeToText(parsed);
+      };
+    });
+  }
   function bindIngredientActions(body){ body.querySelectorAll('[data-remove]').forEach(btn=>{ btn.onclick = ()=>{ const row = btn.closest('[data-ing-row]'); if(row) row.remove(); }; }); }
 
   function openEditor(mode){
@@ -131,7 +160,9 @@
     }
     if(showRecipes){
       const recipeWrap = document.getElementById('stockRecipes');
-      recipeWrap.innerHTML = recipeProducts.map(recipeRowHtml).join('');
+      const ingredientOptions = Object.entries(INGREDIENTS).map(([id, def])=> `<option value="${id}">${def.name || id} (${id})</option>`).join('');
+      recipeWrap.innerHTML = recipeProducts.map(p=> recipeRowHtml(p, ingredientOptions)).join('');
+      bindRecipeBuilder(recipeWrap);
     }
     document.getElementById('modalStock').classList.add('open');
   }
