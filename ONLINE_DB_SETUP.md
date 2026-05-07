@@ -89,6 +89,13 @@ In Firebase **Realtime Database -> Rules** einfügen und veröffentlichen:
 2. Einen Artikel hinzufügen.
 3. In Firebase **Realtime Database -> Data** öffnen.
 4. Es sollte ein Pfad wie `pos / live / SN1` erscheinen.
+5. Bestellung abschließen und History auf einem zweiten Gerät öffnen.
+6. Ein Bild im Admin-Bereich speichern und die POS-App auf einem zweiten Gerät neu laden.
+
+Erwartete Online-Pfade:
+- Live-Bestellung: `pos / live / SN1`
+- Abgeschlossene Bestellungen: `pos / history`
+- Produktbilder: `pos / config / images`
 
 ## Hinweis
 - Die App speichert weiterhin lokal (`localStorage`) als Fallback.
