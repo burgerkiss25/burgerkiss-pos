@@ -561,15 +561,93 @@
     goTab('order');
   }
 
+  let historyRemoteSaveTimer = null;
+  let historyRemoteLoadedAt = 0;
+
+  function historyRemoteEnabled(){
+    return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database && window.firebase.auth);
+  }
+  function normalizeHistory(list){
+    if(!Array.isArray(list)) return [];
+    return list.filter(h=> h && typeof h === 'object')
+      .map(h=> Object.assign({}, h, {
+        id: String(h.id || `${h.orderNo || 'ORD'}-${h.closedAt || Date.now()}`),
+        closedAt: Number(h.closedAt || 0) || Date.now()
+      }));
+  }
+  function mergeHistoryLists(a, b){
+    const map = new Map();
+    normalizeHistory(a).concat(normalizeHistory(b)).forEach(h=>{
+      const key = h.id || `${h.orderNo}-${h.closedAt}`;
+      if(!map.has(key)) map.set(key, h);
+    });
+    return Array.from(map.values())
+      .sort((x,y)=> Number(y.closedAt||0) - Number(x.closedAt||0))
+      .slice(0, 1000);
+  }
+  function getHistoryRef(){
+    if(!historyRemoteEnabled()) return Promise.resolve(null);
+    try{
+      const app = (window.firebase.apps && firebase.apps.length)
+        ? firebase.app()
+        : firebase.initializeApp(window.FIREBASE_CONFIG);
+      const auth = firebase.auth(app);
+      const ready = auth.currentUser ? Promise.resolve() : auth.signInAnonymously().catch(function(e){
+        console.warn('firebase history auth failed:', e && e.message);
+      });
+      const db = firebase.database(app);
+      return ready.then(()=> db.ref('/pos/history'));
+    }catch(e){ return Promise.resolve(null); }
+  }
   function getHistory(){
     try{
       const raw = localStorage.getItem(HISTORY_KEY);
       const arr = raw ? JSON.parse(raw) : [];
-      return Array.isArray(arr) ? arr : [];
+      return normalizeHistory(arr);
     }catch(e){ return []; }
   }
-  function saveHistory(list){
-    try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); }catch(e){}
+  function saveHistoryRemoteSoon(list){
+    if(!historyRemoteEnabled()) return;
+    if(historyRemoteSaveTimer) clearTimeout(historyRemoteSaveTimer);
+    historyRemoteSaveTimer = setTimeout(function(){
+      const clean = normalizeHistory(list).slice(0, 1000);
+      getHistoryRef().then(function(ref){
+        if(!ref) return;
+        ref.set({entries: clean, ts: Date.now()}).catch(function(e){
+          console.warn('history remote save failed:', e && e.message);
+        });
+      });
+    }, 400);
+  }
+  function saveHistory(list, opts){
+    const clean = normalizeHistory(list).slice(0, 1000);
+    try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(clean)); }catch(e){}
+    if(!opts || opts.remote !== false) saveHistoryRemoteSoon(clean);
+  }
+  function loadHistoryRemoteOnce(force){
+    if(!historyRemoteEnabled()) return Promise.resolve(false);
+    if(!force && historyRemoteLoadedAt && Date.now() - historyRemoteLoadedAt < 5000) return Promise.resolve(false);
+    historyRemoteLoadedAt = Date.now();
+    return getHistoryRef().then(function(ref){
+      if(!ref) return false;
+      return ref.get().then(function(snap){
+        const val = snap.val();
+        if(!val) return false;
+        const hasEntries = Array.isArray(val.entries);
+        const remote = normalizeHistory(hasEntries ? val.entries : val);
+        if(hasEntries && !remote.length){
+          saveHistory([], {remote:false});
+          return true;
+        }
+        if(!remote.length) return false;
+        const merged = mergeHistoryLists(getHistory(), remote);
+        saveHistory(merged, {remote:false});
+        return true;
+      });
+    }).catch(function(e){
+      console.warn('history remote load failed:', e && e.message);
+      return false;
+    });
   }
   function slotSnapshot(slot){
     const c = BK_LOGIC.computeSlot(slot);
@@ -587,9 +665,8 @@
     };
   }
   function pushHistory(entry){
-    const hist = getHistory();
-    hist.unshift(entry);
-    saveHistory(hist.slice(0, 1000));
+    const hist = mergeHistoryLists([entry], getHistory());
+    saveHistory(hist);
   }
   function markIssued(i){
     const st = BK_STATE.getState();
@@ -611,7 +688,7 @@
     });
   }
 
-  function openHistory(){
+  function renderHistoryBody(){
     const body = document.getElementById('historyBody');
     const hist = getFilteredHistory();
     if(hist.length===0){
@@ -632,7 +709,13 @@
         </div>
       `).join('');
     }
+  }
+  function openHistory(){
+    renderHistoryBody();
     document.getElementById('modalHistory').classList.add('open');
+    loadHistoryRemoteOnce(false).then(function(changed){
+      if(changed && document.getElementById('modalHistory').classList.contains('open')) renderHistoryBody();
+    });
   }
   function getFilteredHistory(){
     const text = historyFilterText.trim().toLowerCase();
@@ -656,7 +739,9 @@
   function clearHistory(){
     if(!confirm('Clear saved order history?')) return;
     saveHistory([]);
-    openHistory();
+    historyRemoteLoadedAt = Date.now();
+    renderHistoryBody();
+    document.getElementById('modalHistory').classList.add('open');
   }
   function closeHistory(){ document.getElementById('modalHistory').classList.remove('open'); }
   function downloadFile(name, content, type){

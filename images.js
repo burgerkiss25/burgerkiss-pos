@@ -3,9 +3,69 @@
   const KEY = 'bk_images_v1';
   let MAP = {};
   let DRAFT = {};
+  let remoteSaveTimer = null;
+
+  function remoteEnabled(){
+    return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database && window.firebase.auth);
+  }
+  function normalizeMap(raw){
+    const src = raw && typeof raw === 'object' && raw.map ? raw.map : raw;
+    const out = {};
+    if(!src || typeof src !== 'object') return out;
+    Object.keys(src).forEach(id=>{
+      if(typeof src[id] === 'string' && src[id]) out[id] = src[id];
+    });
+    return out;
+  }
+  function getRemoteRef(){
+    if(!remoteEnabled()) return Promise.resolve(null);
+    try{
+      const app = (window.firebase.apps && firebase.apps.length)
+        ? firebase.app()
+        : firebase.initializeApp(window.FIREBASE_CONFIG);
+      const auth = firebase.auth(app);
+      const ready = auth.currentUser ? Promise.resolve() : auth.signInAnonymously().catch(function(e){
+        console.warn('firebase images auth failed:', e && e.message);
+      });
+      const db = firebase.database(app);
+      return ready.then(()=> db.ref('/pos/config/images'));
+    }catch(e){ return Promise.resolve(null); }
+  }
+  function saveRemoteSoon(){
+    if(!remoteEnabled()) return;
+    if(remoteSaveTimer) clearTimeout(remoteSaveTimer);
+    remoteSaveTimer = setTimeout(function(){
+      getRemoteRef().then(function(ref){
+        if(!ref) return;
+        ref.set({map: MAP, ts: Date.now()}).catch(function(e){
+          console.warn('images remote save failed:', e && e.message);
+        });
+      });
+    }, 400);
+  }
+  function loadRemoteOnce(){
+    if(!remoteEnabled()) return Promise.resolve(false);
+    return getRemoteRef().then(function(ref){
+      if(!ref) return false;
+      return ref.get().then(function(snap){
+        const val = snap.val();
+        if(!val || typeof val !== 'object') return false;
+        const remote = normalizeMap(val);
+        MAP = remote;
+        try{ localStorage.setItem(KEY, JSON.stringify(MAP)); }catch(e){}
+        return true;
+      });
+    }).catch(function(e){
+      console.warn('images remote load failed:', e && e.message);
+      return false;
+    });
+  }
 
   function load(){
-    try{ const raw = localStorage.getItem(KEY); if(raw) MAP = JSON.parse(raw)||{}; }catch(e){}
+    try{ const raw = localStorage.getItem(KEY); if(raw) MAP = normalizeMap(JSON.parse(raw)); }catch(e){}
+    loadRemoteOnce().then(function(changed){
+      if(changed && window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
+    });
   }
 
   function get(id){
@@ -74,9 +134,10 @@
     });
     MAP = clean;
     localStorage.setItem(KEY, JSON.stringify(MAP));
+    saveRemoteSoon();
     closeEditor();
     window.BK_UI.renderAll();
-    alert('Images saved locally.');
+    alert('Images saved online.');
   }
 
   function reset(){
@@ -84,7 +145,9 @@
     MAP = {};
     DRAFT = {};
     localStorage.removeItem(KEY);
+    saveRemoteSoon();
     renderRows();
+    if(window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
   }
 
   window.BK_IMAGES = { KEY, load, get, openEditor, closeEditor, save, reset };
