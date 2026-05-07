@@ -10,6 +10,7 @@ window.BK_SYNC_INTERVAL_MS = 1200;
 window.FIREBASE_CONFIG = {
   apiKey: 'YOUR_API_KEY',
   authDomain: 'YOUR_PROJECT.firebaseapp.com',
+  databaseURL: 'https://YOUR_PROJECT-default-rtdb.REGION.firebasedatabase.app',
   projectId: 'YOUR_PROJECT_ID',
   storageBucket: 'YOUR_PROJECT.appspot.com',
   messagingSenderId: 'YOUR_SENDER_ID',
