@@ -9,6 +9,7 @@
   function later(fn, ms){ return setTimeout(fn, ms); }
   function json(x){ try { return JSON.stringify(x); } catch(e){ return ''; } }
   function clone(x){ try { return JSON.parse(JSON.stringify(x)); } catch(e){ return null; } }
+  function nowIso(){ try { return new Date().toISOString(); } catch(e){ return String(Date.now()); } }
 
   function hasState(){
     return !!(window.BK_STATE &&
@@ -29,9 +30,16 @@
     const a = Math.max(0, Math.min((s.active|0), (s.slots.length-1)));
     const active = s.slots[a] || {name:'SN1', items:[], pay:'unpaid'};
     const payload = {
-      slot:   { name: slotLabel(), items: active.items||[], pay: active.pay||'unpaid' },
+      slot: {
+        name: slotLabel(),
+        items: active.items || [],
+        pay: active.pay || 'unpaid',
+        issued: !!active.issued,
+        orderNo: active.orderNo || null,
+        createdAt: active.createdAt || Date.now()
+      },
       sender: sender,
-      ts:     Date.now()
+      ts: Date.now()
     };
     payload.hash = json({slot: payload.slot});
     return payload;
@@ -47,7 +55,10 @@
     current.slots[a] = {
       name: slotLabel(),
       items: Array.isArray(remoteSlot.items) ? remoteSlot.items : [],
-      pay:   remoteSlot.pay || 'unpaid'
+      pay: remoteSlot.pay || 'unpaid',
+      issued: !!remoteSlot.issued,
+      orderNo: remoteSlot.orderNo || (current.slots[a] && current.slots[a].orderNo) || null,
+      createdAt: Number(remoteSlot.createdAt) > 0 ? Number(remoteSlot.createdAt) : ((current.slots[a] && current.slots[a].createdAt) || Date.now())
     };
     return current;
   }
@@ -72,50 +83,90 @@
     const POLL_MS = Number(window.BK_SYNC_INTERVAL_MS) > 0 ? Number(window.BK_SYNC_INTERVAL_MS) : 1200;
 
     const sender = `dev-${Math.random().toString(36).slice(2,8)}`;
-    window.BK_SYNC = { sender, path: `${BASE}/${SLOT}`, pollMs: POLL_MS };
-
-    auth.signInAnonymously().catch(function(e){
-      console.warn('firebase auth anonymous failed:', e && e.message);
-    });
+    window.BK_SYNC = {
+      sender,
+      path: `${BASE}/${SLOT}`,
+      pollMs: POLL_MS,
+      status: 'starting',
+      lastPushAt: null,
+      lastPullAt: null,
+      lastError: null
+    };
 
     let lastLocalHash = '';
     let lastRemoteHash = '';
+    let busy = false;
+
+    function markError(prefix, e){
+      const msg = `${prefix}: ${e && e.message ? e.message : e}`;
+      window.BK_SYNC.status = 'error';
+      window.BK_SYNC.lastError = msg;
+      console.warn(msg);
+    }
 
     function pushIfChanged(){
       const payload = buildPayload(BK_STATE.getState(), sender);
-      if (!payload) return;
-      if (!shouldPush(payload.hash, lastLocalHash)) return;
-      REF.update(payload).catch(function(e){
-        console.warn('sync push failed', e && e.message);
+      if (!payload) return Promise.resolve(false);
+      if (!shouldPush(payload.hash, lastLocalHash)) return Promise.resolve(false);
+      return REF.update(payload).then(function(){
+        lastLocalHash = payload.hash;
+        lastRemoteHash = payload.hash;
+        window.BK_SYNC.status = 'online';
+        window.BK_SYNC.lastPushAt = nowIso();
+        window.BK_SYNC.lastError = null;
+        return true;
+      }).catch(function(e){
+        markError('sync push failed', e);
+        return false;
       });
-      lastLocalHash = payload.hash;
     }
 
     function pullAndApply(){
-      REF.get().then(function(snap){
+      return REF.get().then(function(snap){
         const val = snap.val();
-        if (!val || !val.slot) return;
+        if (!val || !val.slot) return false;
 
         const remoteHash = val.hash || json({slot: val.slot});
-        if (remoteHash === lastRemoteHash) return;
+        if (remoteHash === lastRemoteHash) return false;
         lastRemoteHash = remoteHash;
 
         const next = applyRemoteSlot(BK_STATE.getState(), val.slot);
         BK_STATE.setState(next);
-        if(window.BK_UI && typeof BK_UI.renderAll === "function") BK_UI.renderAll();
+        if(window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
         lastLocalHash = remoteHash;
+        window.BK_SYNC.status = 'online';
+        window.BK_SYNC.lastPullAt = nowIso();
+        window.BK_SYNC.lastError = null;
+        return true;
       }).catch(function(e){
-        console.warn('sync pull failed', e && e.message);
+        markError('sync pull failed', e);
+        return false;
       });
     }
 
     function tick(){
-      try { pushIfChanged(); pullAndApply(); }
-      catch(e){ /* still */ }
-      finally { later(tick, POLL_MS); }
+      if(busy){ later(tick, POLL_MS); return; }
+      busy = true;
+      pullAndApply()
+        .then(pushIfChanged)
+        .catch(function(e){ markError('sync tick failed', e); })
+        .finally(function(){
+          busy = false;
+          later(tick, POLL_MS);
+        });
     }
 
-    REF.update({ sender, ts: Date.now() }).finally(tick);
+    auth.signInAnonymously().then(function(){
+      window.BK_SYNC.status = 'authenticated';
+      return REF.update({ sender, ts: Date.now() });
+    }).then(function(){
+      return pullAndApply();
+    }).then(function(){
+      tick();
+    }).catch(function(e){
+      markError('firebase auth anonymous failed', e);
+      tick();
+    });
   }
 
   boot();
