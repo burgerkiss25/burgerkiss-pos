@@ -76,7 +76,11 @@
       renderStatus(statusRows().map(r=>Object.assign({}, r, {ok:false, status:'local only'})), 'not configured');
       return;
     }
-    authPromise.then(()=> Promise.all(statusRows().map(row=>
+    const authWait = Promise.race([
+      authPromise,
+      new Promise(resolve=> setTimeout(()=>resolve(false), 1200))
+    ]);
+    authWait.then(()=> Promise.all(statusRows().map(row=>
       database.ref(row.path).get().then(snap=>{
         const val = snap.val();
         return Object.assign({}, row, { ok: snap.exists(), status: snap.exists() ? 'online' : 'empty', ts: findTs(val) });

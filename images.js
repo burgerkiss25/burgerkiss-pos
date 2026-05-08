@@ -33,11 +33,14 @@
   function persistLocal(){
     try{ localStorage.setItem(KEY, JSON.stringify(MAP)); }catch(e){}
   }
+  function renderPosIfAvailable(){
+    if(window.BK_UI && typeof BK_UI.renderAll === 'function' && document.getElementById('buttons')) BK_UI.renderAll();
+  }
   function applyRemote(raw){
     const next = cleanMap(raw && raw.map ? raw.map : raw);
     MAP = next;
     persistLocal();
-    if(window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
+    renderPosIfAvailable();
     return true;
   }
   function loadRemoteOnce(){
@@ -143,7 +146,7 @@
     localStorage.removeItem(KEY);
     saveRemoteSoon();
     renderRows();
-    if(window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
+    renderPosIfAvailable();
   }
 
   window.BK_IMAGES = { KEY, load, loadRemoteOnce, get, openEditor, closeEditor, save, reset, remotePath };

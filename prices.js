@@ -32,10 +32,13 @@
   function persistLocal(){
     try{ localStorage.setItem(KEY, JSON.stringify(MAP)); }catch(e){}
   }
+  function renderPosIfAvailable(){
+    if(window.BK_UI && typeof BK_UI.renderAll === 'function' && document.getElementById('buttons')) BK_UI.renderAll();
+  }
   function applyRemote(raw){
     MAP = cleanMap(raw && raw.map ? raw.map : raw);
     persistLocal();
-    if(window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
+    renderPosIfAvailable();
     return true;
   }
   function loadRemoteOnce(){
@@ -119,7 +122,7 @@
       localStorage.removeItem(KEY);
       saveRemoteSoon();
       openEditor(true);
-      if(window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
+      renderPosIfAvailable();
     };
     if(window.BK_UI && BK_UI.confirmDialog){
       BK_UI.confirmDialog('Reset prices', 'Reset all edited prices to defaults?').then(ok=>{ if(ok) run(); });

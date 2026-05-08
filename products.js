@@ -31,6 +31,10 @@
     }catch(e){ return null; }
   }
 
+  function renderPosIfAvailable(){
+    if(window.BK_UI && typeof BK_UI.renderAll === 'function' && document.getElementById('buttons')) BK_UI.renderAll();
+  }
+
   function sanitizeRows(rows){
     if(!Array.isArray(rows)) return [];
     const out = [];
@@ -52,7 +56,7 @@
     if(!clean.length) return false;
     window.BK_DATA.BASE = clean;
     try{ localStorage.setItem(KEY, JSON.stringify(clean)); }catch(e){}
-    if(window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
+    renderPosIfAvailable();
     return true;
   }
 

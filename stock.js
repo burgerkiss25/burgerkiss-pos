@@ -73,13 +73,16 @@
       });
     }, 250);
   }
+  function renderPosIfAvailable(){
+    if(window.BK_UI && typeof BK_UI.renderAll === 'function' && document.getElementById('buttons')) BK_UI.renderAll();
+  }
   function applyRemoteStock(rawIngredients, rawRecipes){
     const cleanIng = sanitizeIngredients(rawIngredients && rawIngredients.map ? rawIngredients.map : rawIngredients);
     const cleanRec = sanitizeRecipes(rawRecipes && rawRecipes.map ? rawRecipes.map : rawRecipes);
     if(Object.keys(cleanIng).length) INGREDIENTS = cleanIng;
     if(Object.keys(cleanRec).length) RECIPES = cleanRec;
     persist();
-    if(window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
+    renderPosIfAvailable();
     return !!(Object.keys(cleanIng).length || Object.keys(cleanRec).length);
   }
   function loadRemoteOnce(){
