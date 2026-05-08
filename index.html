@@ -6,34 +6,8 @@
   <title>BurgerKiss – POS (Variante B: gespiegelt auf SN1)</title>
   <link rel="stylesheet" href="./style.css?v=12" />
 
-  <!-- ====================== POS-Konfiguration ====================== -->
-  <script>
-    // Preise lokal editierbar lassen
-    window.BK_ALLOW_PRICE_EDIT = true;
-
-    // Live-Sync aktivieren
-    window.BK_SYNC_ENABLED = true;
-
-    // Variante B: ALLE Geräte arbeiten auf demselben Slot.
-    // Hier fix auf SN1 “gepinnt”.
-    window.BK_SYNC_FORCE_SLOT = 'SN1';
-
-    // Datenbank-Pfad für Live-Sync (unter deiner Realtime DB)
-    window.BK_SYNC_PATH = '/pos/live';
-    // Optional: Polling-Intervall in ms
-    window.BK_SYNC_INTERVAL_MS = 1200;
-
-    // Firebase Web SDK Konfiguration (dein Projekt)
-    window.FIREBASE_CONFIG = {
-      apiKey: "AIzaSyD1LNc1SPciD6k5GYbzimLqs0XZRf54DUs",
-      authDomain: "burgerkiss-pos.firebaseapp.com",
-      projectId: "burgerkiss-pos",
-      storageBucket: "burgerkiss-pos.firebasestorage.app",
-      messagingSenderId: "1041476532885",
-      appId: "1:1041476532885:web:3a20041480487fb60c399c"
-    };
-  </script>
-  <!-- =============================================================== -->
+  <!-- POS-Konfiguration aus externer Datei -->
+  <script src="./firebase-config.js?v=1"></script>
 </head>
 <body>
   <!-- Sticky HUD -->
@@ -216,6 +190,17 @@
     </div>
   </div>
 
+  <script>
+    if(!window.FIREBASE_CONFIG){
+      console.warn('Firebase config missing: online database is disabled until firebase-config.js is filled.');
+    }
+  </script>
+
+  <!-- =================== Firebase SDK (Compat) =================== -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
   <!-- ====================== App-Skripte ====================== -->
   <script src="./data.js?v=12"></script>
   <script src="./prices.js?v=12"></script>
@@ -228,11 +213,6 @@
   <script src="./logic.js?v=12"></script>
   <script src="./ui.js?v=12"></script>
   <script src="./main.js?v=12"></script>
-
-  <!-- =================== Firebase SDK (Compat) =================== -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
   <!-- =============== Live-Sync (Variante B, Polling) =============== -->
   <script src="./sync_poll.js?v=12"></script>
