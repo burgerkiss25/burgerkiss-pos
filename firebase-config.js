@@ -6,6 +6,7 @@ window.BK_SYNC_ENABLED = true;
 window.BK_SYNC_FORCE_SLOT = 'SN1';
 window.BK_SYNC_PATH = '/pos/live';
 window.BK_SYNC_INTERVAL_MS = 1200;
+window.BK_IMAGES_PATH = '/pos/config/images';
 
 // Firebase Web-App-Konfiguration aus der Firebase Console.
 // Hinweis: Keine `import`-Zeilen hier einfügen; die App nutzt Firebase Compat-Skripte aus index.html.

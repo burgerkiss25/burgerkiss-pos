@@ -1,71 +1,71 @@
-// Bild-Overrides (lokal editierbar)
+// Bild-Overrides (lokal + online editierbar)
 (function(){
   const KEY = 'bk_images_v1';
+  const DEFAULT_REMOTE_PATH = '/pos/config/images';
   let MAP = {};
   let DRAFT = {};
   let remoteSaveTimer = null;
 
-  function remoteEnabled(){
-    return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database && window.firebase.auth);
-  }
-  function normalizeMap(raw){
-    const src = raw && typeof raw === 'object' && raw.map ? raw.map : raw;
-    const out = {};
-    if(!src || typeof src !== 'object') return out;
-    Object.keys(src).forEach(id=>{
-      if(typeof src[id] === 'string' && src[id]) out[id] = src[id];
+  function clone(x){ try{ return JSON.parse(JSON.stringify(x)); }catch(e){ return {}; } }
+  function cleanMap(input){
+    const clean = {};
+    if(!input || typeof input !== 'object') return clean;
+    Object.keys(input).forEach(id=>{
+      if(typeof input[id] === 'string' && input[id]) clean[id] = input[id];
     });
-    return out;
+    return clean;
   }
-  function getRemoteRef(){
-    if(!remoteEnabled()) return Promise.resolve(null);
+  function remoteEnabled(){
+    return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database);
+  }
+  function remotePath(){
+    return (window.BK_IMAGES_PATH || DEFAULT_REMOTE_PATH).replace(/\/+$/,'');
+  }
+  function remoteRef(){
+    if(!remoteEnabled()) return null;
     try{
       const app = (window.firebase.apps && firebase.apps.length)
         ? firebase.app()
         : firebase.initializeApp(window.FIREBASE_CONFIG);
-      const auth = firebase.auth(app);
-      const ready = auth.currentUser ? Promise.resolve() : auth.signInAnonymously().catch(function(e){
-        console.warn('firebase images auth failed:', e && e.message);
-      });
-      const db = firebase.database(app);
-      return ready.then(()=> db.ref('/pos/config/images'));
-    }catch(e){ return Promise.resolve(null); }
+      return firebase.database(app).ref(remotePath());
+    }catch(e){ return null; }
   }
-  function saveRemoteSoon(){
-    if(!remoteEnabled()) return;
-    if(remoteSaveTimer) clearTimeout(remoteSaveTimer);
-    remoteSaveTimer = setTimeout(function(){
-      getRemoteRef().then(function(ref){
-        if(!ref) return;
-        ref.set({map: MAP, ts: Date.now()}).catch(function(e){
-          console.warn('images remote save failed:', e && e.message);
-        });
-      });
-    }, 400);
+  function persistLocal(){
+    try{ localStorage.setItem(KEY, JSON.stringify(MAP)); }catch(e){}
+  }
+  function applyRemote(raw){
+    const next = cleanMap(raw && raw.map ? raw.map : raw);
+    MAP = next;
+    persistLocal();
+    if(window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
+    return true;
   }
   function loadRemoteOnce(){
-    if(!remoteEnabled()) return Promise.resolve(false);
-    return getRemoteRef().then(function(ref){
-      if(!ref) return false;
-      return ref.get().then(function(snap){
-        const val = snap.val();
-        if(!val || typeof val !== 'object') return false;
-        const remote = normalizeMap(val);
-        MAP = remote;
-        try{ localStorage.setItem(KEY, JSON.stringify(MAP)); }catch(e){}
-        return true;
-      });
-    }).catch(function(e){
+    const ref = remoteRef();
+    if(!ref) return Promise.resolve(false);
+    return ref.get().then(snap=>{
+      const val = snap.val();
+      if(!val) return false;
+      return applyRemote(val);
+    }).catch(e=>{
       console.warn('images remote load failed:', e && e.message);
       return false;
     });
   }
+  function saveRemoteSoon(){
+    const ref = remoteRef();
+    if(!ref) return;
+    if(remoteSaveTimer) clearTimeout(remoteSaveTimer);
+    remoteSaveTimer = setTimeout(()=>{
+      ref.set({ map: MAP, ts: Date.now() }).catch(e=>{
+        console.warn('images remote save failed:', e && e.message);
+      });
+    }, 250);
+  }
 
   function load(){
-    try{ const raw = localStorage.getItem(KEY); if(raw) MAP = normalizeMap(JSON.parse(raw)); }catch(e){}
-    loadRemoteOnce().then(function(changed){
-      if(changed && window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
-    });
+    try{ const raw = localStorage.getItem(KEY); if(raw) MAP = cleanMap(JSON.parse(raw)||{}); }catch(e){}
+    loadRemoteOnce();
   }
 
   function get(id){
@@ -118,7 +118,7 @@
   }
 
   function openEditor(){
-    DRAFT = Object.assign({}, MAP);
+    DRAFT = clone(MAP);
     renderRows();
     document.getElementById('modalImages').classList.add('open');
   }
@@ -128,16 +128,12 @@
   }
 
   function save(){
-    const clean = {};
-    Object.keys(DRAFT).forEach(id=>{
-      if(typeof DRAFT[id] === 'string' && DRAFT[id]) clean[id] = DRAFT[id];
-    });
-    MAP = clean;
-    localStorage.setItem(KEY, JSON.stringify(MAP));
+    MAP = cleanMap(DRAFT);
+    persistLocal();
     saveRemoteSoon();
     closeEditor();
     window.BK_UI.renderAll();
-    alert('Images saved online.');
+    alert(remoteEnabled() ? 'Images saved online.' : 'Images saved locally.');
   }
 
   function reset(){
@@ -150,5 +146,5 @@
     if(window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
   }
 
-  window.BK_IMAGES = { KEY, load, get, openEditor, closeEditor, save, reset };
+  window.BK_IMAGES = { KEY, load, loadRemoteOnce, get, openEditor, closeEditor, save, reset, remotePath };
 })();

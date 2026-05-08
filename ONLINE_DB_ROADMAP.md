@@ -27,6 +27,7 @@ pos/
   catalog/
     products
     prices
+  config/
     images
   stock/
     inventory
@@ -36,6 +37,8 @@ pos/
 ```
 
 ## Phase 1: Jetzt sichtbar machen, dass Online-DB funktioniert
+
+Status: **gestartet und in Firebase sichtbar**. In der Realtime Database ist `pos/live/SN1` sichtbar; damit ist bestätigt, dass die App grundsätzlich in die Online-DB schreibt.
 
 Ziel: Wir sehen in Firebase sofort, dass die App schreibt und liest.
 
@@ -52,12 +55,20 @@ Erfolgskriterium:
 - Firebase zeigt Daten unter `pos/live/SN1`.
 - Keine roten Fehler in der Browser-Konsole.
 
+Noch zu prüfen, bevor Phase 1 komplett abgeschlossen ist:
+
+- In der POS-App einen echten Artikel hinzufügen und prüfen, ob `pos/live/SN1/slot/items` in Firebase gefüllt wird.
+- Die POS-App in einem zweiten Browser/Fenster öffnen und prüfen, ob derselbe Artikel dort automatisch erscheint.
+- In der Browser-Konsole `window.BK_SYNC` prüfen; `status` soll `online` sein und `lastError` soll `null` sein.
+
 ## Phase 2: Bilder überall sichtbar machen
+
+Status: **gestartet**. `images.js` lädt und speichert Bild-Overrides jetzt zusätzlich online unter `pos/config/images`, bleibt aber lokal als Fallback nutzbar.
 
 Ziel: Produktbilder sollen nicht nur lokal im Browser gespeichert sein, sondern online geteilt werden.
 
 1. Aktuellen `images.js`-Speicher prüfen.
-2. Online-Pfad `pos/catalog/images` einführen.
+2. Online-Pfad `pos/config/images` einführen.
 3. Beim Laden zuerst Online-Bilder holen.
 4. Beim Speichern Bilder/URLs online schreiben.
 5. Admin-Editor testen.
@@ -66,7 +77,7 @@ Ziel: Produktbilder sollen nicht nur lokal im Browser gespeichert sein, sondern 
 Erfolgskriterium:
 
 - Bildänderung im Admin ist nach Reload/auf anderem Gerät sichtbar.
-- Firebase zeigt `pos/catalog/images` separat an.
+- Firebase zeigt `pos/config/images` separat an.
 
 ## Phase 3: Produkte und Preise online machen
 

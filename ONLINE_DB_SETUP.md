@@ -62,8 +62,40 @@ window.FIREBASE_CONFIG = {
 };
 ```
 
-## 6) Empfohlene Realtime Database Rules
+## 6) Realtime Database Rules für die Entwicklungsphase
+
+Für die aktuelle Testphase, in der Bilder, Produkte, Stock und Historie noch Schritt für Schritt online gebracht werden, darf die Datenbank vorübergehend einfacher offen sein.
+Das ist praktisch zum Testen, soll aber vor dem Mitarbeiter-Start wieder abgesichert werden.
+
 In Firebase **Realtime Database -> Rules** einfügen und veröffentlichen:
+
+```json
+{
+  "rules": {
+    "pos": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
+```
+
+Damit funktionieren auch getrennte Bereiche wie:
+
+```txt
+pos/live/SN1
+pos/catalog/images
+pos/catalog/products
+pos/catalog/prices
+pos/stock/inventory
+pos/history
+```
+
+Wenn später Sicherheit aktiviert wird, ersetzen wir diese Entwicklungsregeln durch Rollen-/Auth-Regeln.
+
+## 6b) Spätere sichere Realtime Database Rules
+
+Diese Regeln sind für später, wenn Mitarbeiter Zugriff bekommen und Sicherheit finalisiert wird:
 
 ```json
 {
