@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – Admin Editors</title>
   <link rel="stylesheet" href="https://burgerkiss25.github.io/burgerkiss-pos/style.css?v=11" />
+  <script src="./firebase-config.js?v=1"></script>
 </head>
 <body>
   <div class="hud-wrap">
@@ -37,6 +38,9 @@
   <div class="modal" id="modalImages"><div class="sheet"><header><b>Edit Images</b><div><button class="x" id="iSave">Save</button><button class="x" id="iReset">Reset</button><button class="x" id="iClose">Close</button></div></header><div class="body" id="imagesBody"></div></div></div>
   <div class="modal" id="modalStock"><div class="sheet"><header><b id="stockModalTitle">Edit Stock</b><div><button class="x" id="sSave">Save</button><button class="x" id="sReset">Reset</button><button class="x" id="sClose">Close</button></div></header><div class="body" id="stockBody"></div></div></div>
 
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
   <script src="./data.js?v=13"></script>
   <script src="./prices.js?v=13"></script>
   <script src="./products.js?v=13"></script>
