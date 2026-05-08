@@ -1,11 +1,74 @@
-// Bild-Overrides (lokal editierbar)
+// Bild-Overrides (lokal + online editierbar)
 (function(){
   const KEY = 'bk_images_v1';
+  const DEFAULT_REMOTE_PATH = '/pos/config/images';
   let MAP = {};
   let DRAFT = {};
+  let remoteSaveTimer = null;
+
+  function clone(x){ try{ return JSON.parse(JSON.stringify(x)); }catch(e){ return {}; } }
+  function cleanMap(input){
+    const clean = {};
+    if(!input || typeof input !== 'object') return clean;
+    Object.keys(input).forEach(id=>{
+      if(typeof input[id] === 'string' && input[id]) clean[id] = input[id];
+    });
+    return clean;
+  }
+  function remoteEnabled(){
+    return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database);
+  }
+  function remotePath(){
+    return (window.BK_IMAGES_PATH || DEFAULT_REMOTE_PATH).replace(/\/+$/,'');
+  }
+  function remoteRef(){
+    if(!remoteEnabled()) return null;
+    try{
+      const app = (window.firebase.apps && firebase.apps.length)
+        ? firebase.app()
+        : firebase.initializeApp(window.FIREBASE_CONFIG);
+      return firebase.database(app).ref(remotePath());
+    }catch(e){ return null; }
+  }
+  function persistLocal(){
+    try{ localStorage.setItem(KEY, JSON.stringify(MAP)); }catch(e){}
+  }
+  function renderPosIfAvailable(){
+    if(window.BK_UI && typeof BK_UI.renderAll === 'function' && document.getElementById('buttons')) BK_UI.renderAll();
+  }
+  function applyRemote(raw){
+    const next = cleanMap(raw && raw.map ? raw.map : raw);
+    MAP = next;
+    persistLocal();
+    renderPosIfAvailable();
+    return true;
+  }
+  function loadRemoteOnce(){
+    const ref = remoteRef();
+    if(!ref) return Promise.resolve(false);
+    return ref.get().then(snap=>{
+      const val = snap.val();
+      if(!val) return false;
+      return applyRemote(val);
+    }).catch(e=>{
+      console.warn('images remote load failed:', e && e.message);
+      return false;
+    });
+  }
+  function saveRemoteSoon(){
+    const ref = remoteRef();
+    if(!ref) return;
+    if(remoteSaveTimer) clearTimeout(remoteSaveTimer);
+    remoteSaveTimer = setTimeout(()=>{
+      ref.set({ map: MAP, ts: Date.now() }).catch(e=>{
+        console.warn('images remote save failed:', e && e.message);
+      });
+    }, 250);
+  }
 
   function load(){
-    try{ const raw = localStorage.getItem(KEY); if(raw) MAP = JSON.parse(raw)||{}; }catch(e){}
+    try{ const raw = localStorage.getItem(KEY); if(raw) MAP = cleanMap(JSON.parse(raw)||{}); }catch(e){}
+    loadRemoteOnce();
   }
 
   function get(id){
@@ -58,7 +121,7 @@
   }
 
   function openEditor(){
-    DRAFT = Object.assign({}, MAP);
+    DRAFT = clone(MAP);
     renderRows();
     document.getElementById('modalImages').classList.add('open');
   }
@@ -68,15 +131,12 @@
   }
 
   function save(){
-    const clean = {};
-    Object.keys(DRAFT).forEach(id=>{
-      if(typeof DRAFT[id] === 'string' && DRAFT[id]) clean[id] = DRAFT[id];
-    });
-    MAP = clean;
-    localStorage.setItem(KEY, JSON.stringify(MAP));
+    MAP = cleanMap(DRAFT);
+    persistLocal();
+    saveRemoteSoon();
     closeEditor();
     window.BK_UI.renderAll();
-    alert('Images saved locally.');
+    alert(remoteEnabled() ? 'Images saved online.' : 'Images saved locally.');
   }
 
   function reset(){
@@ -84,8 +144,10 @@
     MAP = {};
     DRAFT = {};
     localStorage.removeItem(KEY);
+    saveRemoteSoon();
     renderRows();
+    renderPosIfAvailable();
   }
 
-  window.BK_IMAGES = { KEY, load, get, openEditor, closeEditor, save, reset };
+  window.BK_IMAGES = { KEY, load, loadRemoteOnce, get, openEditor, closeEditor, save, reset, remotePath };
 })();
