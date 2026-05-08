@@ -647,11 +647,51 @@
     try{
       const raw = localStorage.getItem(HISTORY_KEY);
       const arr = raw ? JSON.parse(raw) : [];
-      return Array.isArray(arr) ? arr : [];
+      return normalizeHistory(arr);
     }catch(e){ return []; }
   }
-  function saveHistory(list){
-    try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); }catch(e){}
+  function saveHistoryRemoteSoon(list){
+    if(!historyRemoteEnabled()) return;
+    if(historyRemoteSaveTimer) clearTimeout(historyRemoteSaveTimer);
+    historyRemoteSaveTimer = setTimeout(function(){
+      const clean = normalizeHistory(list).slice(0, 1000);
+      getHistoryRef().then(function(ref){
+        if(!ref) return;
+        ref.set({entries: clean, ts: Date.now()}).catch(function(e){
+          console.warn('history remote save failed:', e && e.message);
+        });
+      });
+    }, 400);
+  }
+  function saveHistory(list, opts){
+    const clean = normalizeHistory(list).slice(0, 1000);
+    try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(clean)); }catch(e){}
+    if(!opts || opts.remote !== false) saveHistoryRemoteSoon(clean);
+  }
+  function loadHistoryRemoteOnce(force){
+    if(!historyRemoteEnabled()) return Promise.resolve(false);
+    if(!force && historyRemoteLoadedAt && Date.now() - historyRemoteLoadedAt < 5000) return Promise.resolve(false);
+    historyRemoteLoadedAt = Date.now();
+    return getHistoryRef().then(function(ref){
+      if(!ref) return false;
+      return ref.get().then(function(snap){
+        const val = snap.val();
+        if(!val) return false;
+        const hasEntries = Array.isArray(val.entries);
+        const remote = normalizeHistory(hasEntries ? val.entries : val);
+        if(hasEntries && !remote.length){
+          saveHistory([], {remote:false});
+          return true;
+        }
+        if(!remote.length) return false;
+        const merged = mergeHistoryLists(getHistory(), remote);
+        saveHistory(merged, {remote:false});
+        return true;
+      });
+    }).catch(function(e){
+      console.warn('history remote load failed:', e && e.message);
+      return false;
+    });
   }
   function slotSnapshot(slot){
     const c = BK_LOGIC.computeSlot(slot);
