@@ -84,9 +84,9 @@ Damit funktionieren auch getrennte Bereiche wie:
 
 ```txt
 pos/live/SN1
-pos/catalog/images
 pos/catalog/products
 pos/catalog/prices
+pos/config/images
 pos/stock/inventory
 pos/history
 ```

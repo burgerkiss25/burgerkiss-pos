@@ -81,6 +81,8 @@ Erfolgskriterium:
 
 ## Phase 3: Produkte und Preise online machen
 
+Status: **gestartet**. `products.js` und `prices.js` laden/speichern jetzt zusätzlich online unter `pos/catalog/products` und `pos/catalog/prices`, bleiben aber lokal als Fallback nutzbar.
+
 Ziel: Produkte und Preise sollen zentral in Firebase liegen und überall gleich sein.
 
 1. `products.js` online-fähig machen.

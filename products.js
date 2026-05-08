@@ -1,7 +1,9 @@
-// Produkt-Editor (lokal editierbar)
+// Produkt-Editor (lokal + online editierbar)
 (function(){
   const KEY = 'bk_products_v1';
+  const DEFAULT_REMOTE_PATH = '/pos/catalog/products';
   let DRAFT = [];
+  let remoteSaveTimer = null;
 
   function clone(x){ return JSON.parse(JSON.stringify(x)); }
 
@@ -13,6 +15,21 @@
       .replace(/[^a-z0-9_\-]/g, '');
   }
 
+  function remoteEnabled(){
+    return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database);
+  }
+  function remotePath(){
+    return (window.BK_PRODUCTS_PATH || DEFAULT_REMOTE_PATH).replace(/\/+$/,'');
+  }
+  function remoteRef(){
+    if(!remoteEnabled()) return null;
+    try{
+      const app = (window.firebase.apps && firebase.apps.length)
+        ? firebase.app()
+        : firebase.initializeApp(window.FIREBASE_CONFIG);
+      return firebase.database(app).ref(remotePath());
+    }catch(e){ return null; }
+  }
 
   function sanitizeRows(rows){
     if(!Array.isArray(rows)) return [];
@@ -30,21 +47,47 @@
     return out;
   }
 
+  function applyRows(rows){
+    const clean = sanitizeRows(rows);
+    if(!clean.length) return false;
+    window.BK_DATA.BASE = clean;
+    try{ localStorage.setItem(KEY, JSON.stringify(clean)); }catch(e){}
+    if(window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
+    return true;
+  }
+
+  function loadRemoteOnce(){
+    const ref = remoteRef();
+    if(!ref) return Promise.resolve(false);
+    return ref.get().then(snap=>{
+      const val = snap.val();
+      const rows = val && Array.isArray(val.rows) ? val.rows : val;
+      return applyRows(rows);
+    }).catch(e=>{
+      console.warn('products remote load failed:', e && e.message);
+      return false;
+    });
+  }
+
+  function saveRemoteSoon(){
+    const ref = remoteRef();
+    if(!ref) return;
+    if(remoteSaveTimer) clearTimeout(remoteSaveTimer);
+    remoteSaveTimer = setTimeout(()=>{
+      ref.set({ rows: sanitizeRows(window.BK_DATA.BASE || []), ts: Date.now() }).catch(e=>{
+        console.warn('products remote save failed:', e && e.message);
+      });
+    }, 250);
+  }
+
   function load(){
     try{
       const raw = localStorage.getItem(KEY);
-      if(!raw) return;
-      const arr = JSON.parse(raw);
-      const clean = sanitizeRows(arr);
-      if(clean.length){
-        window.BK_DATA.BASE = clean;
-      }else{
-        // beschädigte lokale Produktliste zurücksetzen
-        localStorage.removeItem(KEY);
-      }
+      if(raw) applyRows(JSON.parse(raw));
     }catch(e){
       localStorage.removeItem(KEY);
     }
+    loadRemoteOnce();
   }
 
   function collectRows(){
@@ -117,11 +160,10 @@
       idSet.add(r.id);
     }
 
-    window.BK_DATA.BASE = rows;
-    localStorage.setItem(KEY, JSON.stringify(rows));
+    applyRows(rows);
+    saveRemoteSoon();
     closeEditor();
-    window.BK_UI.renderAll();
-    alert('Products saved locally.');
+    alert(remoteEnabled() ? 'Products saved online.' : 'Products saved locally.');
   }
 
   function reset(){
@@ -129,9 +171,10 @@
     localStorage.removeItem(KEY);
     window.BK_DATA.BASE = clone(window.BK_DATA.DEFAULT_BASE || []);
     DRAFT = clone(window.BK_DATA.BASE);
+    saveRemoteSoon();
     renderRows();
     window.BK_UI.renderAll();
   }
 
-  window.BK_PRODUCTS = { KEY, load, openEditor, closeEditor, addRow, save, reset };
+  window.BK_PRODUCTS = { KEY, load, loadRemoteOnce, remotePath, openEditor, closeEditor, addRow, save, reset };
 })();
