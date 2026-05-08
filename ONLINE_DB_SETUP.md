@@ -87,7 +87,10 @@ pos/live/SN1
 pos/catalog/products
 pos/catalog/prices
 pos/config/images
+pos/stock/ingredients
+pos/stock/recipes
 pos/stock/inventory
+pos/stock/addons
 pos/history
 ```
 

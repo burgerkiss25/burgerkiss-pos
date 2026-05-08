@@ -101,6 +101,8 @@ Erfolgskriterium:
 
 ## Phase 4: Stock online machen
 
+Status: **gestartet**. `stock.js` lädt/speichert Zutaten und Rezepte jetzt online und schreibt zusätzlich getrennte Ansichten für Inventory und Add-ons.
+
 Ziel: Lagerbestand, Zutaten, Rezepte und Add-ons sollen auf allen Geräten gleich sein.
 
 1. Aktuelle Stock-Dateien prüfen:

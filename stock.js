@@ -12,8 +12,89 @@
   } = window.BK_STOCK_UTILS;
   let INGREDIENTS = {};
   let RECIPES = {};
+  let remoteSaveTimer = null;
 
   function clone(x){ return JSON.parse(JSON.stringify(x)); }
+  function remoteEnabled(){
+    return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database);
+  }
+  function stockPaths(){
+    return {
+      ingredients: (window.BK_STOCK_INGREDIENTS_PATH || '/pos/stock/ingredients').replace(/\/+$/,''),
+      recipes: (window.BK_STOCK_RECIPES_PATH || '/pos/stock/recipes').replace(/\/+$/,''),
+      inventory: (window.BK_STOCK_INVENTORY_PATH || '/pos/stock/inventory').replace(/\/+$/,''),
+      addons: (window.BK_STOCK_ADDONS_PATH || '/pos/stock/addons').replace(/\/+$/,'')
+    };
+  }
+  function db(){
+    if(!remoteEnabled()) return null;
+    try{
+      const app = (window.firebase.apps && firebase.apps.length)
+        ? firebase.app()
+        : firebase.initializeApp(window.FIREBASE_CONFIG);
+      return firebase.database(app);
+    }catch(e){ return null; }
+  }
+  function inventoryFromIngredients(ingredients){
+    const out = {};
+    Object.entries(ingredients || {}).forEach(([id, def])=>{
+      out[id] = {
+        current_stock_storage: num(def.current_stock_storage, 0),
+        current_stock_foodtruck: num(def.current_stock_foodtruck, 0),
+        moq_storage: num(def.moq_storage, 0),
+        moq_foodtruck: num(def.moq_foodtruck, 0),
+        unit: def.unit || '',
+        track_stock: def.track_stock !== false
+      };
+    });
+    return out;
+  }
+  function addonRecipesFromRecipes(recipes){
+    const out = {};
+    Object.entries(recipes || {}).forEach(([id, recipe])=>{
+      if(String(id).startsWith('x_')) out[id] = recipe;
+    });
+    return out;
+  }
+  function persistRemoteSoon(){
+    const database = db();
+    if(!database) return;
+    if(remoteSaveTimer) clearTimeout(remoteSaveTimer);
+    remoteSaveTimer = setTimeout(()=>{
+      const paths = stockPaths();
+      const ts = Date.now();
+      Promise.all([
+        database.ref(paths.ingredients).set({ map: INGREDIENTS, ts }),
+        database.ref(paths.recipes).set({ map: RECIPES, ts }),
+        database.ref(paths.inventory).set({ map: inventoryFromIngredients(INGREDIENTS), ts }),
+        database.ref(paths.addons).set({ map: addonRecipesFromRecipes(RECIPES), ts })
+      ]).catch(e=>{
+        console.warn('stock remote save failed:', e && e.message);
+      });
+    }, 250);
+  }
+  function applyRemoteStock(rawIngredients, rawRecipes){
+    const cleanIng = sanitizeIngredients(rawIngredients && rawIngredients.map ? rawIngredients.map : rawIngredients);
+    const cleanRec = sanitizeRecipes(rawRecipes && rawRecipes.map ? rawRecipes.map : rawRecipes);
+    if(Object.keys(cleanIng).length) INGREDIENTS = cleanIng;
+    if(Object.keys(cleanRec).length) RECIPES = cleanRec;
+    persist();
+    if(window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
+    return !!(Object.keys(cleanIng).length || Object.keys(cleanRec).length);
+  }
+  function loadRemoteOnce(){
+    const database = db();
+    if(!database) return Promise.resolve(false);
+    const paths = stockPaths();
+    return Promise.all([
+      database.ref(paths.ingredients).get(),
+      database.ref(paths.recipes).get()
+    ]).then(([ingSnap, recSnap])=> applyRemoteStock(ingSnap.val(), recSnap.val()))
+      .catch(e=>{
+        console.warn('stock remote load failed:', e && e.message);
+        return false;
+      });
+  }
 
   function migrateLegacyIngredients(raw){
     const src = raw && typeof raw === 'object' ? raw : {};
@@ -43,12 +124,15 @@
     INGREDIENTS = clone(DEFAULTS.ingredients);
     RECIPES = clone(DEFAULTS.recipes);
     try{
-      const raw = localStorage.getItem(KEY); if(!raw) return;
+      const raw = localStorage.getItem(KEY);
+      if(!raw){ loadRemoteOnce(); return; }
       const parsed = JSON.parse(raw);
       if(parsed && !parsed.ingredients && !parsed.recipes){
         const migrated = migrateLegacyIngredients(parsed);
         if(Object.keys(migrated).length) INGREDIENTS = migrated;
         persist();
+        persistRemoteSoon();
+        loadRemoteOnce();
         return;
       }
       const cleanIng = sanitizeIngredients(parsed && parsed.ingredients);
@@ -56,10 +140,11 @@
       if(Object.keys(cleanIng).length) INGREDIENTS = cleanIng;
       if(Object.keys(cleanRec).length) RECIPES = cleanRec;
     }catch(e){ localStorage.removeItem(KEY); }
+    loadRemoteOnce();
   }
 
   function persist(){ localStorage.setItem(KEY, JSON.stringify({ ingredients: INGREDIENTS, recipes: RECIPES })); }
-  function reset(){ INGREDIENTS = clone(DEFAULTS.ingredients); RECIPES = clone(DEFAULTS.recipes); localStorage.removeItem(KEY); }
+  function reset(){ INGREDIENTS = clone(DEFAULTS.ingredients); RECIPES = clone(DEFAULTS.recipes); localStorage.removeItem(KEY); persistRemoteSoon(); }
 
   function getSnapshot(slots){
     const usage = {}; Object.keys(INGREDIENTS).forEach(k=>{ usage[k] = 0; });
@@ -191,8 +276,8 @@
     if(!Object.keys(ingNext).length) return false;
     const recipeNext = {};
     body.querySelectorAll('[data-recipe-input]').forEach(inp=>{ const pid = normalizeId(inp.dataset.productId); if(!pid) return; const parsed = parseRecipeText(inp.value); const filtered = {}; Object.entries(parsed).forEach(([iid, qty])=>{ if(ingNext[iid]) filtered[iid] = qty; }); recipeNext[pid] = filtered; });
-    INGREDIENTS = ingNext; RECIPES = recipeNext; persist(); closeEditor(); return true;
+    INGREDIENTS = ingNext; RECIPES = recipeNext; persist(); persistRemoteSoon(); closeEditor(); return true;
   }
 
-  window.BK_STOCK = { KEY, load, reset, getSnapshot, openEditor, closeEditor, saveEditor };
+  window.BK_STOCK = { KEY, load, loadRemoteOnce, reset, getSnapshot, openEditor, closeEditor, saveEditor, remoteEnabled, stockPaths };
 })();

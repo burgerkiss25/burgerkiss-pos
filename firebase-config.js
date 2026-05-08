@@ -9,6 +9,10 @@ window.BK_SYNC_INTERVAL_MS = 1200;
 window.BK_IMAGES_PATH = '/pos/config/images';
 window.BK_PRODUCTS_PATH = '/pos/catalog/products';
 window.BK_PRICES_PATH = '/pos/catalog/prices';
+window.BK_STOCK_INGREDIENTS_PATH = '/pos/stock/ingredients';
+window.BK_STOCK_RECIPES_PATH = '/pos/stock/recipes';
+window.BK_STOCK_INVENTORY_PATH = '/pos/stock/inventory';
+window.BK_STOCK_ADDONS_PATH = '/pos/stock/addons';
 
 // Firebase Web-App-Konfiguration aus der Firebase Console.
 // Hinweis: Keine `import`-Zeilen hier einfügen; die App nutzt Firebase Compat-Skripte aus index.html.
