@@ -1,4 +1,16 @@
 (function(){
+  function bootFirebase(){
+    if(!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.auth)) return;
+    const app = (window.firebase.apps && firebase.apps.length)
+      ? firebase.app()
+      : firebase.initializeApp(window.FIREBASE_CONFIG);
+    firebase.auth(app).signInAnonymously().catch(function(e){
+      console.warn('admin firebase auth anonymous failed:', e && e.message);
+    });
+  }
+
+  bootFirebase();
+
   BK_PRICES.load();
   BK_PRODUCTS.load();
   BK_IMAGES.load();

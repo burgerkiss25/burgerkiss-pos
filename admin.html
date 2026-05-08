@@ -4,7 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – Admin Editors</title>
-  <link rel="stylesheet" href="https://burgerkiss25.github.io/burgerkiss-pos/style.css?v=11" />
+  <link rel="stylesheet" href="./style.css?v=12" />
+  <script src="./firebase-config.js?v=1"></script>
 </head>
 <body>
   <div class="hud-wrap">
@@ -36,6 +37,17 @@
   <div class="modal" id="modalProducts"><div class="sheet"><header><b>Edit Products</b><div><button class="x" id="prodAdd">+ Add</button><button class="x" id="prodSave">Save</button><button class="x" id="prodReset">Reset</button><button class="x" id="prodClose">Close</button></div></header><div class="body" id="productsBody"></div></div></div>
   <div class="modal" id="modalImages"><div class="sheet"><header><b>Edit Images</b><div><button class="x" id="iSave">Save</button><button class="x" id="iReset">Reset</button><button class="x" id="iClose">Close</button></div></header><div class="body" id="imagesBody"></div></div></div>
   <div class="modal" id="modalStock"><div class="sheet"><header><b id="stockModalTitle">Edit Stock</b><div><button class="x" id="sSave">Save</button><button class="x" id="sReset">Reset</button><button class="x" id="sClose">Close</button></div></header><div class="body" id="stockBody"></div></div></div>
+
+  <script>
+    if(!window.FIREBASE_CONFIG){
+      console.warn('Firebase config missing: admin online database saves are disabled until firebase-config.js is filled.');
+    }
+  </script>
+
+  <!-- Firebase SDK (Compat) for Admin online saves -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
   <script src="./data.js?v=13"></script>
   <script src="./prices.js?v=13"></script>
