@@ -177,7 +177,7 @@
     DRAFT = clone(window.BK_DATA.BASE);
     saveRemoteSoon();
     renderRows();
-    window.BK_UI.renderAll();
+    renderPosIfAvailable();
   }
 
   window.BK_PRODUCTS = { KEY, load, loadRemoteOnce, remotePath, openEditor, closeEditor, addRow, save, reset };

@@ -137,6 +137,7 @@
 
   function buildProducts(){
     const grid = document.getElementById('buttons');
+    if(!grid) return;
     grid.innerHTML = '';
     const base = (Array.isArray(BK_DATA.BASE) && BK_DATA.BASE.length) ? BK_DATA.BASE : (BK_DATA.DEFAULT_BASE || []);
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;

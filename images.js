@@ -135,7 +135,7 @@
     persistLocal();
     saveRemoteSoon();
     closeEditor();
-    window.BK_UI.renderAll();
+    renderPosIfAvailable();
     alert(remoteEnabled() ? 'Images saved online.' : 'Images saved locally.');
   }
 

@@ -113,7 +113,7 @@
     persistLocal();
     saveRemoteSoon();
     closeEditor();
-    window.BK_UI.renderAll(); // refresh
+    renderPosIfAvailable(); // refresh
     if(window.BK_UI && BK_UI.infoDialog) BK_UI.infoDialog(remoteEnabled() ? 'Prices saved online.' : 'Prices saved locally.');
   }
   function reset(){
