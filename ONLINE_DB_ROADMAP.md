@@ -145,6 +145,8 @@ Erfolgskriterium:
 
 ## Phase 6: Admin-Übersicht für Datenbankbereiche
 
+Status: **gestartet**. `admin.html` zeigt jetzt einen Online-DB-Statusbereich, der alle wichtigen Firebase-Pfade prüft und per Refresh aktualisiert werden kann.
+
 Ziel: Man soll in der App sehen können, welche Bereiche online sind und wann zuletzt synchronisiert wurde.
 
 1. Admin-Seite um Statusbereich erweitern.
