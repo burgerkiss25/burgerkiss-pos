@@ -744,7 +744,7 @@
     const ok = BK_STOCK.saveEditor();
     if(!ok){ infoDialog('Invalid stock values.'); return; }
     renderStock();
-    infoDialog('Stock saved locally.');
+    infoDialog(window.BK_STOCK && BK_STOCK.remoteEnabled && BK_STOCK.remoteEnabled() ? 'Stock saved online.' : 'Stock saved locally.');
   };
   const resetStock = ()=>{
     confirmDialog('Reset stock', 'Reset stock quantities to defaults?').then(ok=>{
