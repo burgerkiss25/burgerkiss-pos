@@ -53,18 +53,62 @@
     return genOrderNo(orderSeq);
   }
 
+
+  function remoteEnabled(){
+    return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database);
+  }
+  function getRemoteRef(){
+    try{
+      const app = (window.firebase.apps && firebase.apps.length)
+        ? firebase.app()
+        : firebase.initializeApp(window.FIREBASE_CONFIG);
+      const db = firebase.database(app);
+      const base = (window.BK_SYNC_PATH || '/pos/live').replace(/\/+$/,'');
+      const slot = (window.BK_SYNC_FORCE_SLOT && typeof window.BK_SYNC_FORCE_SLOT === 'string') ? window.BK_SYNC_FORCE_SLOT : 'SN1';
+      return db.ref(`${base}/${slot}/state`);
+    }catch(e){ return null; }
+  }
+  let remoteSaveTimer = null;
+  function saveRemoteSoon(){
+    if(!remoteEnabled()) return;
+    if(remoteSaveTimer) clearTimeout(remoteSaveTimer);
+    remoteSaveTimer = setTimeout(function(){
+      const ref = getRemoteRef();
+      if(!ref) return;
+      ref.set({ slots, active, discountRate, orderSeq, v:5, ts: Date.now() }).catch(()=>{});
+    }, 250);
+  }
+  function loadRemoteOnce(){
+    if(!remoteEnabled()) return Promise.resolve(false);
+    const ref = getRemoteRef();
+    if(!ref) return Promise.resolve(false);
+    return ref.get().then(function(snap){
+      const raw = snap.val();
+      if(!raw || !raw.v) return false;
+      const n = normalizeState(raw);
+      slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq;
+      slots.forEach(s=>{ if(!s.orderNo) s.orderNo = nextOrderNo(); });
+      try{ localStorage.setItem(SAVE_KEY, JSON.stringify({slots, active, discountRate, orderSeq, v:5})); }catch(e){}
+      return true;
+    }).catch(()=>false);
+  }
   function save(){
     try{ localStorage.setItem(SAVE_KEY, JSON.stringify({slots, active, discountRate, orderSeq, v:5})); }catch(e){}
+    saveRemoteSoon();
   }
   function load(){
     try{
       const raw = localStorage.getItem(SAVE_KEY);
-      if(!raw) return false;
-      const n = normalizeState(JSON.parse(raw));
-      slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq;
-      slots.forEach(s=>{ if(!s.orderNo) s.orderNo = nextOrderNo(); });
+      if(raw){
+        const n = normalizeState(JSON.parse(raw));
+        slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq;
+        slots.forEach(s=>{ if(!s.orderNo) s.orderNo = nextOrderNo(); });
+      }
+      loadRemoteOnce().then(function(hasRemote){
+        if(hasRemote && window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
+      });
       save();
-      return true;
+      return !!raw;
     }catch(e){ return false; }
   }
   function clearAll(){
