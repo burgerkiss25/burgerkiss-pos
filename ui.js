@@ -561,6 +561,87 @@
     goTab('order');
   }
 
+  function historyRemoteEnabled(){
+    return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database);
+  }
+  function historyRemotePath(){
+    return (window.BK_HISTORY_PATH || '/pos/history').replace(/\/+$/,'');
+  }
+  function historyDb(){
+    if(!historyRemoteEnabled()) return null;
+    try{
+      const app = (window.firebase.apps && firebase.apps.length)
+        ? firebase.app()
+        : firebase.initializeApp(window.FIREBASE_CONFIG);
+      return firebase.database(app);
+    }catch(e){ return null; }
+  }
+  function historyDateKey(ts){
+    const d = new Date(Number(ts) || Date.now());
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
+  function sanitizeHistoryEntry(entry){
+    if(!entry || typeof entry !== 'object') return null;
+    const orderNo = String(entry.orderNo || '').trim() || '-';
+    const closedAt = Number(entry.closedAt) || Date.now();
+    return {
+      id: String(entry.id || `${orderNo}-${closedAt}`).replace(/[^a-zA-Z0-9_\-]/g, '_'),
+      orderNo,
+      slotName: String(entry.slotName || '-'),
+      pay: String(entry.pay || 'unpaid'),
+      issued: !!entry.issued,
+      createdAt: Number(entry.createdAt) || closedAt,
+      closedAt,
+      subtotal: Number(entry.subtotal) || 0,
+      combos: Number(entry.combos) || 0,
+      items: Array.isArray(entry.items) ? entry.items : []
+    };
+  }
+  function mergeHistory(local, remote){
+    const map = new Map();
+    (Array.isArray(local) ? local : []).forEach(h=>{ const clean = sanitizeHistoryEntry(h); if(clean) map.set(clean.id, clean); });
+    (Array.isArray(remote) ? remote : []).forEach(h=>{ const clean = sanitizeHistoryEntry(h); if(clean) map.set(clean.id, clean); });
+    return Array.from(map.values()).sort((a,b)=> Number(b.closedAt||0) - Number(a.closedAt||0)).slice(0, 1000);
+  }
+  function flattenRemoteHistory(raw){
+    const out = [];
+    if(!raw || typeof raw !== 'object') return out;
+    Object.values(raw).forEach(day=>{
+      if(!day || typeof day !== 'object') return;
+      Object.values(day).forEach(entry=>{ const clean = sanitizeHistoryEntry(entry); if(clean) out.push(clean); });
+    });
+    return out;
+  }
+  function saveHistoryRemote(entry){
+    const database = historyDb();
+    const clean = sanitizeHistoryEntry(entry);
+    if(!database || !clean) return Promise.resolve(false);
+    return database.ref(`${historyRemotePath()}/${historyDateKey(clean.closedAt)}/${clean.id}`).set(clean)
+      .then(()=>true)
+      .catch(e=>{ console.warn('history remote save failed:', e && e.message); return false; });
+  }
+  function loadHistoryRemoteOnce(){
+    const database = historyDb();
+    if(!database) return Promise.resolve(false);
+    return database.ref(historyRemotePath()).get().then(snap=>{
+      const remote = flattenRemoteHistory(snap.val());
+      if(!remote.length) return false;
+      saveHistory(mergeHistory(getHistory(), remote));
+      return true;
+    }).catch(e=>{
+      console.warn('history remote load failed:', e && e.message);
+      return false;
+    });
+  }
+  function clearHistoryRemote(){
+    const database = historyDb();
+    if(!database) return Promise.resolve(false);
+    return database.ref(historyRemotePath()).set(null)
+      .then(()=>true)
+      .catch(e=>{ console.warn('history remote clear failed:', e && e.message); return false; });
+  }
+
   function getHistory(){
     try{
       const raw = localStorage.getItem(HISTORY_KEY);
@@ -587,9 +668,11 @@
     };
   }
   function pushHistory(entry){
-    const hist = getHistory();
-    hist.unshift(entry);
-    saveHistory(hist.slice(0, 1000));
+    const clean = sanitizeHistoryEntry(entry);
+    if(!clean) return;
+    const hist = mergeHistory([clean], getHistory());
+    saveHistory(hist);
+    saveHistoryRemote(clean);
   }
   function markIssued(i){
     const st = BK_STATE.getState();
@@ -611,28 +694,32 @@
     });
   }
 
-  function openHistory(){
+  function renderHistoryBody(){
     const body = document.getElementById('historyBody');
     const hist = getFilteredHistory();
     if(hist.length===0){
       body.innerHTML = '<div class="empty-state">No completed orders in history yet.</div>';
-    }else{
-      const totalSales = hist.reduce((a,h)=> a + Number(h.subtotal||0), 0);
-      const cashCount = hist.filter(h=>h.pay==='cash').length;
-      const momoCount = hist.filter(h=>h.pay==='momo').length;
-      body.innerHTML = `
-        <div class="row" style="border-top:none;padding:8px 0 14px">
-          <span><b>Orders:</b> ${hist.length} · <b>Cash:</b> ${cashCount} · <b>MoMo:</b> ${momoCount}</span>
-          <span><b>Sales:</b> ${totalSales} GHS</span>
-        </div>
-      ` + hist.slice(0,100).map(h=>`
-        <div class="row" style="border-top:1px dashed #2a2f39;padding:8px 0">
-          <span><b>${h.orderNo}</b> · ${h.slotName} · ${h.pay.toUpperCase()} · ${new Date(h.closedAt).toLocaleString()}</span>
-          <span>${h.subtotal} GHS</span>
-        </div>
-      `).join('');
+      return;
     }
+    const totalSales = hist.reduce((a,h)=> a + Number(h.subtotal||0), 0);
+    const cashCount = hist.filter(h=>h.pay==='cash').length;
+    const momoCount = hist.filter(h=>h.pay==='momo').length;
+    body.innerHTML = `
+      <div class="row" style="border-top:none;padding:8px 0 14px">
+        <span><b>Orders:</b> ${hist.length} · <b>Cash:</b> ${cashCount} · <b>MoMo:</b> ${momoCount}</span>
+        <span><b>Sales:</b> ${totalSales} GHS</span>
+      </div>
+    ` + hist.slice(0,100).map(h=>`
+      <div class="row" style="border-top:1px dashed #2a2f39;padding:8px 0">
+        <span><b>${h.orderNo}</b> · ${h.slotName} · ${h.pay.toUpperCase()} · ${new Date(h.closedAt).toLocaleString()}</span>
+        <span>${h.subtotal} GHS</span>
+      </div>
+    `).join('');
+  }
+  function openHistory(){
+    renderHistoryBody();
     document.getElementById('modalHistory').classList.add('open');
+    loadHistoryRemoteOnce().then(hasRemote=>{ if(hasRemote) renderHistoryBody(); });
   }
   function getFilteredHistory(){
     const text = historyFilterText.trim().toLowerCase();
@@ -656,6 +743,7 @@
   function clearHistory(){
     if(!confirm('Clear saved order history?')) return;
     saveHistory([]);
+    clearHistoryRemote();
     openHistory();
   }
   function closeHistory(){ document.getElementById('modalHistory').classList.remove('open'); }
@@ -667,14 +755,19 @@
     URL.revokeObjectURL(url);
   }
   function exportHistoryJson(){
-    downloadFile(`bk-history-${Date.now()}.json`, JSON.stringify(getHistory(), null, 2), 'application/json');
+    loadHistoryRemoteOnce().finally(()=>{
+      downloadFile(`bk-history-${Date.now()}.json`, JSON.stringify(getHistory(), null, 2), 'application/json');
+    });
   }
   function exportHistoryCsv(){
+    const writeCsv = ()=>{
     const hist = getHistory();
     const rows = [['orderNo','slotName','pay','issued','createdAt','closedAt','subtotal','combos']];
     hist.forEach(h=> rows.push([h.orderNo,h.slotName,h.pay,h.issued,h.createdAt,h.closedAt,h.subtotal,h.combos]));
     const csv = rows.map(r=> r.map(v=> `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
     downloadFile(`bk-history-${Date.now()}.csv`, csv, 'text/csv');
+    };
+    loadHistoryRemoteOnce().finally(writeCsv);
   }
 
   function formatAge(createdAt){
@@ -744,7 +837,7 @@
     const ok = BK_STOCK.saveEditor();
     if(!ok){ infoDialog('Invalid stock values.'); return; }
     renderStock();
-    infoDialog('Stock saved locally.');
+    infoDialog(window.BK_STOCK && BK_STOCK.remoteEnabled && BK_STOCK.remoteEnabled() ? 'Stock saved online.' : 'Stock saved locally.');
   };
   const resetStock = ()=>{
     confirmDialog('Reset stock', 'Reset stock quantities to defaults?').then(ok=>{
