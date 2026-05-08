@@ -127,6 +127,8 @@ Erfolgskriterium:
 
 ## Phase 5: Historie übersichtlich und online machen
 
+Status: **gestartet**. Ausgegebene Bestellungen werden jetzt zusätzlich online unter `pos/history/YYYY-MM-DD/orderId` gespeichert und beim Öffnen der History mit lokalen Einträgen zusammengeführt.
+
 Ziel: Abgeschlossene/ausgegebene Bestellungen sollen zentral gespeichert und übersichtlich filterbar sein.
 
 1. History-Datenstruktur definieren.
