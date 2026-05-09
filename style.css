@@ -120,4 +120,21 @@ button:focus-visible,.chip:focus-visible,input:focus-visible,a:focus-visible,sum
 @media (max-width:640px){.app-header{grid-template-columns:1fr}.totals{text-align:left}.stats{justify-content:flex-start}.more-menu{justify-self:start}.system-tools{margin-left:0}.catbar{top:250px}.wrap{padding:10px}.name{font-size:15px}}
 @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 #productsBody input,#stockBody input{width:100%;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:6px}
+
+/* Admin page */
+.admin-page .hud-wrap{position:sticky;top:0}
+.admin-header{display:flex;align-items:center;gap:18px;justify-content:space-between;padding:14px clamp(12px,2vw,22px);flex-wrap:wrap}
+.admin-brand h1{margin:0;font-size:26px;line-height:1.05;color:#fff6d8;font-weight:950;letter-spacing:.01em}
+.admin-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:center}
+.admin-actions .x{text-decoration:none;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap}
+.admin-page .wrap{max-width:1600px;padding-top:18px}
+.admin-page .panel{padding:2px 0}
+.muted-copy{color:#aeb7c4;margin:0 12px 16px;font-size:var(--fz-lg)}
+#adminDbStatusPanel .slot-head{padding:12px;border-bottom:1px solid #242a35}
+#adminDbStatusBody .row{padding:10px 12px!important}
+@media (max-width:760px){
+  .admin-header{align-items:stretch}
+  .admin-brand{width:100%}
+  .admin-actions{width:100%;justify-content:flex-start;overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px}
+}
 @media print{.hud-wrap,.catbar,.wrap > section:not(#printArea){display:none}#printArea{display:block}body{background:#fff;color:#000}}
