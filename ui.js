@@ -369,19 +369,54 @@
       row.textContent = 'No items yet. Select products to start this order.';
       lines.appendChild(row);
     }
+    const refreshOrderViews = ()=>{
+      renderOrder();
+      renderMake();
+      renderIssue();
+      refreshTotals();
+    };
     entries.forEach(([key,qty])=>{
       const [id, note=''] = BK_LOGIC.parseItemKey(key);
       const prod = BK_DATA.BASE.find(x=>x.id===id);
       const unitPrice = (note==='included' && String(id).startsWith('x_sauce_')) ? 0 : BK_PRICES.getPrice(id);
-      const row = document.createElement('div'); row.className='row';
-      const safeKey = encodeURIComponent(key);
-      row.innerHTML = `
-        <span class="left">
-          <button class="mini" ${s.issued ? 'disabled' : ''} onclick="BK_STATE.decItemForKey(decodeURIComponent('${safeKey}')); BK_UI.renderOrder(); BK_UI.renderMake(); BK_UI.refreshTotals();">−1</button>
-          <b>${prod ? prod.name : id}</b> <small>× ${qty}${note?` · ${note}`:''}</small>
-        </span>
-        <span>${qty*unitPrice} GHS</span>
-      `;
+      const row = document.createElement('div'); row.className='row cart-row';
+
+      const controls = document.createElement('div');
+      controls.className = 'cart-controls';
+      const dec = document.createElement('button');
+      dec.className = 'mini';
+      dec.type = 'button';
+      dec.textContent = '−';
+      dec.disabled = !!s.issued;
+      dec.onclick = ()=>{ BK_STATE.decItemForKey(key); refreshOrderViews(); };
+      const inc = document.createElement('button');
+      inc.className = 'mini';
+      inc.type = 'button';
+      inc.textContent = '+';
+      inc.disabled = !!s.issued;
+      inc.onclick = ()=>{ BK_STATE.addItemForKey(key); refreshOrderViews(); };
+      controls.append(dec, inc);
+
+      const detail = document.createElement('div');
+      detail.className = 'cart-detail';
+      const title = document.createElement('b');
+      title.textContent = prod ? prod.name : id;
+      const meta = document.createElement('small');
+      meta.textContent = `× ${qty}${note ? ` · ${note}` : ''}`;
+      detail.append(title, meta);
+
+      const price = document.createElement('div');
+      price.className = 'cart-price';
+      price.textContent = `${qty*unitPrice} GHS`;
+
+      const remove = document.createElement('button');
+      remove.className = 'mini remove-line';
+      remove.type = 'button';
+      remove.textContent = 'Remove';
+      remove.disabled = !!s.issued;
+      remove.onclick = ()=>{ BK_STATE.removeItemForKey(key); refreshOrderViews(); };
+
+      row.append(controls, detail, price, remove);
       lines.appendChild(row);
     });
 
