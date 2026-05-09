@@ -174,11 +174,23 @@
     const legacy = String(key || '').split('|');
     return [legacy[0] || '', legacy[1] || ''];
   }
+  function addItemForKey(key){
+    const s = slots[active]; if(!s || s.issued) return;
+    const [id, note=''] = parseItemKey(key);
+    if(!id) return;
+    addItem(id, note);
+  }
   function decItemForKey(key){
     const s = slots[active]; if(!s || s.issued) return;
     const [id, note=''] = parseItemKey(key);
     const idx = s.items.findIndex(it => it.itemId===id && (it.note||'')===note);
     if(idx>-1){ s.items.splice(idx,1); save(); }
+  }
+  function removeItemForKey(key){
+    const s = slots[active]; if(!s || s.issued) return;
+    const [id, note=''] = parseItemKey(key);
+    const next = s.items.filter(it => !(it.itemId===id && (it.note||'')===note));
+    if(next.length !== s.items.length){ s.items = next; save(); }
   }
   function setPay(i,status){
     if(!slots[i] || slots[i].issued) return;
@@ -213,7 +225,7 @@
     load, save, clearAll, clearStorage,
     addSlot, renameActive, deleteActive, setActive,
     setActiveName,
-    addItem, undo, decItemForKey, setPay, setIssued, toggleDone,
+    addItem, addItemForKey, undo, decItemForKey, removeItemForKey, setPay, setIssued, toggleDone,
     setDiscount,
     getState, setState, nextOrderNo
   };
