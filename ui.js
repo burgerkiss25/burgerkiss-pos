@@ -178,24 +178,62 @@
     });
   }
 
-  async function pickFromList(title, options){
+  function openModifierSheet(title, sections){
     const host = ensureDialogHost();
     document.getElementById('appDialogTitle').textContent = title;
     document.getElementById('appDialogBody').innerHTML = `
-      <div style="display:grid;gap:8px" id="dlgOpts"></div>
-      <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="x" id="dlgCancel">Cancel</button></div>
+      <form class="modifier-sheet" id="modifierForm">
+        <div class="modifier-grid" id="modifierSections"></div>
+        <div class="modifier-actions">
+          <button class="x" id="dlgCancel" type="button">Skip add-ons</button>
+          <button class="x modifier-primary" id="dlgConfirm" type="submit">Add selected</button>
+        </div>
+      </form>
     `;
-    const wrap = document.getElementById('dlgOpts');
+    const wrap = document.getElementById('modifierSections');
+    (sections || []).forEach(section=>{
+      const fieldset = document.createElement('fieldset');
+      fieldset.className = 'modifier-group';
+      const legend = document.createElement('legend');
+      legend.textContent = section.title;
+      fieldset.appendChild(legend);
+      (section.help ? [section.help] : []).forEach(helpText=>{
+        const help = document.createElement('p');
+        help.className = 'modifier-help';
+        help.textContent = helpText;
+        fieldset.appendChild(help);
+      });
+      (section.options || []).forEach((opt, idx)=>{
+        const label = document.createElement('label');
+        label.className = 'choice-row';
+        const input = document.createElement('input');
+        input.type = section.type || 'checkbox';
+        input.name = section.name;
+        input.value = opt.value || '';
+        input.checked = !!opt.checked || (section.type === 'radio' && idx === 0 && !section.options.some(o=>o.checked));
+        label.appendChild(input);
+        const text = document.createElement('span');
+        text.textContent = opt.label;
+        label.appendChild(text);
+        fieldset.appendChild(label);
+      });
+      wrap.appendChild(fieldset);
+    });
+
     return new Promise(resolve=>{
       host.classList.add('open');
-      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(null); };
-      (options || []).forEach(opt=>{
-        const btn = document.createElement('button');
-        btn.className = 'x';
-        btn.textContent = opt.label;
-        btn.onclick = ()=>{ closeDialog(); resolve(opt.value); };
-        wrap.appendChild(btn);
-      });
+      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve({}); };
+      document.getElementById('modifierForm').onsubmit = (e)=>{
+        e.preventDefault();
+        const form = e.currentTarget;
+        const values = {};
+        (sections || []).forEach(section=>{
+          const selected = [...form.querySelectorAll(`[name="${section.name}"]:checked`)].map(input=>input.value).filter(Boolean);
+          values[section.name] = section.type === 'radio' ? (selected[0] || null) : selected;
+        });
+        closeDialog();
+        resolve(values);
+      };
     });
   }
 
@@ -203,55 +241,54 @@
     const note = (document.getElementById('noteInput').value||'').trim();
     BK_STATE.addItem(product.id, note);
 
-    async function runFriesFlow(){
-      const sauce = await pickFromList('Bitte Sauce für Fries wählen', [
-        {label:'Ketchup', value:'x_sauce_ketchup'},
-        {label:'Mayonnaise', value:'x_sauce_mayonnaise'},
-        {label:'Chipotle', value:'x_sauce_chipotle'},
-        {label:'Dutch Special', value:'x_sauce_dutch_special'},
-        {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'},
-        {label:'No Sauce Wanted', value:null}
+    const sauceOptions = [
+      {label:'No Sauce Wanted', value:''},
+      {label:'Ketchup', value:'x_sauce_ketchup'},
+      {label:'Mayonnaise', value:'x_sauce_mayonnaise'},
+      {label:'Chipotle', value:'x_sauce_chipotle'},
+      {label:'Dutch Special', value:'x_sauce_dutch_special'},
+      {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'}
+    ];
+
+    if(['fries_standard', 'fries_large', 'fries_family'].includes(product.id)){
+      const picked = await openModifierSheet(`${product.name} options`, [
+        { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one included sauce for this fries item.', options:sauceOptions },
+        { title:'Extra sauce cup (+5 GHS)', name:'extraSauce', type:'radio', help:'Optional paid extra sauce.', options:sauceOptions }
       ]);
-      if(sauce) BK_STATE.addItem(sauce, 'included');
-      const extra = await pickFromList('Extra Sauce gewünscht?', [
-        {label:'No Extra Sauce Wanted', value:null},
-        {label:'+1 Extra Sauce Cup (5 GHS)', value:'extra1'}
-      ]);
-      if(extra === 'extra1'){
-        const extraType = await pickFromList('Welche Extra-Sauce?', [
-          {label:'Ketchup', value:'x_sauce_ketchup'},
-          {label:'Mayonnaise', value:'x_sauce_mayonnaise'},
-          {label:'Chipotle', value:'x_sauce_chipotle'},
-          {label:'Dutch Special', value:'x_sauce_dutch_special'},
-          {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'}
-        ]);
-        if(extraType) BK_STATE.addItem(extraType, 'extra');
-      }
+      if(picked.includedSauce) BK_STATE.addItem(picked.includedSauce, 'included');
+      if(picked.extraSauce) BK_STATE.addItem(picked.extraSauce, 'extra');
     }
 
-    async function runBurgerFlow(title, askCheeseDefault){
-      if(await confirmDialog(title, 'Extra Beef Patty hinzufügen?')) BK_STATE.addItem('x_beef_patty', '');
-      if(askCheeseDefault && await confirmDialog(title, 'Extra Cheese hinzufügen?')) BK_STATE.addItem('x_cheese', '');
-      const egg = await pickFromList('Ei auswählen', [
-        {label:'Kein Ei', value:null},
-        {label:'Fried Egg', value:'x_fried_egg'},
-        {label:'Omelette', value:'x_omelette'}
+    if(['hamburger', 'cheeseburger', 'double_burger', 'double_cheeseburger', 'chicken_burger', 'chicken_shawarma_burger'].includes(product.id)){
+      const askCheeseDefault = product.id !== 'cheeseburger' && product.id !== 'double_cheeseburger';
+      const extras = [
+        {label:'Extra Beef Patty', value:'x_beef_patty'},
+        ...(askCheeseDefault ? [{label:'Extra Cheese', value:'x_cheese'}] : []),
+        {label:'Bacon', value:'x_bacon'},
+        {label:'Chicken Patty', value:'x_chicken_patty'},
+        {label:'Chicken Shawarma Patty', value:'x_chicken_shawarma_patty'}
+      ];
+      const picked = await openModifierSheet(`${product.name} add-ons`, [
+        { title:'Burger add-ons', name:'burgerExtras', type:'checkbox', help:'Select all paid add-ons for this burger.', options:extras },
+        { title:'Egg', name:'egg', type:'radio', options:[
+          {label:'No egg', value:''},
+          {label:'Fried Egg', value:'x_fried_egg'},
+          {label:'Omelette', value:'x_omelette'}
+        ]}
       ]);
-      if(egg) BK_STATE.addItem(egg, '');
-      if(await confirmDialog(title, 'Bacon hinzufügen?')) BK_STATE.addItem('x_bacon', '');
-      if(await confirmDialog(title, 'Chicken Patty zusätzlich?')) BK_STATE.addItem('x_chicken_patty', '');
-      if(await confirmDialog(title, 'Chicken Shawarma Patty zusätzlich?')) BK_STATE.addItem('x_chicken_shawarma_patty', '');
+      (picked.burgerExtras || []).forEach(id=> BK_STATE.addItem(id, ''));
+      if(picked.egg) BK_STATE.addItem(picked.egg, '');
     }
 
-    if(['fries_standard', 'fries_large', 'fries_family'].includes(product.id)) await runFriesFlow();
-    if(['hamburger', 'cheeseburger', 'double_burger', 'double_cheeseburger', 'chicken_burger', 'chicken_shawarma_burger'].includes(product.id)) await runBurgerFlow(`${product.name} Add-on`, product.id !== 'cheeseburger' && product.id !== 'double_cheeseburger');
     if(['wings_6','wings_12','wings_24'].includes(product.id)){
-      const wingsSauce = await pickFromList('Sauce für Wings auswählen', [
-        {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'},
-        {label:'Chipotle', value:'x_sauce_chipotle'},
-        {label:'No Sauce Wanted', value:null}
+      const picked = await openModifierSheet(`${product.name} sauce`, [
+        { title:'Included sauce', name:'wingsSauce', type:'radio', help:'Choose one included sauce for the wings.', options:[
+          {label:'No Sauce Wanted', value:''},
+          {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'},
+          {label:'Chipotle', value:'x_sauce_chipotle'}
+        ]}
       ]);
-      if(wingsSauce) BK_STATE.addItem(wingsSauce, 'included');
+      if(picked.wingsSauce) BK_STATE.addItem(picked.wingsSauce, 'included');
     }
 
     document.getElementById('noteInput').value='';
