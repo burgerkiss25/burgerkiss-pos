@@ -53,6 +53,16 @@
     el.onclick = ()=>{ const inp=document.getElementById('noteInput'); inp.value=el.textContent; inp.focus(); };
   });
 
+  const syncWorkflowA11y = (name)=>{
+    const tabs = { order:'tabOrder', make:'tabMake', pay:'tabPay', issue:'tabIssue' };
+    Object.entries(tabs).forEach(([key, id])=>{
+      const el = document.getElementById(id);
+      if(!el) return;
+      if(key === name) el.setAttribute('aria-current', 'step');
+      else el.removeAttribute('aria-current');
+    });
+  };
+
   // Tabs
   const showTab = (name)=>{
     document.getElementById('tab-order').classList.toggle('hidden', name!=='order');
@@ -63,6 +73,7 @@
     document.getElementById('tabMake').classList.toggle('active',   name==='make');
     document.getElementById('tabPay').classList.toggle('active',    name==='pay');
     document.getElementById('tabIssue').classList.toggle('active',  name==='issue');
+    syncWorkflowA11y(name);
 
     if(name==='order') BK_UI.renderOrder();
     if(name==='make') BK_UI.renderMake();
@@ -74,6 +85,10 @@
   document.getElementById('tabMake').onclick  = ()=> showTab('make');
   document.getElementById('tabPay').onclick   = ()=> showTab('pay');
   document.getElementById('tabIssue').onclick = ()=> showTab('issue');
+
+  document.querySelectorAll('.more-panel button, .more-panel a').forEach(el=>{
+    el.addEventListener('click', ()=> el.closest('details')?.removeAttribute('open'));
+  });
 
   // Summary
   document.getElementById('btnSummary').onclick = ()=> BK_UI.openSummary();
@@ -121,6 +136,8 @@
   });
 
 
+
+  syncWorkflowA11y('order');
 
   // initial render
   BK_UI.renderAll();
