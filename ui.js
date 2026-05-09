@@ -4,6 +4,7 @@
   let productQuery = '';
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
+  const CATEGORY_LABELS = { all:'All', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
   let historyFilterText = '';
   let historyFilterToday = false;
 
@@ -145,9 +146,18 @@
     const items = base.filter(it => (currentCat==='all' ? true : it.cat===currentCat))
       .filter(it => !String(it.id || '').startsWith('x_sauce_'))
       .filter(it => query ? it.name.toLowerCase().includes(query) : true);
+    if(!items.length){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state product-empty';
+      empty.innerHTML = `<strong>No products found</strong><span>Try another category or clear the search.</span>`;
+      empty.style.gridColumn = '1 / -1';
+      grid.appendChild(empty);
+      return;
+    }
     items.forEach(it=>{
       const b = document.createElement('button');
       b.className='item';
+      b.type = 'button';
       const img = BK_IMAGES.get(it.id);
       if(img){
         b.classList.add('item-with-bg');
@@ -156,9 +166,13 @@
         b.classList.remove('item-with-bg');
         b.style.backgroundImage = '';
       }
-      b.innerHTML = `<div class="name">${it.name}</div>
-                     <div class="price">${it.cat==='burger'?'Single':'Price'}: ${BK_PRICES.getPrice(it.id)} GHS</div>
-                     <span class="badge">+1</span>`;
+      const catLabel = CATEGORY_LABELS[it.cat] || it.cat || 'Item';
+      b.innerHTML = `<span class="cat-badge">${catLabel}</span>
+                     <div class="name">${it.name}</div>
+                     <div class="item-meta">
+                       <div class="price">${BK_PRICES.getPrice(it.id)} GHS</div>
+                       <span class="badge">+1</span>
+                     </div>`;
       b.onclick = ()=> addProductWithFlow(it);
       grid.appendChild(b);
     });
@@ -279,20 +293,25 @@
   function renderSlotsBar(){
     const {slots, active} = BK_STATE.getState();
     const bar = document.getElementById('slotsBar');
+    const activeLabel = document.getElementById('activeSlotLabel');
+    const activeSlot = slots[active];
+    if(activeLabel) activeLabel.textContent = activeSlot ? `${activeSlot.name} · #${activeSlot.orderNo || '-'}` : 'No active order';
+    if(!bar) return;
     bar.querySelectorAll('.slot-chip').forEach(n=>n.remove());
 
-    const controlIds = ['btnAddSlot', 'btnRenameSlot', 'btnDeleteSlot', 'activeSlotLabel'];
+    const controlIds = ['btnAddSlot', 'btnRenameSlot', 'btnDeleteSlot'];
     const ctl = controlIds
       .map(id => document.getElementById(id))
       .filter(Boolean)
       .filter(el => el.parentElement === bar);
     ctl.forEach(c=>bar.removeChild(c));
     slots.forEach((s,i)=>{
-      const el = document.createElement('span');
+      const el = document.createElement('button');
       const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
       const status = s.issued ? 'issued' : (s.pay==='unpaid' ? 'unpaid' : (allDone ? 'ready' : 'kitchen'));
+      el.type = 'button';
       el.className='chip slot-chip status-' + status + (i===active?' active':'');
-      el.innerHTML = `<span class="status-dot"></span>${s.name} · ${s.orderNo || '-'}`;
+      el.innerHTML = `<span class="status-dot"></span>${s.name} · #${s.orderNo || '-'}`;
       el.onclick = ()=>{ BK_STATE.setActive(i); renderOrder(); refreshTotals(); goTab('order'); };
       bar.appendChild(el);
     });
@@ -473,7 +492,11 @@
     };
     Object.entries(tabMap).forEach(([key, id])=>{
       const tab = document.getElementById(id);
-      if(tab) tab.classList.toggle('active', key === target);
+      if(tab){
+        tab.classList.toggle('active', key === target);
+        if(key === target) tab.setAttribute('aria-current', 'step');
+        else tab.removeAttribute('aria-current');
+      }
     });
   }
 

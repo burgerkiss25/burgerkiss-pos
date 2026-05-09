@@ -4,23 +4,29 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – Admin Editors</title>
-  <link rel="stylesheet" href="./style.css?v=12" />
+  <link rel="stylesheet" href="./style.css?v=14" />
   <script src="./firebase-config.js?v=1"></script>
 </head>
-<body>
-  <div class="hud-wrap">
-    <header>
-      <div class="totals"><h1>Admin</h1></div>
-      <div class="tabbar">
-        <a class="x" href="index.html" style="text-decoration:none;display:inline-flex;align-items:center">← Back to POS</a>
-        <button class="x" id="btnPrices">Edit Prices</button>
-        <button class="x" id="btnProducts">Edit Products</button>
-        <button class="x" id="btnImages">Edit Images</button>
-        <button class="x" id="btnStock">Edit Stock</button>
-        <button class="x" id="btnIngredients">Edit Ingredients</button>
-        <button class="x" id="btnRecipes">Edit Product Recipes</button>
-        <button class="x" id="btnAddons">Edit Add-ons</button>
+<body class="admin-page">
+  <div class="hud-wrap admin-hud">
+    <header class="admin-header">
+      <div class="brand-block admin-brand" aria-label="BurgerKiss admin editors">
+        <div class="brand-mark">BK</div>
+        <div>
+          <div class="eyebrow">BurgerKiss POS</div>
+          <h1>Admin Editors</h1>
+        </div>
       </div>
+      <nav class="admin-actions" aria-label="Admin editor navigation">
+        <a class="x" href="index.html">← Back to POS</a>
+        <button class="x" id="btnPrices" type="button">Edit Prices</button>
+        <button class="x" id="btnProducts" type="button">Edit Products</button>
+        <button class="x" id="btnImages" type="button">Edit Images</button>
+        <button class="x" id="btnStock" type="button">Edit Stock</button>
+        <button class="x" id="btnIngredients" type="button">Edit Ingredients</button>
+        <button class="x" id="btnRecipes" type="button">Edit Product Recipes</button>
+        <button class="x" id="btnAddons" type="button">Edit Add-ons</button>
+      </nav>
     </header>
   </div>
 
@@ -28,7 +34,7 @@
     <section>
       <div class="panel">
         <h3>Editor area</h3>
-        <p style="color:#9aa3ad">Use the buttons above to open Price/Product/Image/Stock editors.</p>
+        <p class="muted-copy">Use the buttons above to open Price/Product/Image/Stock editors.</p>
       </div>
       <div class="panel" id="adminDbStatusPanel">
         <div class="slot-head">

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – POS (Variante B: gespiegelt auf SN1)</title>
-  <link rel="stylesheet" href="./style.css?v=12" />
+  <link rel="stylesheet" href="./style.css?v=14" />
 
   <!-- POS-Konfiguration aus externer Datei -->
   <script src="./firebase-config.js?v=1"></script>
@@ -12,59 +12,85 @@
 <body>
   <!-- Sticky HUD -->
   <div class="hud-wrap">
-    <header>
-      <div class="totals">
+    <header class="app-header">
+      <div class="brand-block" aria-label="BurgerKiss POS">
+        <div class="brand-mark">BK</div>
+        <div>
+          <div class="eyebrow">BurgerKiss POS</div>
+          <div class="order-context" id="activeSlotLabel">SN1</div>
+        </div>
+      </div>
+
+      <nav class="tabbar" aria-label="Order workflow">
+        <button id="tabOrder" class="active workflow-step"><span class="step-no">1</span><span>Order</span></button>
+        <button id="tabMake" class="workflow-step"><span class="step-no">2</span><span>Make</span></button>
+        <button id="tabPay" class="workflow-step"><span class="step-no">3</span><span>Pay</span></button>
+        <button id="tabIssue" class="workflow-step"><span class="step-no">4</span><span>Issue</span></button>
+      </nav>
+
+      <div class="totals" aria-live="polite">
+        <div class="total-label">Grand total</div>
         <h1 id="grand">0 GHS</h1>
         <div class="stats">
           <span class="pill" id="combosPill">Combos: 0</span>
           <span class="pill" id="discountTag">No discount</span>
         </div>
       </div>
-      <div class="tabbar">
-        <button id="tabOrder" class="active workflow-step"><span class="step-no">1</span> Order</button>
-        <button id="tabMake" class="workflow-step"><span class="step-no">2</span> Make</button>
-        <button id="tabPay" class="workflow-step"><span class="step-no">3</span> Pay</button>
-        <button id="tabIssue" class="workflow-step"><span class="step-no">4</span> Issue</button>
-        <button class="x" id="btnSummary">Summary</button>
-        <button class="x" id="btnHistory">History</button>
-        <button class="x" id="btnReceipt">Receipt</button>
-        <a class="x" href="admin.html" style="text-decoration:none;display:inline-flex;align-items:center">Admin</a>
-        <button class="x" id="btnGroup">Group Ticket</button>
-      </div>
+
+      <details class="more-menu">
+        <summary class="x more-trigger">More</summary>
+        <div class="more-panel">
+          <button class="x" id="btnSummary">Summary</button>
+          <button class="x" id="btnHistory">History</button>
+          <button class="x" id="btnReceipt">Receipt</button>
+          <button class="x" id="btnGroup">Group Ticket</button>
+          <a class="x admin-link" href="admin.html">Admin</a>
+        </div>
+      </details>
     </header>
 
     <div class="hud-rows">
-      <div class="toolbar">
+      <div class="toolbar order-tools" aria-label="Order actions">
         <button class="ghost" id="btnUndo">Undo</button>
-        <button class="danger" id="btnReset">Reset</button>
+        <button class="danger" id="btnReset">Reset Order</button>
+      </div>
+
+      <div class="toolbar discount-tools" aria-label="Discount actions">
+        <span class="toolbar-label">Discount</span>
         <button class="disc" data-disc="0.01">-1%</button>
         <button class="disc" data-disc="0.03">-3%</button>
         <button class="disc" data-disc="0.05">-5%</button>
         <button class="disc" data-disc="0.10">-10%</button>
-        <button class="ok" id="btnClearDisc">Clear Discount</button>
-        <button class="ghost" id="btnClearStorage">Clear Storage</button>
+        <button class="ok" id="btnClearDisc">Clear</button>
       </div>
 
-      <div class="toolbar" id="slotsBar">
+      <div class="toolbar slot-tools" id="slotsBar" aria-label="Order slots">
         <!-- Slot-Verwaltung: wird im Force-Slot-Modus in main.js deaktiviert -->
-        <span class="chip" id="btnAddSlot">+ Slot</span>
-        <span class="chip" id="btnRenameSlot">Rename</span>
-        <span class="chip" id="btnDeleteSlot">Delete</span>
-        <span class="chip" id="activeSlotLabel">SN1</span>
+        <button class="chip" id="btnAddSlot" type="button">+ Slot</button>
+        <button class="chip" id="btnRenameSlot" type="button">Rename</button>
+        <button class="chip" id="btnDeleteSlot" type="button">Delete</button>
+      </div>
+
+      <div class="toolbar system-tools" aria-label="System actions">
+        <button class="ghost" id="btnClearStorage">Clear Storage</button>
       </div>
     </div>
   </div>
 
   <!-- Kategorien -->
-  <div class="catbar">
+  <div class="catbar" aria-label="Product categories">
     <button class="tab active" data-cat="all">All</button>
     <button class="tab" data-cat="burger">Burgers</button>
     <button class="tab" data-cat="wings">Wings</button>
     <button class="tab" data-cat="fries">Fries</button>
+    <button class="tab" data-cat="salad">Salads</button>
     <button class="tab" data-cat="extra">Extras</button>
     <button class="tab" data-cat="drink">Drinks</button>
-    <input id="productSearch" class="product-search" placeholder="Search products" aria-label="Search products" />
-    <button id="clearProductSearch" class="tab" type="button">Clear</button>
+    <div class="search-wrap">
+      <span aria-hidden="true">⌕</span>
+      <input id="productSearch" class="product-search" placeholder="Search products" aria-label="Search products" />
+    </div>
+    <button id="clearProductSearch" class="tab clear-search" type="button">Clear</button>
   </div>
 
   <!-- Hauptbereich -->
