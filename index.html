@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – POS (Variante B: gespiegelt auf SN1)</title>
-  <link rel="stylesheet" href="./style.css?v=16" />
+  <link rel="stylesheet" href="./style.css?v=17" />
 
   <!-- POS-Konfiguration aus externer Datei -->
   <script src="./firebase-config.js?v=1"></script>
@@ -44,36 +44,41 @@
           <button class="x" id="btnHistory">History</button>
           <button class="x" id="btnReceipt">Receipt</button>
           <button class="x" id="btnGroup">Group Ticket</button>
+          <button class="x danger-link" id="btnReset">Reset Order</button>
+          <button class="x" id="btnClearStorage">Clear Storage</button>
           <a class="x admin-link" href="admin.html">Admin</a>
         </div>
       </details>
     </header>
 
-    <div class="hud-rows">
+    <div class="hud-rows compact-actions">
       <div class="toolbar order-tools" aria-label="Order actions">
-        <button class="ghost" id="btnUndo">Undo</button>
-        <button class="danger" id="btnReset">Reset Order</button>
-      </div>
-
-      <div class="toolbar discount-tools" aria-label="Discount actions">
-        <span class="toolbar-label">Discount</span>
-        <button class="disc" data-disc="0.01">-1%</button>
-        <button class="disc" data-disc="0.03">-3%</button>
-        <button class="disc" data-disc="0.05">-5%</button>
-        <button class="disc" data-disc="0.10">-10%</button>
-        <button class="ok" id="btnClearDisc">Clear</button>
+        <button class="ghost" id="btnUndo" type="button">Undo</button>
       </div>
 
       <div class="toolbar slot-tools" id="slotsBar" aria-label="Order slots">
         <!-- Slot-Verwaltung: wird im Force-Slot-Modus in main.js deaktiviert -->
-        <button class="chip" id="btnAddSlot" type="button">+ Slot</button>
-        <button class="chip" id="btnRenameSlot" type="button">Rename</button>
-        <button class="chip" id="btnDeleteSlot" type="button">Delete</button>
+        <button class="chip primary-chip" id="btnAddSlot" type="button">+ Slot</button>
       </div>
 
-      <div class="toolbar system-tools" aria-label="System actions">
-        <button class="ghost" id="btnClearStorage">Clear Storage</button>
-      </div>
+      <details class="tool-menu discount-menu">
+        <summary class="chip">Discount</summary>
+        <div class="tool-panel" aria-label="Discount actions">
+          <button class="disc" data-disc="0.01" type="button">-1%</button>
+          <button class="disc" data-disc="0.03" type="button">-3%</button>
+          <button class="disc" data-disc="0.05" type="button">-5%</button>
+          <button class="disc" data-disc="0.10" type="button">-10%</button>
+          <button class="ok" id="btnClearDisc" type="button">Clear Discount</button>
+        </div>
+      </details>
+
+      <details class="tool-menu slot-menu">
+        <summary class="chip">Manage Slot</summary>
+        <div class="tool-panel" aria-label="Slot management actions">
+          <button class="chip" id="btnRenameSlot" type="button">Rename</button>
+          <button class="chip danger-soft" id="btnDeleteSlot" type="button">Delete</button>
+        </div>
+      </details>
     </div>
   </div>
 
