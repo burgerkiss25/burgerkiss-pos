@@ -143,8 +143,9 @@
     const base = (Array.isArray(BK_DATA.BASE) && BK_DATA.BASE.length) ? BK_DATA.BASE : (BK_DATA.DEFAULT_BASE || []);
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
     const query = productQuery.trim().toLowerCase();
-    const items = base.filter(it => (currentCat==='all' ? true : it.cat===currentCat))
-      .filter(it => !String(it.id || '').startsWith('x_sauce_'))
+    const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
+    const items = base.filter(isFrontProduct)
+      .filter(it => (currentCat==='all' ? true : it.cat===currentCat))
       .filter(it => query ? it.name.toLowerCase().includes(query) : true);
     if(!items.length){
       const empty = document.createElement('div');
