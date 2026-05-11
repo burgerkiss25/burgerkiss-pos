@@ -143,8 +143,9 @@
     const base = (Array.isArray(BK_DATA.BASE) && BK_DATA.BASE.length) ? BK_DATA.BASE : (BK_DATA.DEFAULT_BASE || []);
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
     const query = productQuery.trim().toLowerCase();
-    const items = base.filter(it => (currentCat==='all' ? true : it.cat===currentCat))
-      .filter(it => !String(it.id || '').startsWith('x_sauce_'))
+    const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
+    const items = base.filter(isFrontProduct)
+      .filter(it => (currentCat==='all' ? true : it.cat===currentCat))
       .filter(it => query ? it.name.toLowerCase().includes(query) : true);
     if(!items.length){
       const empty = document.createElement('div');
@@ -178,11 +179,19 @@
     });
   }
 
-  function openModifierSheet(title, sections){
+  function openModifierSheet(title, sections, opts){
     const host = ensureDialogHost();
+    const settings = opts || {};
+    const showNote = Object.prototype.hasOwnProperty.call(settings, 'note');
     document.getElementById('appDialogTitle').textContent = title;
     document.getElementById('appDialogBody').innerHTML = `
       <form class="modifier-sheet" id="modifierForm">
+        ${showNote ? `
+          <label class="modifier-note">
+            <span>Note for this item</span>
+            <textarea id="modifierItemNote" rows="2" placeholder="e.g. no onion, no lettuce, no sesame"></textarea>
+          </label>
+        ` : ''}
         <div class="modifier-grid" id="modifierSections"></div>
         <div class="modifier-actions">
           <button class="x" id="dlgCancel" type="button">Skip add-ons</button>
@@ -205,16 +214,52 @@
       });
       (section.options || []).forEach((opt, idx)=>{
         const label = document.createElement('label');
-        label.className = 'choice-row';
-        const input = document.createElement('input');
-        input.type = section.type || 'checkbox';
-        input.name = section.name;
-        input.value = opt.value || '';
-        input.checked = !!opt.checked || (section.type === 'radio' && idx === 0 && !section.options.some(o=>o.checked));
-        label.appendChild(input);
-        const text = document.createElement('span');
-        text.textContent = opt.label;
-        label.appendChild(text);
+        label.className = section.type === 'quantity' ? 'choice-row qty-row' : 'choice-row';
+
+        if(section.type === 'quantity'){
+          const name = document.createElement('span');
+          name.textContent = opt.label;
+          label.appendChild(name);
+
+          const controls = document.createElement('span');
+          controls.className = 'qty-controls';
+          const minus = document.createElement('button');
+          minus.type = 'button';
+          minus.className = 'qty-btn';
+          minus.textContent = '−';
+          const qty = document.createElement('output');
+          qty.className = 'qty-value';
+          qty.dataset.name = section.name;
+          qty.dataset.value = opt.value || '';
+          qty.value = '0';
+          qty.textContent = '0';
+          const plus = document.createElement('button');
+          plus.type = 'button';
+          plus.className = 'qty-btn';
+          plus.textContent = '+';
+          const setQty = next=>{
+            const max = Number.isFinite(Number(section.max)) ? Number(section.max) : 9;
+            const val = Math.max(0, Math.min(max, Number(next) || 0));
+            qty.value = String(val);
+            qty.textContent = String(val);
+          };
+          minus.onclick = ()=> setQty(Number(qty.value) - 1);
+          plus.onclick = ()=> setQty(Number(qty.value) + 1);
+          controls.appendChild(minus);
+          controls.appendChild(qty);
+          controls.appendChild(plus);
+          label.appendChild(controls);
+        }else{
+          const input = document.createElement('input');
+          input.type = section.type || 'checkbox';
+          input.name = section.name;
+          input.value = opt.value || '';
+          input.checked = !!opt.checked || (section.type === 'radio' && idx === 0 && !section.options.some(o=>o.checked));
+          label.appendChild(input);
+          const text = document.createElement('span');
+          text.textContent = opt.label;
+          label.appendChild(text);
+        }
         fieldset.appendChild(label);
       });
       wrap.appendChild(fieldset);
@@ -222,12 +267,23 @@
 
     return new Promise(resolve=>{
       host.classList.add('open');
-      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve({}); };
+      const noteBox = document.getElementById('modifierItemNote');
+      if(noteBox){ noteBox.value = settings.note || ''; noteBox.focus(); noteBox.select(); }
+      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve({ itemNote: noteBox ? noteBox.value.trim() : '' }); };
       document.getElementById('modifierForm').onsubmit = (e)=>{
         e.preventDefault();
         const form = e.currentTarget;
-        const values = {};
+        const values = { itemNote: noteBox ? noteBox.value.trim() : '' };
         (sections || []).forEach(section=>{
+          if(section.type === 'quantity'){
+            const picked = [];
+            form.querySelectorAll(`output[data-name="${section.name}"]`).forEach(out=>{
+              const qty = Number(out.value || out.textContent || 0) || 0;
+              if(qty > 0) picked.push({ value: out.dataset.value, qty });
+            });
+            values[section.name] = picked;
+            return;
+          }
           const selected = [...form.querySelectorAll(`[name="${section.name}"]:checked`)].map(input=>input.value).filter(Boolean);
           values[section.name] = section.type === 'radio' ? (selected[0] || null) : selected;
         });
@@ -237,9 +293,17 @@
     });
   }
 
+  function addQuantities(picks, note){
+    (picks || []).forEach(pick=>{
+      const qty = Math.max(0, Number(pick.qty) || 0);
+      if(!pick.value) return;
+      for(let i=0; i<qty; i++) BK_STATE.addItem(pick.value, note || '');
+    });
+  }
+
   async function addProductWithFlow(product){
-    const note = (document.getElementById('noteInput').value||'').trim();
-    BK_STATE.addItem(product.id, note);
+    const noteInput = document.getElementById('noteInput');
+    const pendingNote = (noteInput && noteInput.value || '').trim();
 
     const sauceOptions = [
       {label:'No Sauce Wanted', value:''},
@@ -249,17 +313,17 @@
       {label:'Dutch Special', value:'x_sauce_dutch_special'},
       {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'}
     ];
+    const paidSauceOptions = sauceOptions.filter(opt=>opt.value);
 
     if(['fries_standard', 'fries_large', 'fries_family'].includes(product.id)){
       const picked = await openModifierSheet(`${product.name} options`, [
-        { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one included sauce for this fries item.', options:sauceOptions },
-        { title:'Extra sauce cup (+5 GHS)', name:'extraSauce', type:'radio', help:'Optional paid extra sauce.', options:sauceOptions }
-      ]);
+        { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one free sauce for this fries item.', options:sauceOptions },
+        { title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add several paid sauces.', options:paidSauceOptions }
+      ], { note: pendingNote });
+      BK_STATE.addItem(product.id, picked.itemNote || '');
       if(picked.includedSauce) BK_STATE.addItem(picked.includedSauce, 'included');
-      if(picked.extraSauce) BK_STATE.addItem(picked.extraSauce, 'extra');
-    }
-
-    if(['hamburger', 'cheeseburger', 'double_burger', 'double_cheeseburger', 'chicken_burger', 'chicken_shawarma_burger'].includes(product.id)){
+      addQuantities(picked.extraSauce, 'extra');
+    }else if(['hamburger', 'cheeseburger', 'double_burger', 'double_cheeseburger', 'chicken_burger', 'chicken_shawarma_burger'].includes(product.id)){
       const askCheeseDefault = product.id !== 'cheeseburger' && product.id !== 'double_cheeseburger';
       const extras = [
         {label:'Extra Beef Patty', value:'x_beef_patty'},
@@ -269,29 +333,32 @@
         {label:'Chicken Shawarma Patty', value:'x_chicken_shawarma_patty'}
       ];
       const picked = await openModifierSheet(`${product.name} add-ons`, [
-        { title:'Burger add-ons', name:'burgerExtras', type:'checkbox', help:'Select all paid add-ons for this burger.', options:extras },
-        { title:'Egg', name:'egg', type:'radio', options:[
-          {label:'No egg', value:''},
+        { title:'Burger add-ons', name:'burgerExtras', type:'quantity', help:'Use + / − for multiple paid add-ons.', options:extras },
+        { title:'Egg add-ons', name:'eggExtras', type:'quantity', options:[
           {label:'Fried Egg', value:'x_fried_egg'},
           {label:'Omelette', value:'x_omelette'}
         ]}
-      ]);
-      (picked.burgerExtras || []).forEach(id=> BK_STATE.addItem(id, ''));
-      if(picked.egg) BK_STATE.addItem(picked.egg, '');
-    }
-
-    if(['wings_6','wings_12','wings_24'].includes(product.id)){
+      ], { note: pendingNote });
+      BK_STATE.addItem(product.id, picked.itemNote || '');
+      addQuantities(picked.burgerExtras, '');
+      addQuantities(picked.eggExtras, '');
+    }else if(['wings_6','wings_12','wings_24'].includes(product.id)){
       const picked = await openModifierSheet(`${product.name} sauce`, [
         { title:'Included sauce', name:'wingsSauce', type:'radio', help:'Choose one included sauce for the wings.', options:[
           {label:'No Sauce Wanted', value:''},
           {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'},
           {label:'Chipotle', value:'x_sauce_chipotle'}
-        ]}
-      ]);
+        ]},
+        { title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add extra sauce cups.', options:paidSauceOptions }
+      ], { note: pendingNote });
+      BK_STATE.addItem(product.id, picked.itemNote || '');
       if(picked.wingsSauce) BK_STATE.addItem(picked.wingsSauce, 'included');
+      addQuantities(picked.extraSauce, 'extra');
+    }else{
+      BK_STATE.addItem(product.id, pendingNote);
     }
 
-    document.getElementById('noteInput').value='';
+    if(noteInput) noteInput.value='';
     renderOrder();
     renderMake();
     refreshTotals();
