@@ -117,6 +117,7 @@ button.item > *{position:relative;z-index:1}
 .cat-badge{display:inline-flex;align-items:center;width:max-content;margin-bottom:8px;padding:4px 8px;border-radius:999px;background:rgba(255,210,77,.14);border:1px solid rgba(255,210,77,.28);color:#ffe69c;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em}
 .badge{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:32px;background:var(--accent);border:1px solid var(--accent-strong);padding:2px 9px;border-radius:10px;font-size:14px;color:#201600;font-weight:950}
 .img-preview{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #2a2f39;margin-right:8px}
+.muted{color:var(--muted);font-size:var(--fz-xs)}
 .flow-action{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px}
 .toolbar .danger{background:#28191b;border-color:#51262c;color:#ffd6dc}
 .toolbar .ghost{background:#1a2027;border-color:#263241}
