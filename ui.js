@@ -231,6 +231,7 @@
           qty.className = 'qty-value';
           qty.dataset.name = section.name;
           qty.dataset.value = opt.value || '';
+          qty.dataset.label = opt.label || opt.value || '';
           qty.value = '0';
           qty.textContent = '0';
           const plus = document.createElement('button');
@@ -279,7 +280,7 @@
             const picked = [];
             form.querySelectorAll(`output[data-name="${section.name}"]`).forEach(out=>{
               const qty = Number(out.value || out.textContent || 0) || 0;
-              if(qty > 0) picked.push({ value: out.dataset.value, qty });
+              if(qty > 0) picked.push({ value: out.dataset.value, label: out.dataset.label || out.dataset.value, qty });
             });
             values[section.name] = picked;
             return;
@@ -301,6 +302,22 @@
     });
   }
 
+  function describeQuantities(picks){
+    return (picks || [])
+      .filter(pick=> Number(pick.qty) > 0)
+      .map(pick=> `${pick.label || pick.value}${Number(pick.qty) > 1 ? ` x${Number(pick.qty)}` : ''}`)
+      .join(', ');
+  }
+
+  function joinNotes(){
+    return Array.from(arguments).map(x=>String(x || '').trim()).filter(Boolean).join(' · ');
+  }
+
+  function modifierLinkNote(prefix, productName, itemNote){
+    const lead = prefix === 'for' ? 'for' : `${prefix} for`;
+    return `${lead} ${productName}${itemNote ? `: ${itemNote}` : ''}`;
+  }
+
   async function addProductWithFlow(product){
     const noteInput = document.getElementById('noteInput');
     const pendingNote = (noteInput && noteInput.value || '').trim();
@@ -320,9 +337,11 @@
         { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one free sauce for this fries item.', options:sauceOptions },
         { title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add several paid sauces.', options:paidSauceOptions }
       ], { note: pendingNote });
-      BK_STATE.addItem(product.id, picked.itemNote || '');
-      if(picked.includedSauce) BK_STATE.addItem(picked.includedSauce, 'included');
-      addQuantities(picked.extraSauce, 'extra');
+      const extraSummary = describeQuantities(picked.extraSauce);
+      const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
+      BK_STATE.addItem(product.id, itemNote);
+      if(picked.includedSauce) BK_STATE.addItem(picked.includedSauce, modifierLinkNote('included', product.name, itemNote));
+      addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, itemNote));
     }else if(['hamburger', 'cheeseburger', 'double_burger', 'double_cheeseburger', 'chicken_burger', 'chicken_shawarma_burger'].includes(product.id)){
       const askCheeseDefault = product.id !== 'cheeseburger' && product.id !== 'double_cheeseburger';
       const extras = [
@@ -339,9 +358,12 @@
           {label:'Omelette', value:'x_omelette'}
         ]}
       ], { note: pendingNote });
-      BK_STATE.addItem(product.id, picked.itemNote || '');
-      addQuantities(picked.burgerExtras, '');
-      addQuantities(picked.eggExtras, '');
+      const burgerSummary = describeQuantities([...(picked.burgerExtras || []), ...(picked.eggExtras || [])]);
+      const itemNote = joinNotes(picked.itemNote, burgerSummary ? `Add-ons: ${burgerSummary}` : '');
+      BK_STATE.addItem(product.id, itemNote);
+      const addonNote = modifierLinkNote('for', product.name, itemNote);
+      addQuantities(picked.burgerExtras, addonNote);
+      addQuantities(picked.eggExtras, addonNote);
     }else if(['wings_6','wings_12','wings_24'].includes(product.id)){
       const picked = await openModifierSheet(`${product.name} sauce`, [
         { title:'Included sauce', name:'wingsSauce', type:'radio', help:'Choose one included sauce for the wings.', options:[
@@ -351,9 +373,11 @@
         ]},
         { title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add extra sauce cups.', options:paidSauceOptions }
       ], { note: pendingNote });
-      BK_STATE.addItem(product.id, picked.itemNote || '');
-      if(picked.wingsSauce) BK_STATE.addItem(picked.wingsSauce, 'included');
-      addQuantities(picked.extraSauce, 'extra');
+      const extraSummary = describeQuantities(picked.extraSauce);
+      const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
+      BK_STATE.addItem(product.id, itemNote);
+      if(picked.wingsSauce) BK_STATE.addItem(picked.wingsSauce, modifierLinkNote('included', product.name, itemNote));
+      addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, itemNote));
     }else{
       BK_STATE.addItem(product.id, pendingNote);
     }
@@ -445,7 +469,7 @@
     entries.forEach(([key,qty])=>{
       const [id, note=''] = BK_LOGIC.parseItemKey(key);
       const prod = BK_DATA.BASE.find(x=>x.id===id);
-      const unitPrice = (note==='included' && String(id).startsWith('x_sauce_')) ? 0 : BK_PRICES.getPrice(id);
+      const unitPrice = (String(note || '').toLowerCase().startsWith('included') && String(id).startsWith('x_sauce_')) ? 0 : BK_PRICES.getPrice(id);
       const row = document.createElement('div'); row.className='row cart-row';
 
       const controls = document.createElement('div');
