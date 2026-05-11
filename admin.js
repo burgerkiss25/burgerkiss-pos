@@ -113,7 +113,7 @@
 
   document.getElementById('btnImages').onclick = ()=> BK_UI.openImages();
   document.getElementById('iClose').onclick    = ()=> BK_UI.closeImages();
-  document.getElementById('iSave').onclick     = ()=>{ BK_UI.saveImages(); setTimeout(refreshDbStatus, 800); };
+  document.getElementById('iSave').onclick     = ()=>{ Promise.resolve(BK_UI.saveImages()).finally(()=> setTimeout(refreshDbStatus, 200)); };
   document.getElementById('iReset').onclick    = ()=>{ BK_UI.resetImages(); setTimeout(refreshDbStatus, 800); };
 
   document.getElementById('btnStock').onclick = ()=> BK_UI.openStock();
