@@ -2,8 +2,8 @@
 (function(){
   const KEY = 'bk_images_v1';
   const DEFAULT_REMOTE_PATH = '/pos/config/images';
-  const MAX_IMAGE_EDGE = 900;
-  const JPEG_QUALITY = 0.82;
+  const MAX_IMAGE_EDGE = 640;
+  const JPEG_QUALITY = 0.72;
   let MAP = {};
   let DRAFT = {};
   let pendingImages = 0;
@@ -175,7 +175,7 @@
   function resizeImageDataUrl(src){
     return loadImage(src).then(img=>{
       const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
-      if(scale >= 1 && src.length < 450000) return src;
+      if(scale >= 1 && src.length < 300000) return src;
       const width = Math.max(1, Math.round((img.naturalWidth || img.width) * scale));
       const height = Math.max(1, Math.round((img.naturalHeight || img.height) * scale));
       const canvas = document.createElement('canvas');
@@ -273,11 +273,11 @@
     return saveRemoteNow().then(remote=>{
       closeEditor();
       if(remote.ok){
-        notify(local.ok ? 'Images saved online.' : 'Images saved online, but this browser storage is full.');
+        notify('Images saved online.');
       }else if(remote.skipped){
-        notify(local.ok ? 'Images saved locally.' : 'Images could not be saved. Browser storage is full.');
+        notify(local.ok ? 'Images saved locally.' : 'Images saved in this tab only. Browser storage is full.');
       }else{
-        notify(local.ok ? 'Images saved locally, but online save failed. Check Firebase rules/connection.' : 'Images could not be saved locally or online. Use smaller images and check Firebase.');
+        notify(local.ok ? 'Images saved locally, but online save failed. Check Firebase rules/connection.' : 'Images saved in this tab only; online save failed and browser storage is full.');
       }
       return !!(local.ok || remote.ok);
     });
