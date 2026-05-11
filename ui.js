@@ -340,8 +340,8 @@
       const extraSummary = describeQuantities(picked.extraSauce);
       const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
       BK_STATE.addItem(product.id, itemNote);
-      if(picked.includedSauce) BK_STATE.addItem(picked.includedSauce, modifierLinkNote('included', product.name, itemNote));
-      addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, itemNote));
+      if(picked.includedSauce) BK_STATE.addItem(picked.includedSauce, modifierLinkNote('included', product.name, picked.itemNote));
+      addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
     }else if(['hamburger', 'cheeseburger', 'double_burger', 'double_cheeseburger', 'chicken_burger', 'chicken_shawarma_burger'].includes(product.id)){
       const askCheeseDefault = product.id !== 'cheeseburger' && product.id !== 'double_cheeseburger';
       const extras = [
@@ -361,7 +361,7 @@
       const burgerSummary = describeQuantities([...(picked.burgerExtras || []), ...(picked.eggExtras || [])]);
       const itemNote = joinNotes(picked.itemNote, burgerSummary ? `Add-ons: ${burgerSummary}` : '');
       BK_STATE.addItem(product.id, itemNote);
-      const addonNote = modifierLinkNote('for', product.name, itemNote);
+      const addonNote = modifierLinkNote('for', product.name, picked.itemNote);
       addQuantities(picked.burgerExtras, addonNote);
       addQuantities(picked.eggExtras, addonNote);
     }else if(['wings_6','wings_12','wings_24'].includes(product.id)){
@@ -376,8 +376,8 @@
       const extraSummary = describeQuantities(picked.extraSauce);
       const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
       BK_STATE.addItem(product.id, itemNote);
-      if(picked.wingsSauce) BK_STATE.addItem(picked.wingsSauce, modifierLinkNote('included', product.name, itemNote));
-      addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, itemNote));
+      if(picked.wingsSauce) BK_STATE.addItem(picked.wingsSauce, modifierLinkNote('included', product.name, picked.itemNote));
+      addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
     }else{
       BK_STATE.addItem(product.id, pendingNote);
     }
