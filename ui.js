@@ -446,14 +446,66 @@
     ctl.forEach(c=>bar.appendChild(c));
   }
 
+
+  function baseCustomerNote(note){
+    return String(note || '')
+      .replace(/\s+·\s+Add-ons:.*$/i, '')
+      .replace(/\s+·\s+Extra sauces:.*$/i, '')
+      .trim();
+  }
+
+  function parseLinkedModifierNote(note){
+    const txt = String(note || '').trim();
+    const m = txt.match(/^(included|extra)?\s*for\s+(.+?)(?::\s*(.*))?$/i);
+    if(!m) return null;
+    return {
+      prefix: (m[1] || 'for').toLowerCase(),
+      productName: (m[2] || '').trim(),
+      itemNote: (m[3] || '').trim()
+    };
+  }
+
+
+  function linkedGroupKey(productName, note){
+    return `${String(productName || '').trim()}|${baseCustomerNote(note)}`;
+  }
+
+  function groupedCartRows(items){
+    const groups = [];
+    const parentByKey = new Map();
+    const standalone = [];
+    BK_LOGIC.groupedLines(items).forEach(line=>{
+      const linked = parseLinkedModifierNote(line.note);
+      if(linked){
+        const key = linkedGroupKey(linked.productName, linked.itemNote);
+        const parent = parentByKey.get(key);
+        if(parent){
+          parent.children.push(Object.assign({}, line, { linked }));
+          return;
+        }
+        standalone.push(line);
+        return;
+      }
+      const prod = BK_DATA.BASE.find(x=>x.id===line.id);
+      const isModifierProduct = prod && (prod.cat === 'extra' || String(prod.id || '').startsWith('x_sauce_'));
+      if(isModifierProduct){
+        standalone.push(line);
+        return;
+      }
+      const group = Object.assign({}, line, { children: [] });
+      groups.push(group);
+      parentByKey.set(linkedGroupKey(line.name, line.note), group);
+    });
+    return groups.concat(standalone.map(line=>Object.assign({}, line, { children: [] })));
+  }
+
   function renderOrder(){
     const {slots, active} = BK_STATE.getState();
     const lines = document.getElementById('lines'); lines.innerHTML='';
     if(!slots.length){ setSlotTotals(0,0,0); return; }
     const s = slots[active];
 
-    const counts = BK_LOGIC.groupCounts(s.items);
-    const entries = Object.entries(counts);
+    const entries = groupedCartRows(s.items);
     if(entries.length===0){
       const row = document.createElement('div');
       row.className = 'empty-state';
@@ -466,10 +518,11 @@
       renderIssue();
       refreshTotals();
     };
-    entries.forEach(([key,qty])=>{
-      const [id, note=''] = BK_LOGIC.parseItemKey(key);
+    const repeat = (n, fn)=>{ for(let i=0; i<Math.max(0, n); i++) fn(); };
+    entries.forEach(entry=>{
+      const [id, note=''] = BK_LOGIC.parseItemKey(entry.key);
       const prod = BK_DATA.BASE.find(x=>x.id===id);
-      const unitPrice = (String(note || '').toLowerCase().startsWith('included') && String(id).startsWith('x_sauce_')) ? 0 : BK_PRICES.getPrice(id);
+      const totalPrice = entry.total + (entry.children || []).reduce((sum, child)=> sum + child.total, 0);
       const row = document.createElement('div'); row.className='row cart-row';
 
       const controls = document.createElement('div');
@@ -479,13 +532,21 @@
       dec.type = 'button';
       dec.textContent = '−';
       dec.disabled = !!s.issued;
-      dec.onclick = ()=>{ BK_STATE.decItemForKey(key); refreshOrderViews(); };
+      dec.onclick = ()=>{
+        (entry.children || []).forEach(child=> repeat(Math.max(1, Math.round(child.qty / Math.max(1, entry.qty))), ()=> BK_STATE.decItemForKey(child.key)));
+        BK_STATE.decItemForKey(entry.key);
+        refreshOrderViews();
+      };
       const inc = document.createElement('button');
       inc.className = 'mini';
       inc.type = 'button';
       inc.textContent = '+';
       inc.disabled = !!s.issued;
-      inc.onclick = ()=>{ BK_STATE.addItemForKey(key); refreshOrderViews(); };
+      inc.onclick = ()=>{
+        BK_STATE.addItemForKey(entry.key);
+        (entry.children || []).forEach(child=> repeat(Math.max(1, Math.round(child.qty / Math.max(1, entry.qty))), ()=> BK_STATE.addItemForKey(child.key)));
+        refreshOrderViews();
+      };
       controls.append(dec, inc);
 
       const detail = document.createElement('div');
@@ -493,19 +554,29 @@
       const title = document.createElement('b');
       title.textContent = prod ? prod.name : id;
       const meta = document.createElement('small');
-      meta.textContent = `× ${qty}${note ? ` · ${note}` : ''}`;
+      meta.textContent = `× ${entry.qty}${note ? ` · ${note}` : ''}`;
       detail.append(title, meta);
+      (entry.children || []).forEach(child=>{
+        const childLine = document.createElement('small');
+        childLine.className = 'cart-child-line';
+        childLine.textContent = `↳ ${child.name} × ${child.qty} · ${child.total} GHS`;
+        detail.appendChild(childLine);
+      });
 
       const price = document.createElement('div');
       price.className = 'cart-price';
-      price.textContent = `${qty*unitPrice} GHS`;
+      price.textContent = `${totalPrice} GHS`;
 
       const remove = document.createElement('button');
       remove.className = 'mini remove-line';
       remove.type = 'button';
       remove.textContent = 'Remove';
       remove.disabled = !!s.issued;
-      remove.onclick = ()=>{ BK_STATE.removeItemForKey(key); refreshOrderViews(); };
+      remove.onclick = ()=>{
+        (entry.children || []).forEach(child=> BK_STATE.removeItemForKey(child.key));
+        BK_STATE.removeItemForKey(entry.key);
+        refreshOrderViews();
+      };
 
       row.append(controls, detail, price, remove);
       lines.appendChild(row);
