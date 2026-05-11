@@ -4,10 +4,15 @@
   const DEFAULT_REMOTE_PATH = '/pos/config/images';
   const MAX_IMAGE_EDGE = 640;
   const JPEG_QUALITY = 0.72;
+  const LOCAL_CACHE_LIMIT = 900000;
+  const RENDER_DEBOUNCE_MS = 120;
   let MAP = {};
   let DRAFT = {};
+  let DIRTY = new Set();
+  let REMOVED = new Set();
   let pendingImages = 0;
   let remoteSaveTimer = null;
+  let renderTimer = null;
   let remoteWatchStarted = false;
   let authPromise = null;
   let lastRemoteHash = '';
@@ -38,6 +43,10 @@
       return firebase.database(firebaseApp()).ref(remotePath());
     }catch(e){ return null; }
   }
+  function remoteMapRef(){
+    const ref = remoteRef();
+    return ref ? ref.child('map') : null;
+  }
   function ensureAuth(){
     if(!remoteEnabled() || !window.firebase.auth) return Promise.resolve(true);
     if(authPromise) return authPromise;
@@ -62,9 +71,15 @@
   }
   function persistLocal(){
     try{
-      localStorage.setItem(KEY, JSON.stringify(MAP));
+      const json = JSON.stringify(MAP);
+      if(json.length > LOCAL_CACHE_LIMIT){
+        localStorage.removeItem(KEY);
+        return { ok:false, skipped:true };
+      }
+      localStorage.setItem(KEY, json);
       return { ok:true };
     }catch(e){
+      try{ localStorage.removeItem(KEY); }catch(_e){}
       console.warn('images local save failed:', e && e.message);
       return { ok:false, error:e };
     }
@@ -72,9 +87,39 @@
   function renderPosIfAvailable(){
     if(window.BK_UI && typeof BK_UI.renderAll === 'function' && document.getElementById('buttons')) BK_UI.renderAll();
   }
+  function schedulePosRender(){
+    if(renderTimer) return;
+    renderTimer = setTimeout(()=>{
+      renderTimer = null;
+      renderPosIfAvailable();
+    }, RENDER_DEBOUNCE_MS);
+  }
   function notify(message){
     if(window.BK_UI && BK_UI.infoDialog) BK_UI.infoDialog(message);
     else alert(message);
+  }
+
+  function imageEditorOpen(){
+    const modal = document.getElementById('modalImages');
+    return !!(modal && modal.classList.contains('open'));
+  }
+  function syncDraftImageFromRemote(id, value){
+    if(!imageEditorOpen() || DIRTY.has(id)) return;
+    if(typeof value === 'string' && value) DRAFT[id] = value;
+    else delete DRAFT[id];
+    const prev = document.getElementById(`img-prev-${id}`);
+    if(!prev) return;
+    if(!DRAFT[id]){
+      prev.src = '';
+      prev.classList.add('hidden');
+      return;
+    }
+    const rect = prev.getBoundingClientRect();
+    const visible = rect.bottom >= 0 && rect.top <= (window.innerHeight || document.documentElement.clientHeight);
+    if(visible){
+      prev.src = DRAFT[id];
+      prev.classList.remove('hidden');
+    }
   }
   function applyRemote(raw){
     const next = cleanMap(raw && raw.map ? raw.map : raw);
@@ -82,12 +127,26 @@
     if(hash && hash === lastRemoteHash) return false;
     lastRemoteHash = hash;
     MAP = next;
-    persistLocal();
-    renderPosIfAvailable();
+    schedulePosRender();
+    return true;
+  }
+  function applyRemoteImage(id, value){
+    if(!id) return false;
+    if(typeof value === 'string' && value){
+      if(MAP[id] === value) return false;
+      MAP[id] = value;
+      syncDraftImageFromRemote(id, value);
+    }else{
+      if(!MAP[id]) return false;
+      delete MAP[id];
+      syncDraftImageFromRemote(id, '');
+    }
+    lastRemoteHash = '';
+    schedulePosRender();
     return true;
   }
   function loadRemoteOnce(){
-    const ref = remoteRef();
+    const ref = remoteMapRef();
     if(!ref) return Promise.resolve(false);
     return ensureAuth().then(()=> ref.get()).then(snap=>{
       const val = snap.val();
@@ -100,19 +159,17 @@
   }
   function watchRemote(){
     if(remoteWatchStarted) return true;
-    const ref = remoteRef();
+    const ref = remoteMapRef();
     if(!ref) return false;
     remoteWatchStarted = true;
     ensureAuth().then(()=>{
-      ref.on('value', snap=>{
-        const val = snap.val();
-        if(!val) return;
-        applyRemote(val);
-      }, e=>{
+      ref.on('child_added', snap=> applyRemoteImage(snap.key, snap.val()), e=>{
         remoteWatchStarted = false;
         console.warn('images remote sync failed:', e && e.message);
         setTimeout(watchRemote, 3000);
       });
+      ref.on('child_changed', snap=> applyRemoteImage(snap.key, snap.val()));
+      ref.on('child_removed', snap=> applyRemoteImage(snap.key, ''));
     }).catch(e=>{
       remoteWatchStarted = false;
       console.warn('images remote sync failed:', e && e.message);
@@ -120,12 +177,16 @@
     });
     return true;
   }
-  function saveRemoteNow(){
+  function saveRemoteNow(nextMap, dirtyIds, removedIds){
     const ref = remoteRef();
     if(!ref) return Promise.resolve({ ok:false, skipped:true });
     if(remoteSaveTimer){ clearTimeout(remoteSaveTimer); remoteSaveTimer = null; }
+    const updates = { ts: Date.now() };
+    dirtyIds.forEach(id=>{
+      updates[`map/${id}`] = removedIds.has(id) ? null : (nextMap[id] || null);
+    });
     return ensureAuth()
-      .then(()=> ref.set({ map: MAP, ts: Date.now() }))
+      .then(()=> ref.update(updates))
       .then(()=>{ lastRemoteHash = mapHash(MAP); return { ok:true }; })
       .catch(e=>{
         console.warn('images remote save failed:', e && e.message);
@@ -138,16 +199,23 @@
     if(remoteSaveTimer) clearTimeout(remoteSaveTimer);
     remoteSaveTimer = setTimeout(()=>{
       remoteSaveTimer = null;
-      ensureAuth().then(()=> ref.set({ map: MAP, ts: Date.now() })).catch(e=>{
+      ensureAuth().then(()=>{
+        const payload = { map: MAP, ts: Date.now() };
+        return Object.keys(MAP).length ? ref.update(payload) : ref.set(payload);
+      }).catch(e=>{
         console.warn('images remote save failed:', e && e.message);
       });
     }, 250);
   }
 
   function load(){
-    try{ const raw = localStorage.getItem(KEY); if(raw) MAP = cleanMap(JSON.parse(raw)||{}); }catch(e){}
+    try{
+      const raw = localStorage.getItem(KEY);
+      if(raw && raw.length <= LOCAL_CACHE_LIMIT) MAP = cleanMap(JSON.parse(raw)||{});
+      else if(raw) localStorage.removeItem(KEY);
+    }catch(e){ try{ localStorage.removeItem(KEY); }catch(_e){} }
     lastRemoteHash = mapHash(MAP);
-    loadRemoteOnce().finally(watchRemote);
+    watchRemote();
   }
 
   function get(id){
@@ -193,6 +261,40 @@
     return readFileAsDataUrl(file).then(resizeImageDataUrl);
   }
 
+  function compactDraftImages(){
+    const ids = Object.keys(DRAFT).filter(id=> typeof DRAFT[id] === 'string' && DRAFT[id].startsWith('data:image/') && DRAFT[id].length > 300000);
+    if(!ids.length) return Promise.resolve(false);
+    pendingImages += ids.length;
+    return ids.reduce((chain, id)=> chain.then(()=> resizeImageDataUrl(DRAFT[id]).then(dataUrl=>{
+      if(dataUrl !== DRAFT[id]) DIRTY.add(id);
+      DRAFT[id] = dataUrl;
+    }).catch(e=>{
+      console.warn('image compaction failed:', e && e.message);
+    }).finally(()=>{
+      pendingImages = Math.max(0, pendingImages - 1);
+    })), Promise.resolve()).then(()=>true);
+  }
+
+  function hydrateVisiblePreviews(body){
+    const previews = Array.from(body.querySelectorAll('img[data-preview-id]'));
+    const show = img=>{
+      const src = DRAFT[img.dataset.previewId] || '';
+      if(src){ img.src = src; img.classList.remove('hidden'); }
+    };
+    if(!('IntersectionObserver' in window)){
+      previews.slice(0, 8).forEach(show);
+      return;
+    }
+    const observer = new IntersectionObserver(entries=>{
+      entries.forEach(entry=>{
+        if(!entry.isIntersecting) return;
+        observer.unobserve(entry.target);
+        show(entry.target);
+      });
+    }, { rootMargin: '160px 0px' });
+    previews.forEach(img=> observer.observe(img));
+  }
+
   function renderRows(){
     const body = document.getElementById('imagesBody');
     body.innerHTML = '';
@@ -205,7 +307,7 @@
           <b>${it.name}</b> <small>(${it.cat})</small>
         </span>
         <span class="left">
-          <img class="img-preview ${src ? '' : 'hidden'}" id="img-prev-${it.id}" src="${src}" alt="${it.name}">
+          <img class="img-preview ${src ? '' : 'hidden'}" id="img-prev-${it.id}" data-preview-id="${it.id}" loading="lazy" alt="${it.name}">
           <input type="file" accept="image/*" data-img-id="${it.id}">
           <small id="img-status-${it.id}" class="muted"></small>
           <button class="mini" data-remove-id="${it.id}">Remove</button>
@@ -213,6 +315,7 @@
       `;
       body.appendChild(row);
     });
+    hydrateVisiblePreviews(body);
 
     body.querySelectorAll('input[data-img-id]').forEach(inp=>{
       inp.onchange = ()=>{
@@ -225,6 +328,8 @@
         inp.disabled = true;
         fileToStoredImage(file).then(dataUrl=>{
           DRAFT[id] = dataUrl;
+          DIRTY.add(id);
+          REMOVED.delete(id);
           const prev = document.getElementById(`img-prev-${id}`);
           if(prev){ prev.src = DRAFT[id]; prev.classList.remove('hidden'); }
           if(status) status.textContent = 'Ready';
@@ -244,6 +349,8 @@
       btn.onclick = ()=>{
         const id = btn.dataset.removeId;
         DRAFT[id] = '';
+        DIRTY.add(id);
+        REMOVED.add(id);
         const prev = document.getElementById(`img-prev-${id}`);
         const status = document.getElementById(`img-status-${id}`);
         if(prev){ prev.src = ''; prev.classList.add('hidden'); }
@@ -254,6 +361,8 @@
 
   function openEditor(){
     DRAFT = clone(MAP);
+    DIRTY = new Set();
+    REMOVED = new Set();
     renderRows();
     document.getElementById('modalImages').classList.add('open');
   }
@@ -267,10 +376,22 @@
       notify('Please wait until image preparation is finished, then save again.');
       return Promise.resolve(false);
     }
-    MAP = cleanMap(DRAFT);
-    const local = persistLocal();
-    renderPosIfAvailable();
-    return saveRemoteNow().then(remote=>{
+    return compactDraftImages().then(()=>{
+      const next = clone(MAP);
+      const cleanDraft = cleanMap(DRAFT);
+      DIRTY.forEach(id=>{
+        if(REMOVED.has(id)) delete next[id];
+        else if(cleanDraft[id]) next[id] = cleanDraft[id];
+      });
+      MAP = cleanMap(next);
+      const dirtyIds = new Set(DIRTY);
+      const removedIds = new Set(REMOVED);
+      const local = persistLocal();
+      renderPosIfAvailable();
+      return saveRemoteNow(MAP, dirtyIds, removedIds).then(remote=>({ remote, local }));
+    }).then(({ remote, local })=>{
+      DIRTY = new Set();
+      REMOVED = new Set();
       closeEditor();
       if(remote.ok){
         notify('Images saved online.');
@@ -287,6 +408,8 @@
     if(!confirm('Reset all edited images?')) return;
     MAP = {};
     DRAFT = {};
+    DIRTY = new Set();
+    REMOVED = new Set();
     localStorage.removeItem(KEY);
     saveRemoteSoon();
     renderRows();
