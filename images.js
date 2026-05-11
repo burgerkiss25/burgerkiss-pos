@@ -8,6 +8,9 @@
   let DRAFT = {};
   let pendingImages = 0;
   let remoteSaveTimer = null;
+  let remoteWatchStarted = false;
+  let authPromise = null;
+  let lastRemoteHash = '';
 
   function clone(x){ try{ return JSON.parse(JSON.stringify(x)); }catch(e){ return {}; } }
   function cleanMap(input){
@@ -24,14 +27,38 @@
   function remotePath(){
     return (window.BK_IMAGES_PATH || DEFAULT_REMOTE_PATH).replace(/\/+$/,'');
   }
+  function firebaseApp(){
+    return (window.firebase.apps && firebase.apps.length)
+      ? firebase.app()
+      : firebase.initializeApp(window.FIREBASE_CONFIG);
+  }
   function remoteRef(){
     if(!remoteEnabled()) return null;
     try{
-      const app = (window.firebase.apps && firebase.apps.length)
-        ? firebase.app()
-        : firebase.initializeApp(window.FIREBASE_CONFIG);
-      return firebase.database(app).ref(remotePath());
+      return firebase.database(firebaseApp()).ref(remotePath());
     }catch(e){ return null; }
+  }
+  function ensureAuth(){
+    if(!remoteEnabled() || !window.firebase.auth) return Promise.resolve(true);
+    if(authPromise) return authPromise;
+    try{
+      const auth = firebase.auth(firebaseApp());
+      if(auth.currentUser) return Promise.resolve(true);
+      authPromise = auth.signInAnonymously()
+        .then(()=>true)
+        .catch(e=>{
+          authPromise = null;
+          console.warn('images firebase auth failed:', e && e.message);
+          return false;
+        });
+      return authPromise;
+    }catch(e){
+      console.warn('images firebase auth failed:', e && e.message);
+      return Promise.resolve(false);
+    }
+  }
+  function mapHash(map){
+    try{ return JSON.stringify(cleanMap(map)); }catch(e){ return ''; }
   }
   function persistLocal(){
     try{
@@ -51,6 +78,9 @@
   }
   function applyRemote(raw){
     const next = cleanMap(raw && raw.map ? raw.map : raw);
+    const hash = mapHash(next);
+    if(hash && hash === lastRemoteHash) return false;
+    lastRemoteHash = hash;
     MAP = next;
     persistLocal();
     renderPosIfAvailable();
@@ -59,7 +89,7 @@
   function loadRemoteOnce(){
     const ref = remoteRef();
     if(!ref) return Promise.resolve(false);
-    return ref.get().then(snap=>{
+    return ensureAuth().then(()=> ref.get()).then(snap=>{
       const val = snap.val();
       if(!val) return false;
       return applyRemote(val);
@@ -68,12 +98,35 @@
       return false;
     });
   }
+  function watchRemote(){
+    if(remoteWatchStarted) return true;
+    const ref = remoteRef();
+    if(!ref) return false;
+    remoteWatchStarted = true;
+    ensureAuth().then(()=>{
+      ref.on('value', snap=>{
+        const val = snap.val();
+        if(!val) return;
+        applyRemote(val);
+      }, e=>{
+        remoteWatchStarted = false;
+        console.warn('images remote sync failed:', e && e.message);
+        setTimeout(watchRemote, 3000);
+      });
+    }).catch(e=>{
+      remoteWatchStarted = false;
+      console.warn('images remote sync failed:', e && e.message);
+      setTimeout(watchRemote, 3000);
+    });
+    return true;
+  }
   function saveRemoteNow(){
     const ref = remoteRef();
     if(!ref) return Promise.resolve({ ok:false, skipped:true });
     if(remoteSaveTimer){ clearTimeout(remoteSaveTimer); remoteSaveTimer = null; }
-    return ref.set({ map: MAP, ts: Date.now() })
-      .then(()=>({ ok:true }))
+    return ensureAuth()
+      .then(()=> ref.set({ map: MAP, ts: Date.now() }))
+      .then(()=>{ lastRemoteHash = mapHash(MAP); return { ok:true }; })
       .catch(e=>{
         console.warn('images remote save failed:', e && e.message);
         return { ok:false, error:e };
@@ -85,7 +138,7 @@
     if(remoteSaveTimer) clearTimeout(remoteSaveTimer);
     remoteSaveTimer = setTimeout(()=>{
       remoteSaveTimer = null;
-      ref.set({ map: MAP, ts: Date.now() }).catch(e=>{
+      ensureAuth().then(()=> ref.set({ map: MAP, ts: Date.now() })).catch(e=>{
         console.warn('images remote save failed:', e && e.message);
       });
     }, 250);
@@ -93,7 +146,8 @@
 
   function load(){
     try{ const raw = localStorage.getItem(KEY); if(raw) MAP = cleanMap(JSON.parse(raw)||{}); }catch(e){}
-    loadRemoteOnce();
+    lastRemoteHash = mapHash(MAP);
+    loadRemoteOnce().finally(watchRemote);
   }
 
   function get(id){
@@ -239,5 +293,5 @@
     renderPosIfAvailable();
   }
 
-  window.BK_IMAGES = { KEY, load, loadRemoteOnce, get, openEditor, closeEditor, save, reset, remotePath };
+  window.BK_IMAGES = { KEY, load, loadRemoteOnce, watchRemote, get, openEditor, closeEditor, save, reset, remotePath };
 })();
