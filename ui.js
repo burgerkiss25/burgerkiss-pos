@@ -472,30 +472,43 @@
 
   function groupedCartRows(items){
     const groups = [];
+    const linkedChildren = [];
     const parentByKey = new Map();
+    const parentsByName = new Map();
     const standalone = [];
+
     BK_LOGIC.groupedLines(items).forEach(line=>{
       const linked = parseLinkedModifierNote(line.note);
       if(linked){
-        const key = linkedGroupKey(linked.productName, linked.itemNote);
-        const parent = parentByKey.get(key);
-        if(parent){
-          parent.children.push(Object.assign({}, line, { linked }));
-          return;
-        }
-        standalone.push(line);
+        linkedChildren.push(Object.assign({}, line, { linked }));
         return;
       }
+
       const prod = BK_DATA.BASE.find(x=>x.id===line.id);
       const isModifierProduct = prod && (prod.cat === 'extra' || String(prod.id || '').startsWith('x_sauce_'));
       if(isModifierProduct){
         standalone.push(line);
         return;
       }
+
       const group = Object.assign({}, line, { children: [] });
+      const groupKey = linkedGroupKey(line.name, line.note);
       groups.push(group);
-      parentByKey.set(linkedGroupKey(line.name, line.note), group);
+      parentByKey.set(groupKey, group);
+      const nameKey = String(line.name || '').trim().toLowerCase();
+      if(!parentsByName.has(nameKey)) parentsByName.set(nameKey, []);
+      parentsByName.get(nameKey).push(group);
     });
+
+    linkedChildren.forEach(child=>{
+      const linked = child.linked;
+      const exactParent = parentByKey.get(linkedGroupKey(linked.productName, linked.itemNote));
+      const fallbackParents = parentsByName.get(String(linked.productName || '').trim().toLowerCase()) || [];
+      const parent = exactParent || fallbackParents[fallbackParents.length - 1];
+      if(parent) parent.children.push(child);
+      else standalone.push(child);
+    });
+
     return groups.concat(standalone.map(line=>Object.assign({}, line, { children: [] })));
   }
 
