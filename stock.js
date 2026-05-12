@@ -6,6 +6,7 @@
     normalizeId,
     num,
     locationLabel,
+    STOCK_INVENTORY_LOCATIONS,
     sanitizeIngredient,
     sanitizeIngredients,
     sanitizeRecipes,
@@ -27,7 +28,8 @@
       recipes: (window.BK_STOCK_RECIPES_PATH || '/pos/stock/recipes').replace(/\/+$/,''),
       inventory: (window.BK_STOCK_INVENTORY_PATH || '/pos/stock/inventory').replace(/\/+$/,''),
       addons: (window.BK_STOCK_ADDONS_PATH || '/pos/stock/addons').replace(/\/+$/,''),
-      transfers: (window.BK_STOCK_TRANSFERS_PATH || '/pos/stock/transfers').replace(/\/+$/,'')
+      transfers: (window.BK_STOCK_TRANSFERS_PATH || '/pos/stock/transfers').replace(/\/+$/,''),
+      locations: (window.BK_STOCK_LOCATIONS_PATH || '/pos/stock/config/locations').replace(/\/+$/,'')
     };
   }
   function db(){
@@ -39,6 +41,28 @@
       return firebase.database(app);
     }catch(e){ return null; }
   }
+  function syncIngredientStock(def){
+    if(!def || typeof def !== 'object') return def;
+    def.stock = def.stock && typeof def.stock === 'object' ? def.stock : {};
+    STOCK_INVENTORY_LOCATIONS.forEach(loc=>{
+      def.stock[loc.id] = {
+        qty: num(def[loc.stockField], 0),
+        moq: num(def[loc.moqField], 0)
+      };
+    });
+    return def;
+  }
+  function syncAllIngredientStock(ingredients){
+    Object.values(ingredients || {}).forEach(syncIngredientStock);
+    return ingredients;
+  }
+  function locationConfigMap(){
+    const out = {};
+    STOCK_INVENTORY_LOCATIONS.forEach(loc=>{
+      out[loc.id] = { name: loc.name, type: loc.type, legacy_key: loc.legacyKey };
+    });
+    return out;
+  }
   function inventoryFromIngredients(ingredients){
     const out = {};
     Object.entries(ingredients || {}).forEach(([id, def])=>{
@@ -47,11 +71,42 @@
         current_stock_foodtruck: num(def.current_stock_foodtruck, 0),
         moq_storage: num(def.moq_storage, 0),
         moq_foodtruck: num(def.moq_foodtruck, 0),
+        stock: syncIngredientStock(def).stock,
         unit: def.unit || '',
         track_stock: def.track_stock !== false
       };
     });
     return out;
+  }
+  function inventoryByLocationFromIngredients(ingredients, ts){
+    const out = {};
+    STOCK_INVENTORY_LOCATIONS.forEach(loc=>{
+      out[loc.id] = { map: {}, ts };
+      Object.entries(ingredients || {}).forEach(([id, def])=>{
+        out[loc.id].map[id] = {
+          qty: num(def[loc.stockField], 0),
+          moq: num(def[loc.moqField], 0),
+          unit: def.unit || '',
+          track_stock: def.track_stock !== false
+        };
+      });
+    });
+    return out;
+  }
+  function applyInventoryLocations(rawInventory, ingredients){
+    if(!rawInventory || typeof rawInventory !== 'object') return ingredients;
+    STOCK_INVENTORY_LOCATIONS.forEach(loc=>{
+      const rawLoc = rawInventory[loc.id] || rawInventory[loc.legacyKey];
+      const locMap = rawLoc && rawLoc.map ? rawLoc.map : rawLoc;
+      if(!locMap || typeof locMap !== 'object') return;
+      Object.entries(locMap).forEach(([ingredientId, inv])=>{
+        const id = normalizeId(ingredientId);
+        if(!id || !ingredients[id] || !inv || typeof inv !== 'object') return;
+        ingredients[id][loc.stockField] = num(inv.qty, num(ingredients[id][loc.stockField], 0));
+        ingredients[id][loc.moqField] = num(inv.moq, num(ingredients[id][loc.moqField], 0));
+      });
+    });
+    return syncAllIngredientStock(ingredients);
   }
   function addonRecipesFromRecipes(recipes){
     const out = {};
@@ -72,10 +127,12 @@
     remoteSaveTimer = setTimeout(()=>{
       const paths = stockPaths();
       const ts = Date.now();
+      const inventoryLocations = inventoryByLocationFromIngredients(INGREDIENTS, ts);
       Promise.all([
-        database.ref(paths.ingredients).set({ map: INGREDIENTS, ts }),
+        database.ref(paths.locations).set({ map: locationConfigMap(), ts }),
+        database.ref(paths.ingredients).set({ map: syncAllIngredientStock(INGREDIENTS), ts }),
         database.ref(paths.recipes).set({ map: RECIPES, ts }),
-        database.ref(paths.inventory).set({ map: inventoryFromIngredients(INGREDIENTS), ts }),
+        database.ref(paths.inventory).update(Object.assign({ map: inventoryFromIngredients(INGREDIENTS), ts }, inventoryLocations)),
         database.ref(paths.addons).set({ map: addonRecipesFromRecipes(RECIPES), ts }),
         database.ref(paths.transfers).set({ items: TRANSFERS.slice(-100), ts })
       ]).catch(e=>{
@@ -86,11 +143,11 @@
   function renderPosIfAvailable(){
     if(window.BK_UI && typeof BK_UI.renderAll === 'function' && document.getElementById('buttons')) BK_UI.renderAll();
   }
-  function applyRemoteStock(rawIngredients, rawRecipes, rawTransfers){
+  function applyRemoteStock(rawIngredients, rawRecipes, rawTransfers, rawInventory){
     const cleanIng = sanitizeIngredients(rawIngredients && rawIngredients.map ? rawIngredients.map : rawIngredients);
     const cleanRec = sanitizeRecipes(rawRecipes && rawRecipes.map ? rawRecipes.map : rawRecipes);
     const cleanTransfers = sanitizeTransfers(rawTransfers);
-    if(Object.keys(cleanIng).length) INGREDIENTS = cleanIng;
+    if(Object.keys(cleanIng).length) INGREDIENTS = applyInventoryLocations(rawInventory, cleanIng);
     if(Object.keys(cleanRec).length) RECIPES = cleanRec;
     if(cleanTransfers.length) TRANSFERS = cleanTransfers;
     persist();
@@ -105,8 +162,9 @@
     return Promise.all([
       database.ref(paths.ingredients).get(),
       database.ref(paths.recipes).get(),
-      database.ref(paths.transfers).get()
-    ]).then(([ingSnap, recSnap, transferSnap])=> applyRemoteStock(ingSnap.val(), recSnap.val(), transferSnap.val()))
+      database.ref(paths.transfers).get(),
+      database.ref(paths.inventory).get()
+    ]).then(([ingSnap, recSnap, transferSnap, inventorySnap])=> applyRemoteStock(ingSnap.val(), recSnap.val(), transferSnap.val(), inventorySnap.val()))
       .catch(e=>{
         console.warn('stock remote load failed:', e && e.message);
         return false;
@@ -138,7 +196,7 @@
   }
 
   function load(){
-    INGREDIENTS = clone(DEFAULTS.ingredients);
+    INGREDIENTS = sanitizeIngredients(clone(DEFAULTS.ingredients));
     RECIPES = clone(DEFAULTS.recipes);
     loadTransfers();
     try{
@@ -147,7 +205,7 @@
       const parsed = JSON.parse(raw);
       if(parsed && !parsed.ingredients && !parsed.recipes){
         const migrated = migrateLegacyIngredients(parsed);
-        if(Object.keys(migrated).length) INGREDIENTS = migrated;
+        if(Object.keys(migrated).length) INGREDIENTS = syncAllIngredientStock(migrated);
         persist();
         persistRemoteSoon();
         loadRemoteOnce();
@@ -155,7 +213,7 @@
       }
       const cleanIng = sanitizeIngredients(parsed && parsed.ingredients);
       const cleanRec = sanitizeRecipes(parsed && parsed.recipes);
-      if(Object.keys(cleanIng).length) INGREDIENTS = cleanIng;
+      if(Object.keys(cleanIng).length) INGREDIENTS = syncAllIngredientStock(cleanIng);
       if(Object.keys(cleanRec).length) RECIPES = cleanRec;
     }catch(e){ localStorage.removeItem(KEY); }
     loadRemoteOnce();
@@ -169,7 +227,7 @@
     }catch(e){ TRANSFERS = []; localStorage.removeItem(TRANSFERS_KEY); }
   }
   function persistTransfers(){ localStorage.setItem(TRANSFERS_KEY, JSON.stringify(TRANSFERS.slice(-100))); }
-  function reset(){ INGREDIENTS = clone(DEFAULTS.ingredients); RECIPES = clone(DEFAULTS.recipes); localStorage.removeItem(KEY); persistRemoteSoon(); }
+  function reset(){ INGREDIENTS = sanitizeIngredients(clone(DEFAULTS.ingredients)); RECIPES = clone(DEFAULTS.recipes); localStorage.removeItem(KEY); persistRemoteSoon(); }
 
   function getSnapshot(slots){
     const usage = {}; Object.keys(INGREDIENTS).forEach(k=>{ usage[k] = 0; });
@@ -330,7 +388,7 @@
     return `<section class="stock-transfer-panel">
       <div class="stock-transfer-copy">
         <h4>Transfer / Auffüllen</h4>
-        <p>Moves stock from BurgerKiss Store to BurgerKiss Block Factory and saves the change automatically.</p>
+        <p>Moves stock from BurgerKiss Store to BurgerKiss Block Factory and syncs both location inventory records.</p>
       </div>
       <div class="stock-transfer-form">
         <label>Article
@@ -356,6 +414,7 @@
     if(amount > storeQty) return { ok:false, message:`Not enough stock in BurgerKiss Store. Available: ${storeQty} ${def.unit || ''}.` };
     def.current_stock_storage = storeQty - amount;
     def.current_stock_foodtruck = num(def.current_stock_foodtruck, 0) + amount;
+    syncIngredientStock(def);
     const transfer = {
       id: `tr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       ts: Date.now(),
@@ -424,7 +483,7 @@
       ${showIngredients ? `<div class="stock-editor-intro">
         <div>
           <h4>Stock locations</h4>
-          <p>Phase 1 keeps the existing data fields, but presents them as real BurgerKiss locations.</p>
+          <p>Phase 3 keeps old fields compatible while syncing a location-based inventory for BurgerKiss Store and Block Factory.</p>
         </div>
         <div class="stock-tabs" aria-label="Stock location sections">
           <span>BurgerKiss Store</span>
@@ -468,7 +527,7 @@
     const recipeInputs = body.querySelectorAll('[data-recipe-input]');
     const recipeNext = recipeInputs.length ? {} : clone(RECIPES);
     recipeInputs.forEach(inp=>{ const pid = normalizeId(inp.dataset.productId); if(!pid) return; const parsed = parseRecipeText(inp.value); const filtered = {}; Object.entries(parsed).forEach(([iid, qty])=>{ if(ingNext[iid]) filtered[iid] = qty; }); recipeNext[pid] = filtered; });
-    INGREDIENTS = ingNext; RECIPES = recipeNext; persist(); persistRemoteSoon(); closeEditor(); return true;
+    INGREDIENTS = syncAllIngredientStock(ingNext); RECIPES = recipeNext; persist(); persistRemoteSoon(); closeEditor(); return true;
   }
 
   window.BK_STOCK = { KEY, TRANSFERS_KEY, load, loadRemoteOnce, reset, getSnapshot, openEditor, closeEditor, saveEditor, remoteEnabled, stockPaths };

@@ -35,6 +35,7 @@
       { label: 'Prices', path: pathFor('BK_PRICES_PATH', '/pos/catalog/prices') },
       { label: 'Stock Ingredients', path: pathFor('BK_STOCK_INGREDIENTS_PATH', '/pos/stock/ingredients') },
       { label: 'Stock Recipes', path: pathFor('BK_STOCK_RECIPES_PATH', '/pos/stock/recipes') },
+      { label: 'Stock Locations', path: pathFor('BK_STOCK_LOCATIONS_PATH', '/pos/stock/config/locations') },
       { label: 'Stock Inventory', path: pathFor('BK_STOCK_INVENTORY_PATH', '/pos/stock/inventory') },
       { label: 'Stock Add-ons', path: pathFor('BK_STOCK_ADDONS_PATH', '/pos/stock/addons') },
       { label: 'Stock Transfers', path: pathFor('BK_STOCK_TRANSFERS_PATH', '/pos/stock/transfers') },
