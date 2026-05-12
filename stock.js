@@ -1,5 +1,6 @@
 (function(){
   const KEY = 'bk_stock_v1';
+  const TRANSFERS_KEY = 'bk_stock_transfers_v1';
   const DEFAULTS = window.BK_STOCK_DATA.DEFAULTS;
   const {
     normalizeId,
@@ -13,6 +14,7 @@
   } = window.BK_STOCK_UTILS;
   let INGREDIENTS = {};
   let RECIPES = {};
+  let TRANSFERS = [];
   let remoteSaveTimer = null;
 
   function clone(x){ return JSON.parse(JSON.stringify(x)); }
@@ -24,7 +26,8 @@
       ingredients: (window.BK_STOCK_INGREDIENTS_PATH || '/pos/stock/ingredients').replace(/\/+$/,''),
       recipes: (window.BK_STOCK_RECIPES_PATH || '/pos/stock/recipes').replace(/\/+$/,''),
       inventory: (window.BK_STOCK_INVENTORY_PATH || '/pos/stock/inventory').replace(/\/+$/,''),
-      addons: (window.BK_STOCK_ADDONS_PATH || '/pos/stock/addons').replace(/\/+$/,'')
+      addons: (window.BK_STOCK_ADDONS_PATH || '/pos/stock/addons').replace(/\/+$/,''),
+      transfers: (window.BK_STOCK_TRANSFERS_PATH || '/pos/stock/transfers').replace(/\/+$/,'')
     };
   }
   function db(){
@@ -57,6 +60,11 @@
     });
     return out;
   }
+  function sanitizeTransfers(raw){
+    const src = raw && Array.isArray(raw.items) ? raw.items : raw;
+    if(!Array.isArray(src)) return [];
+    return src.filter(t=> t && typeof t === 'object' && t.ingredient_id && Number.isFinite(Number(t.qty))).slice(-100);
+  }
   function persistRemoteSoon(){
     const database = db();
     if(!database) return;
@@ -68,7 +76,8 @@
         database.ref(paths.ingredients).set({ map: INGREDIENTS, ts }),
         database.ref(paths.recipes).set({ map: RECIPES, ts }),
         database.ref(paths.inventory).set({ map: inventoryFromIngredients(INGREDIENTS), ts }),
-        database.ref(paths.addons).set({ map: addonRecipesFromRecipes(RECIPES), ts })
+        database.ref(paths.addons).set({ map: addonRecipesFromRecipes(RECIPES), ts }),
+        database.ref(paths.transfers).set({ items: TRANSFERS.slice(-100), ts })
       ]).catch(e=>{
         console.warn('stock remote save failed:', e && e.message);
       });
@@ -77,14 +86,17 @@
   function renderPosIfAvailable(){
     if(window.BK_UI && typeof BK_UI.renderAll === 'function' && document.getElementById('buttons')) BK_UI.renderAll();
   }
-  function applyRemoteStock(rawIngredients, rawRecipes){
+  function applyRemoteStock(rawIngredients, rawRecipes, rawTransfers){
     const cleanIng = sanitizeIngredients(rawIngredients && rawIngredients.map ? rawIngredients.map : rawIngredients);
     const cleanRec = sanitizeRecipes(rawRecipes && rawRecipes.map ? rawRecipes.map : rawRecipes);
+    const cleanTransfers = sanitizeTransfers(rawTransfers);
     if(Object.keys(cleanIng).length) INGREDIENTS = cleanIng;
     if(Object.keys(cleanRec).length) RECIPES = cleanRec;
+    if(cleanTransfers.length) TRANSFERS = cleanTransfers;
     persist();
+    persistTransfers();
     renderPosIfAvailable();
-    return !!(Object.keys(cleanIng).length || Object.keys(cleanRec).length);
+    return !!(Object.keys(cleanIng).length || Object.keys(cleanRec).length || cleanTransfers.length);
   }
   function loadRemoteOnce(){
     const database = db();
@@ -92,8 +104,9 @@
     const paths = stockPaths();
     return Promise.all([
       database.ref(paths.ingredients).get(),
-      database.ref(paths.recipes).get()
-    ]).then(([ingSnap, recSnap])=> applyRemoteStock(ingSnap.val(), recSnap.val()))
+      database.ref(paths.recipes).get(),
+      database.ref(paths.transfers).get()
+    ]).then(([ingSnap, recSnap, transferSnap])=> applyRemoteStock(ingSnap.val(), recSnap.val(), transferSnap.val()))
       .catch(e=>{
         console.warn('stock remote load failed:', e && e.message);
         return false;
@@ -127,6 +140,7 @@
   function load(){
     INGREDIENTS = clone(DEFAULTS.ingredients);
     RECIPES = clone(DEFAULTS.recipes);
+    loadTransfers();
     try{
       const raw = localStorage.getItem(KEY);
       if(!raw){ loadRemoteOnce(); return; }
@@ -148,6 +162,13 @@
   }
 
   function persist(){ localStorage.setItem(KEY, JSON.stringify({ ingredients: INGREDIENTS, recipes: RECIPES })); }
+  function loadTransfers(){
+    try{
+      const parsed = JSON.parse(localStorage.getItem(TRANSFERS_KEY) || '[]');
+      TRANSFERS = Array.isArray(parsed) ? parsed.filter(t=> t && typeof t === 'object').slice(-100) : [];
+    }catch(e){ TRANSFERS = []; localStorage.removeItem(TRANSFERS_KEY); }
+  }
+  function persistTransfers(){ localStorage.setItem(TRANSFERS_KEY, JSON.stringify(TRANSFERS.slice(-100))); }
   function reset(){ INGREDIENTS = clone(DEFAULTS.ingredients); RECIPES = clone(DEFAULTS.recipes); localStorage.removeItem(KEY); persistRemoteSoon(); }
 
   function getSnapshot(slots){
@@ -262,6 +283,125 @@
   }
   function bindIngredientActions(body){ body.querySelectorAll('[data-remove]').forEach(btn=>{ btn.onclick = ()=>{ const row = btn.closest('[data-ing-row]'); if(row) row.remove(); }; }); }
 
+
+  function readIngredientsFromEditor(body){
+    if(!body || !body.querySelector('[data-ing-row]')) return null;
+    const ingNext = {};
+    body.querySelectorAll('[data-ing-row]').forEach(row=>{
+      const id = normalizeId(row.querySelector('[data-field="id"]').value);
+      if(!id) return;
+      const clean = sanitizeIngredient({
+        name: row.querySelector('[data-field="name"]').value,
+        category: row.querySelector('[data-field="category"]').value,
+        unit: row.querySelector('[data-field="unit"]').value,
+        stock_location: row.querySelector('[data-field="stock_location"]').value,
+        current_stock_storage: row.querySelector('[data-field="current_stock_storage"]').value,
+        current_stock_foodtruck: row.querySelector('[data-field="current_stock_foodtruck"]').value,
+        moq_storage: row.querySelector('[data-field="moq_storage"]').value,
+        moq_foodtruck: row.querySelector('[data-field="moq_foodtruck"]').value,
+        track_stock: row.querySelector('[data-field="track_stock"]').checked
+      }, id);
+      if(clean) ingNext[id] = clean;
+    });
+    return Object.keys(ingNext).length ? ingNext : null;
+  }
+
+  function transferRowHtml(t){
+    const when = t && t.ts ? new Date(t.ts).toLocaleString() : '';
+    return `<div class="stock-transfer-row">
+      <span><b>${t.ingredient_name || t.ingredient_id}</b> <small>${when}</small></span>
+      <span>${t.qty} ${t.unit || ''} · BurgerKiss Store → BurgerKiss Block Factory</span>
+    </div>`;
+  }
+
+  function renderTransferHistory(){
+    const list = document.getElementById('stockTransferHistory');
+    if(!list) return;
+    const recent = TRANSFERS.slice(-5).reverse();
+    list.innerHTML = recent.length
+      ? recent.map(transferRowHtml).join('')
+      : '<div class="empty-state">No transfers yet.</div>';
+  }
+
+  function transferPanelHtml(){
+    const options = Object.entries(INGREDIENTS).map(([id, def])=>
+      `<option value="${id}">${def.name || id} (${num(def.current_stock_storage,0)} ${def.unit || ''} in Store)</option>`
+    ).join('');
+    return `<section class="stock-transfer-panel">
+      <div class="stock-transfer-copy">
+        <h4>Transfer / Auffüllen</h4>
+        <p>Moves stock from BurgerKiss Store to BurgerKiss Block Factory and saves the change automatically.</p>
+      </div>
+      <div class="stock-transfer-form">
+        <label>Article
+          <select id="stockTransferIngredient">${options}</select>
+        </label>
+        <label>Quantity
+          <input id="stockTransferQty" type="number" min="0" step="1" placeholder="0">
+        </label>
+        <button class="x" id="stockTransferBtn" type="button">Transfer stock</button>
+      </div>
+      <div class="stock-transfer-note" id="stockTransferNote">From: BurgerKiss Store · To: BurgerKiss Block Factory</div>
+      <div class="stock-transfer-history" id="stockTransferHistory"></div>
+    </section>`;
+  }
+
+  function applyTransfer(ingredientId, qty){
+    const id = normalizeId(ingredientId);
+    const amount = Number(qty);
+    const def = INGREDIENTS[id];
+    if(!def) return { ok:false, message:'Choose a valid ingredient.' };
+    if(!Number.isFinite(amount) || amount <= 0) return { ok:false, message:'Enter a transfer quantity greater than 0.' };
+    const storeQty = num(def.current_stock_storage, 0);
+    if(amount > storeQty) return { ok:false, message:`Not enough stock in BurgerKiss Store. Available: ${storeQty} ${def.unit || ''}.` };
+    def.current_stock_storage = storeQty - amount;
+    def.current_stock_foodtruck = num(def.current_stock_foodtruck, 0) + amount;
+    const transfer = {
+      id: `tr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      ts: Date.now(),
+      ingredient_id: id,
+      ingredient_name: def.name || id,
+      from: 'storage',
+      to: 'foodtruck',
+      qty: amount,
+      unit: def.unit || ''
+    };
+    TRANSFERS.push(transfer);
+    TRANSFERS = TRANSFERS.slice(-100);
+    persist();
+    persistTransfers();
+    persistRemoteSoon();
+    renderPosIfAvailable();
+    return { ok:true, message:`Transferred ${amount} ${def.unit || ''} ${def.name || id} to BurgerKiss Block Factory.` };
+  }
+
+  function bindTransferActions(body){
+    const btn = document.getElementById('stockTransferBtn');
+    if(!btn) return;
+    renderTransferHistory();
+    btn.onclick = ()=>{
+      const latestIngredients = readIngredientsFromEditor(body);
+      if(latestIngredients) INGREDIENTS = latestIngredients;
+      const select = document.getElementById('stockTransferIngredient');
+      const qtyInput = document.getElementById('stockTransferQty');
+      const note = document.getElementById('stockTransferNote');
+      const result = applyTransfer(select && select.value, qtyInput && qtyInput.value);
+      if(note){
+        note.textContent = result.message;
+        note.className = `stock-transfer-note ${result.ok ? 'ok' : 'error'}`;
+      }
+      if(!result.ok) return;
+      const row = Array.from(body.querySelectorAll('[data-ing-row]')).find(el=> normalizeId(el.querySelector('[data-field="id"]').value) === normalizeId(select.value));
+      const def = INGREDIENTS[normalizeId(select.value)];
+      if(row && def){
+        row.querySelector('[data-field="current_stock_storage"]').value = num(def.current_stock_storage, 0);
+        row.querySelector('[data-field="current_stock_foodtruck"]').value = num(def.current_stock_foodtruck, 0);
+      }
+      if(qtyInput) qtyInput.value = '';
+      renderTransferHistory();
+    };
+  }
+
   function openEditor(mode){
     const body = document.getElementById('stockBody'); if(!body) return;
     const titleEl = document.getElementById('stockModalTitle');
@@ -298,6 +438,7 @@
         </div>
         <button class="x" id="sAddIngredient">+ Ingredient</button>
       </div>
+      ${transferPanelHtml()}
       <div id="stockIngredients" class="stock-ingredients-list"></div>` : ''}
       ${(showIngredients && showRecipes) ? '<hr style="border:0;border-top:1px solid #2a2f39;margin:16px 0">' : ''}
       ${showRecipes ? `<h4 style="margin:4px 0 8px">${mode === 'addons' ? 'Add-on Recipes' : 'Product Recipes'}</h4><div style="font-size:12px;color:#9aa3ad;margin-bottom:8px">Format: ingredient_id:qty, ingredient_id2:qty</div><div id="stockRecipes"></div>` : ''}
@@ -306,6 +447,7 @@
       const ingWrap = document.getElementById('stockIngredients');
       ingWrap.innerHTML = Object.entries(INGREDIENTS).map(([id, def])=> ingredientRowHtml(id, def)).join('');
       bindIngredientActions(ingWrap);
+      bindTransferActions(body);
       document.getElementById('sAddIngredient').onclick = ()=>{ ingWrap.insertAdjacentHTML('beforeend', ingredientRowHtml('', {name:'', category:'general', unit:'', track_stock:true, stock_location:'both', current_stock_storage:0, current_stock_foodtruck:0, moq_storage:0, moq_foodtruck:0})); bindIngredientActions(ingWrap); };
     }
     if(showRecipes){
@@ -321,28 +463,13 @@
 
   function saveEditor(){
     const body = document.getElementById('stockBody'); if(!body) return false;
-    const ingNext = {};
-    body.querySelectorAll('[data-ing-row]').forEach(row=>{
-      const id = normalizeId(row.querySelector('[data-field="id"]').value);
-      if(!id) return;
-      const clean = sanitizeIngredient({
-        name: row.querySelector('[data-field="name"]').value,
-        category: row.querySelector('[data-field="category"]').value,
-        unit: row.querySelector('[data-field="unit"]').value,
-        stock_location: row.querySelector('[data-field="stock_location"]').value,
-        current_stock_storage: row.querySelector('[data-field="current_stock_storage"]').value,
-        current_stock_foodtruck: row.querySelector('[data-field="current_stock_foodtruck"]').value,
-        moq_storage: row.querySelector('[data-field="moq_storage"]').value,
-        moq_foodtruck: row.querySelector('[data-field="moq_foodtruck"]').value,
-        track_stock: row.querySelector('[data-field="track_stock"]').checked
-      }, id);
-      if(clean) ingNext[id] = clean;
-    });
+    const ingNext = readIngredientsFromEditor(body) || clone(INGREDIENTS);
     if(!Object.keys(ingNext).length) return false;
-    const recipeNext = {};
-    body.querySelectorAll('[data-recipe-input]').forEach(inp=>{ const pid = normalizeId(inp.dataset.productId); if(!pid) return; const parsed = parseRecipeText(inp.value); const filtered = {}; Object.entries(parsed).forEach(([iid, qty])=>{ if(ingNext[iid]) filtered[iid] = qty; }); recipeNext[pid] = filtered; });
+    const recipeInputs = body.querySelectorAll('[data-recipe-input]');
+    const recipeNext = recipeInputs.length ? {} : clone(RECIPES);
+    recipeInputs.forEach(inp=>{ const pid = normalizeId(inp.dataset.productId); if(!pid) return; const parsed = parseRecipeText(inp.value); const filtered = {}; Object.entries(parsed).forEach(([iid, qty])=>{ if(ingNext[iid]) filtered[iid] = qty; }); recipeNext[pid] = filtered; });
     INGREDIENTS = ingNext; RECIPES = recipeNext; persist(); persistRemoteSoon(); closeEditor(); return true;
   }
 
-  window.BK_STOCK = { KEY, load, loadRemoteOnce, reset, getSnapshot, openEditor, closeEditor, saveEditor, remoteEnabled, stockPaths };
+  window.BK_STOCK = { KEY, TRANSFERS_KEY, load, loadRemoteOnce, reset, getSnapshot, openEditor, closeEditor, saveEditor, remoteEnabled, stockPaths };
 })();
