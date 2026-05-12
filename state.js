@@ -208,6 +208,15 @@
     slots[i].items[j].done = !!v;
     save();
   }
+  function setDoneForKey(key, v){
+    const s = slots[active]; if(!s || s.issued) return;
+    const [id, note=''] = parseItemKey(key);
+    let changed = false;
+    s.items.forEach(it=>{
+      if(it.itemId===id && (it.note||'')===note){ it.done = !!v; changed = true; }
+    });
+    if(changed) save();
+  }
 
   function setDiscount(r){ discountRate = normalizeDiscount(r); save(); }
 
@@ -225,7 +234,7 @@
     load, save, clearAll, clearStorage,
     addSlot, renameActive, deleteActive, setActive,
     setActiveName,
-    addItem, addItemForKey, undo, decItemForKey, removeItemForKey, setPay, setIssued, toggleDone,
+    addItem, addItemForKey, undo, decItemForKey, removeItemForKey, setPay, setIssued, toggleDone, setDoneForKey,
     setDiscount,
     getState, setState, nextOrderNo
   };

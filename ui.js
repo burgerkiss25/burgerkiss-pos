@@ -512,6 +512,79 @@
     return groups.concat(standalone.map(line=>Object.assign({}, line, { children: [] })));
   }
 
+  function groupedEntryTotal(entry){
+    return entry.total + (entry.children || []).reduce((sum, child)=> sum + child.total, 0);
+  }
+
+  function groupedEntryDone(slot, entry){
+    const keys = [entry.key, ...(entry.children || []).map(child=>child.key)];
+    return keys.every(key=>{
+      const [id, note=''] = BK_LOGIC.parseItemKey(key);
+      return slot.items
+        .filter(it=> it.itemId===id && (it.note||'')===note)
+        .every(it=>!!it.done);
+    });
+  }
+
+  function setGroupedEntryDone(entry, done){
+    BK_STATE.setDoneForKey(entry.key, done);
+    (entry.children || []).forEach(child=> BK_STATE.setDoneForKey(child.key, done));
+  }
+
+  function groupedEntryText(entry){
+    const parent = `${entry.qty}x ${entry.name}${entry.note ? ` (${entry.note})` : ''}`;
+    const children = (entry.children || []).map(child=>`↳ ${child.qty}x ${child.name}${child.note ? ` (${child.note})` : ''}`);
+    return [parent, ...children].join(' · ');
+  }
+
+  function appendGroupedEntry(host, slot, entry, slotIndex, opts){
+    const settings = opts || {};
+    const row = document.createElement('div');
+    row.className = settings.compact ? 'grouped-meal compact' : 'grouped-meal';
+
+    const header = document.createElement('div');
+    header.className = 'grouped-meal-head';
+    if(settings.checkbox){
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = groupedEntryDone(slot, entry);
+      cb.disabled = !!slot.issued;
+      cb.onchange = ()=>{
+        if(settings.onToggle) settings.onToggle(entry, cb.checked);
+        else setGroupedEntryDone(entry, cb.checked);
+      };
+      header.appendChild(cb);
+    }
+
+    const titleWrap = document.createElement('span');
+    titleWrap.className = 'grouped-meal-title';
+    const title = document.createElement('b');
+    title.textContent = `${entry.qty}x ${entry.name}`;
+    titleWrap.appendChild(title);
+    if(entry.note){
+      const note = document.createElement('small');
+      note.textContent = entry.note;
+      titleWrap.appendChild(note);
+    }
+    header.appendChild(titleWrap);
+
+    const price = document.createElement('span');
+    price.className = 'grouped-meal-price';
+    price.textContent = `${groupedEntryTotal(entry)} GHS`;
+    header.appendChild(price);
+    row.appendChild(header);
+
+    (entry.children || []).forEach(child=>{
+      const childLine = document.createElement('div');
+      childLine.className = 'grouped-meal-child';
+      childLine.textContent = `↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''} · ${child.total} GHS`;
+      row.appendChild(childLine);
+    });
+
+    host.appendChild(row);
+    return row;
+  }
+
   function renderOrder(){
     const {slots, active} = BK_STATE.getState();
     const lines = document.getElementById('lines'); lines.innerHTML='';
@@ -619,17 +692,19 @@
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS · Combos: ${c.combos} · In kitchen: ${formatAge(s.createdAt)}</div>
           <div><button onclick="BK_STATE.setActive(${i}); BK_UI.renderOrder(); BK_UI.refreshTotals();">Focus</button></div>
         </div>
-        <div class="todo" id="todo-${i}"></div>`;
+        <div class="todo grouped-todo" id="todo-${i}"></div>`;
       box.appendChild(card);
       const list = card.querySelector(`#todo-${i}`);
-      s.items.forEach((it,idx)=>{
-        const p = BK_DATA.BASE.find(x=>x.id===it.itemId);
-        const li = document.createElement('div'); li.className='li';
-        li.innerHTML = `
-          <input type="checkbox" ${it.done?'checked':''} ${s.issued ? 'disabled' : ''} onchange="BK_STATE.toggleDone(${i},${idx},this.checked); BK_UI.renderIssue();">
-          <span>${p ? p.name : it.itemId}${it.note?` · <small>${it.note}</small>`:''}</span>
-          <span style="margin-left:auto">${BK_PRICES.getPrice((p&&p.id)||it.itemId)} GHS</span>`;
-        list.appendChild(li);
+      groupedCartRows(s.items).forEach(entry=>{
+        appendGroupedEntry(list, s, entry, i, {
+          checkbox: true,
+          onToggle: (picked, done)=>{
+            BK_STATE.setActive(i);
+            setGroupedEntryDone(picked, done);
+            renderMake();
+            renderIssue();
+          }
+        });
       });
     });
     ensureFlowActions('makeList', [
@@ -686,7 +761,6 @@
       const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
       const canIssue = s.pay !== 'unpaid' && allDone;
       const card = document.createElement('div'); card.className='slot-card';
-      const checkItems = BK_LOGIC.groupedLines(s.items).map(x=>`${x.qty}x ${x.name}${x.note ? ` (${x.note})` : ''}`).join(' · ');
       card.innerHTML = `
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
@@ -696,10 +770,19 @@
           </div>
         </div>`;
       const checklist = document.createElement('div');
-      checklist.className = 'row';
-      checklist.style.borderTop = '1px dashed #2a2f39';
-      checklist.style.padding = '8px 0';
-      checklist.innerHTML = `<span><small>Final check:</small> ${checkItems || 'No items'}</span>`;
+      checklist.className = 'issue-checklist';
+      const label = document.createElement('small');
+      label.textContent = 'Final check:';
+      checklist.appendChild(label);
+      const grouped = groupedCartRows(s.items);
+      if(grouped.length){
+        grouped.forEach(entry=> appendGroupedEntry(checklist, s, entry, i, { compact:true }));
+      }else{
+        const emptyLine = document.createElement('div');
+        emptyLine.className = 'empty-state';
+        emptyLine.textContent = 'No items';
+        checklist.appendChild(emptyLine);
+      }
       card.appendChild(checklist);
       box.appendChild(card);
     });
@@ -709,6 +792,7 @@
       { label:'🆕 Start Next Order', onClick:()=> startNextOrder() }
     ]);
   }
+
 
   function goTab(name){
     const valid = new Set(['order','make','pay','issue']);
@@ -764,12 +848,13 @@
       host.appendChild(row);
     }
     row.innerHTML = '';
-    (actions || []).forEach(({label, onClick, disabled})=>{
+    (actions || []).forEach(action=>{
       const btn = document.createElement('button');
+      btn.type = 'button';
       btn.className = 'x';
-      btn.textContent = label;
-      btn.disabled = !!disabled;
-      btn.onclick = onClick;
+      btn.textContent = action.label;
+      btn.disabled = !!action.disabled;
+      btn.onclick = action.onClick;
       row.appendChild(btn);
     });
   }
@@ -989,9 +1074,13 @@
     const st = BK_STATE.getState();
     const slot = st.slots[i];
     if(!slot) return;
-    const lines = BK_LOGIC.groupedLines(slot.items || []);
+    const lines = groupedCartRows(slot.items || []);
     const checkHtml = lines.length
-      ? lines.map(x=>`<div>${x.qty}x <b>${x.name}</b>${x.note ? ` <small>(${x.note})</small>` : ''}</div>`).join('')
+      ? lines.map(entry=>`
+        <div class="grouped-meal compact">
+          <div class="grouped-meal-head"><span class="grouped-meal-title"><b>${entry.qty}x ${entry.name}</b>${entry.note ? `<small>${entry.note}</small>` : ''}</span></div>
+          ${(entry.children || []).map(child=>`<div class="grouped-meal-child">↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''}</div>`).join('')}
+        </div>`).join('')
       : '<div>No items in this order.</div>';
     confirmDialog(
       `Final handover check – ${slot.orderNo || slot.name}`,
