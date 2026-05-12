@@ -1,5 +1,11 @@
 (function(){
   const STOCK_LOCATIONS = ['storage', 'foodtruck', 'both'];
+  const STOCK_LOCATION_LABELS = {
+    storage: 'BurgerKiss Store',
+    foodtruck: 'BurgerKiss Block Factory',
+    both: 'BurgerKiss Store + BurgerKiss Block Factory'
+  };
+  function locationLabel(v){ return STOCK_LOCATION_LABELS[v] || v || ''; }
   function normalizeId(v){ return String(v || '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_\-]/g, ''); }
   function num(v, fallback){ const n = Number(v); return Number.isFinite(n) && n >= 0 ? n : fallback; }
   function sanitizeIngredient(v, id){
@@ -33,5 +39,5 @@
     return out;
   }
   function recipeToText(recipe){ return Object.entries(recipe || {}).map(([id, qty])=> `${id}:${qty}`).join(', '); }
-  window.BK_STOCK_UTILS = { STOCK_LOCATIONS, normalizeId, num, sanitizeIngredient, sanitizeIngredients, sanitizeRecipes, parseRecipeText, recipeToText };
+  window.BK_STOCK_UTILS = { STOCK_LOCATIONS, STOCK_LOCATION_LABELS, locationLabel, normalizeId, num, sanitizeIngredient, sanitizeIngredients, sanitizeRecipes, parseRecipeText, recipeToText };
 })();

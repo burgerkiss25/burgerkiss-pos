@@ -1214,18 +1214,18 @@
     const {slots} = BK_STATE.getState();
     const rows = BK_STOCK.getSnapshot(slots);
 
-    host.innerHTML = '<div class="slot-head"><div><span class="label">Stock</span> · truck first, then storage</div></div>';
+    host.innerHTML = '<div class="slot-head"><div><span class="label">Stock</span> · BurgerKiss Block Factory first, then BurgerKiss Store</div></div>';
     rows.forEach(r=>{
       if(r.track === false) return;
       const row = document.createElement('div');
       row.className = 'row';
       const alerts = [
-        r.refillNeeded ? 'REFILL FROM STORAGE' : '',
-        r.buyNeeded ? 'BUY / ORDER' : ''
+        r.refillNeeded ? 'REFILL FROM BURGERKISS STORE' : '',
+        r.buyNeeded ? 'BUY / ORDER FOR STORE' : ''
       ].filter(Boolean).join(' · ');
       row.innerHTML = `
         <span class="left"><b>${r.name}</b> <small>used ${r.used} ${r.unit || ''}</small></span>
-        <span style="${alerts ? 'color:#ffb347' : ''}">truck ${r.leftTruck} · storage ${r.leftStorage} ${r.unit || ''}${alerts ? ` · ${alerts}` : ''}</span>
+        <span style="${alerts ? 'color:#ffb347' : ''}">Block Factory ${r.leftTruck} · Store ${r.leftStorage} ${r.unit || ''}${alerts ? ` · ${alerts}` : ''}</span>
       `;
       host.appendChild(row);
     });
