@@ -1,6 +1,7 @@
 (function(){
   const KEY = 'bk_stock_v1';
   const TRANSFERS_KEY = 'bk_stock_transfers_v1';
+  const MOVEMENTS_KEY = 'bk_stock_movements_v1';
   const DEFAULTS = window.BK_STOCK_DATA.DEFAULTS;
   const {
     normalizeId,
@@ -16,6 +17,7 @@
   let INGREDIENTS = {};
   let RECIPES = {};
   let TRANSFERS = [];
+  let MOVEMENTS = [];
   let remoteSaveTimer = null;
 
   function clone(x){ return JSON.parse(JSON.stringify(x)); }
@@ -29,6 +31,7 @@
       inventory: (window.BK_STOCK_INVENTORY_PATH || '/pos/stock/inventory').replace(/\/+$/,''),
       addons: (window.BK_STOCK_ADDONS_PATH || '/pos/stock/addons').replace(/\/+$/,''),
       transfers: (window.BK_STOCK_TRANSFERS_PATH || '/pos/stock/transfers').replace(/\/+$/,''),
+      movements: (window.BK_STOCK_MOVEMENTS_PATH || '/pos/stock/movements').replace(/\/+$/,''),
       locations: (window.BK_STOCK_LOCATIONS_PATH || '/pos/stock/config/locations').replace(/\/+$/,'')
     };
   }
@@ -120,6 +123,16 @@
     if(!Array.isArray(src)) return [];
     return src.filter(t=> t && typeof t === 'object' && t.ingredient_id && Number.isFinite(Number(t.qty))).slice(-100);
   }
+  function sanitizeMovements(raw){
+    const src = raw && Array.isArray(raw.items) ? raw.items : raw;
+    if(!Array.isArray(src)) return [];
+    return src.filter(m=> m && typeof m === 'object' && m.ingredient_id && Number.isFinite(Number(m.qty))).slice(-200);
+  }
+  function usageForSlots(slots){
+    const usage = {}; Object.keys(INGREDIENTS).forEach(k=>{ usage[k] = 0; });
+    (slots || []).forEach(s=>{ (s.items || []).forEach(it=>{ const rec = RECIPES[it.itemId] || {}; Object.entries(rec).forEach(([id, qty])=>{ const n = Number(qty); if(Number.isFinite(n) && n > 0) usage[id] = (usage[id] || 0) + n; }); }); });
+    return usage;
+  }
   function persistRemoteSoon(){
     const database = db();
     if(!database) return;
@@ -134,7 +147,8 @@
         database.ref(paths.recipes).set({ map: RECIPES, ts }),
         database.ref(paths.inventory).update(Object.assign({ map: inventoryFromIngredients(INGREDIENTS), ts }, inventoryLocations)),
         database.ref(paths.addons).set({ map: addonRecipesFromRecipes(RECIPES), ts }),
-        database.ref(paths.transfers).set({ items: TRANSFERS.slice(-100), ts })
+        database.ref(paths.transfers).set({ items: TRANSFERS.slice(-100), ts }),
+        database.ref(paths.movements).set({ items: MOVEMENTS.slice(-200), ts })
       ]).catch(e=>{
         console.warn('stock remote save failed:', e && e.message);
       });
@@ -143,17 +157,20 @@
   function renderPosIfAvailable(){
     if(window.BK_UI && typeof BK_UI.renderAll === 'function' && document.getElementById('buttons')) BK_UI.renderAll();
   }
-  function applyRemoteStock(rawIngredients, rawRecipes, rawTransfers, rawInventory){
+  function applyRemoteStock(rawIngredients, rawRecipes, rawTransfers, rawInventory, rawMovements){
     const cleanIng = sanitizeIngredients(rawIngredients && rawIngredients.map ? rawIngredients.map : rawIngredients);
     const cleanRec = sanitizeRecipes(rawRecipes && rawRecipes.map ? rawRecipes.map : rawRecipes);
     const cleanTransfers = sanitizeTransfers(rawTransfers);
+    const cleanMovements = sanitizeMovements(rawMovements);
     if(Object.keys(cleanIng).length) INGREDIENTS = applyInventoryLocations(rawInventory, cleanIng);
     if(Object.keys(cleanRec).length) RECIPES = cleanRec;
     if(cleanTransfers.length) TRANSFERS = cleanTransfers;
+    if(cleanMovements.length) MOVEMENTS = cleanMovements;
     persist();
     persistTransfers();
+    persistMovements();
     renderPosIfAvailable();
-    return !!(Object.keys(cleanIng).length || Object.keys(cleanRec).length || cleanTransfers.length);
+    return !!(Object.keys(cleanIng).length || Object.keys(cleanRec).length || cleanTransfers.length || cleanMovements.length);
   }
   function loadRemoteOnce(){
     const database = db();
@@ -163,8 +180,9 @@
       database.ref(paths.ingredients).get(),
       database.ref(paths.recipes).get(),
       database.ref(paths.transfers).get(),
-      database.ref(paths.inventory).get()
-    ]).then(([ingSnap, recSnap, transferSnap, inventorySnap])=> applyRemoteStock(ingSnap.val(), recSnap.val(), transferSnap.val(), inventorySnap.val()))
+      database.ref(paths.inventory).get(),
+      database.ref(paths.movements).get()
+    ]).then(([ingSnap, recSnap, transferSnap, inventorySnap, movementSnap])=> applyRemoteStock(ingSnap.val(), recSnap.val(), transferSnap.val(), inventorySnap.val(), movementSnap.val()))
       .catch(e=>{
         console.warn('stock remote load failed:', e && e.message);
         return false;
@@ -199,6 +217,7 @@
     INGREDIENTS = sanitizeIngredients(clone(DEFAULTS.ingredients));
     RECIPES = clone(DEFAULTS.recipes);
     loadTransfers();
+    loadMovements();
     try{
       const raw = localStorage.getItem(KEY);
       if(!raw){ loadRemoteOnce(); return; }
@@ -227,24 +246,69 @@
     }catch(e){ TRANSFERS = []; localStorage.removeItem(TRANSFERS_KEY); }
   }
   function persistTransfers(){ localStorage.setItem(TRANSFERS_KEY, JSON.stringify(TRANSFERS.slice(-100))); }
+  function loadMovements(){
+    try{
+      const parsed = JSON.parse(localStorage.getItem(MOVEMENTS_KEY) || '[]');
+      MOVEMENTS = sanitizeMovements(parsed);
+    }catch(e){ MOVEMENTS = []; localStorage.removeItem(MOVEMENTS_KEY); }
+  }
+  function persistMovements(){ localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(MOVEMENTS.slice(-200))); }
   function reset(){ INGREDIENTS = sanitizeIngredients(clone(DEFAULTS.ingredients)); RECIPES = clone(DEFAULTS.recipes); localStorage.removeItem(KEY); persistRemoteSoon(); }
 
   function getSnapshot(slots){
-    const usage = {}; Object.keys(INGREDIENTS).forEach(k=>{ usage[k] = 0; });
-    (slots || []).forEach(s=>{ (s.items || []).forEach(it=>{ const rec = RECIPES[it.itemId] || {}; Object.entries(rec).forEach(([id, qty])=>{ const n = Number(qty); if(Number.isFinite(n) && n > 0) usage[id] = (usage[id] || 0) + n; }); }); });
+    const usage = usageForSlots(slots);
     return Object.entries(INGREDIENTS).map(([id, def])=>{
       const used = usage[id] || 0;
       const storageStart = Number(def.current_stock_storage) || 0;
       const truckStart = Number(def.current_stock_foodtruck) || 0;
-      const fromTruck = Math.min(truckStart, used);
-      const remainingNeed = Math.max(0, used - fromTruck);
-      const fromStorage = Math.min(storageStart, remainingNeed);
-      const leftTruck = Math.max(0, truckStart - fromTruck);
-      const leftStorage = Math.max(0, storageStart - fromStorage);
-      const refillNeeded = def.track_stock && leftTruck <= (Number(def.moq_foodtruck) || 0);
+      const leftTruck = Math.max(0, truckStart - used);
+      const shortage = Math.max(0, used - truckStart);
+      const leftStorage = storageStart;
+      const refillNeeded = def.track_stock && (shortage > 0 || leftTruck <= (Number(def.moq_foodtruck) || 0));
       const buyNeeded = def.track_stock && leftStorage <= (Number(def.moq_storage) || 0);
-      return { id, name: def.name, unit: def.unit || '', used, leftTruck, leftStorage, refillNeeded, buyNeeded, track: def.track_stock };
+      return { id, name: def.name, unit: def.unit || '', used, leftTruck, leftStorage, shortage, refillNeeded, buyNeeded, track: def.track_stock };
     });
+  }
+
+  function consumeSlot(slot){
+    if(!slot || !Array.isArray(slot.items) || !slot.items.length) return { ok:false, message:'No order items to consume.' };
+    const usage = usageForSlots([slot]);
+    const orderNo = slot.orderNo || slot.name || 'order';
+    const ts = Date.now();
+    const movements = [];
+    Object.entries(usage).forEach(([id, qty])=>{
+      const amount = Number(qty);
+      const def = INGREDIENTS[id];
+      if(!def || !Number.isFinite(amount) || amount <= 0 || def.track_stock === false) return;
+      const before = num(def.current_stock_foodtruck, 0);
+      const consumed = Math.min(before, amount);
+      const shortage = Math.max(0, amount - before);
+      def.current_stock_foodtruck = Math.max(0, before - amount);
+      syncIngredientStock(def);
+      movements.push({
+        id: `mv_${ts}_${Math.random().toString(36).slice(2, 8)}`,
+        ts,
+        type: 'sale_consumption',
+        location: 'block_factory',
+        ingredient_id: id,
+        ingredient_name: def.name || id,
+        qty: amount,
+        consumed,
+        shortage,
+        before,
+        after: def.current_stock_foodtruck,
+        unit: def.unit || '',
+        order_no: orderNo
+      });
+    });
+    if(!movements.length) return { ok:true, message:'No tracked ingredients to consume.' };
+    MOVEMENTS = MOVEMENTS.concat(movements).slice(-200);
+    persist();
+    persistMovements();
+    persistRemoteSoon();
+    renderPosIfAvailable();
+    const shortageCount = movements.filter(m=>m.shortage > 0).length;
+    return { ok:true, movements, shortageCount, message: shortageCount ? `Stock consumed from BurgerKiss Block Factory with ${shortageCount} shortage warning(s).` : 'Stock consumed from BurgerKiss Block Factory.' };
   }
 
   function ingredientRowHtml(id, def){
@@ -530,5 +594,5 @@
     INGREDIENTS = syncAllIngredientStock(ingNext); RECIPES = recipeNext; persist(); persistRemoteSoon(); closeEditor(); return true;
   }
 
-  window.BK_STOCK = { KEY, TRANSFERS_KEY, load, loadRemoteOnce, reset, getSnapshot, openEditor, closeEditor, saveEditor, remoteEnabled, stockPaths };
+  window.BK_STOCK = { KEY, TRANSFERS_KEY, MOVEMENTS_KEY, load, loadRemoteOnce, reset, getSnapshot, consumeSlot, openEditor, closeEditor, saveEditor, remoteEnabled, stockPaths };
 })();

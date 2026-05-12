@@ -1087,10 +1087,17 @@
       `<div style="margin-bottom:8px">Please confirm all items are packed correctly before issuing to customer.</div>${checkHtml}`
     ).then(ok=>{
       if(!ok) return;
+      const latestSlot = BK_STATE.getState().slots[i];
+      if(!latestSlot || latestSlot.issued) return;
+      const stockResult = window.BK_STOCK && typeof BK_STOCK.consumeSlot === 'function'
+        ? BK_STOCK.consumeSlot(latestSlot)
+        : null;
       BK_STATE.setIssued(i, true);
-      pushHistory(slotSnapshot({...slot, issued:true}));
+      pushHistory(slotSnapshot({...latestSlot, issued:true}));
       renderIssue();
-      infoDialog('Order marked as issued.');
+      renderStock();
+      const suffix = stockResult && stockResult.message ? ` ${stockResult.message}` : '';
+      infoDialog(`Order marked as issued.${suffix}`);
     });
   }
 
@@ -1214,12 +1221,13 @@
     const {slots} = BK_STATE.getState();
     const rows = BK_STOCK.getSnapshot(slots);
 
-    host.innerHTML = '<div class="slot-head"><div><span class="label">Stock</span> · BurgerKiss Block Factory first, then BurgerKiss Store</div></div>';
+    host.innerHTML = '<div class="slot-head"><div><span class="label">Stock</span> · Sales consume BurgerKiss Block Factory only; Store stays for refill transfers</div></div>';
     rows.forEach(r=>{
       if(r.track === false) return;
       const row = document.createElement('div');
       row.className = 'row';
       const alerts = [
+        r.shortage ? `SHORT ${r.shortage} ${r.unit || ''} AT BLOCK FACTORY` : '',
         r.refillNeeded ? 'REFILL FROM BURGERKISS STORE' : '',
         r.buyNeeded ? 'BUY / ORDER FOR STORE' : ''
       ].filter(Boolean).join(' · ');
