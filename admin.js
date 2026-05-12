@@ -37,6 +37,7 @@
       { label: 'Stock Recipes', path: pathFor('BK_STOCK_RECIPES_PATH', '/pos/stock/recipes') },
       { label: 'Stock Inventory', path: pathFor('BK_STOCK_INVENTORY_PATH', '/pos/stock/inventory') },
       { label: 'Stock Add-ons', path: pathFor('BK_STOCK_ADDONS_PATH', '/pos/stock/addons') },
+      { label: 'Stock Transfers', path: pathFor('BK_STOCK_TRANSFERS_PATH', '/pos/stock/transfers') },
       { label: 'History', path: pathFor('BK_HISTORY_PATH', '/pos/history') }
     ];
   }

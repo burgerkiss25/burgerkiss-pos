@@ -13,6 +13,7 @@ window.BK_STOCK_INGREDIENTS_PATH = '/pos/stock/ingredients';
 window.BK_STOCK_RECIPES_PATH = '/pos/stock/recipes';
 window.BK_STOCK_INVENTORY_PATH = '/pos/stock/inventory';
 window.BK_STOCK_ADDONS_PATH = '/pos/stock/addons';
+window.BK_STOCK_TRANSFERS_PATH = '/pos/stock/transfers';
 window.BK_HISTORY_PATH = '/pos/history';
 
 // Firebase Web-App-Konfiguration aus der Firebase Console.
