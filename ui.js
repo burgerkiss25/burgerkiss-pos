@@ -143,8 +143,9 @@
     const base = (Array.isArray(BK_DATA.BASE) && BK_DATA.BASE.length) ? BK_DATA.BASE : (BK_DATA.DEFAULT_BASE || []);
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
     const query = productQuery.trim().toLowerCase();
-    const items = base.filter(it => (currentCat==='all' ? true : it.cat===currentCat))
-      .filter(it => !String(it.id || '').startsWith('x_sauce_'))
+    const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
+    const items = base.filter(isFrontProduct)
+      .filter(it => (currentCat==='all' ? true : it.cat===currentCat))
       .filter(it => query ? it.name.toLowerCase().includes(query) : true);
     if(!items.length){
       const empty = document.createElement('div');
@@ -178,11 +179,19 @@
     });
   }
 
-  function openModifierSheet(title, sections){
+  function openModifierSheet(title, sections, opts){
     const host = ensureDialogHost();
+    const settings = opts || {};
+    const showNote = Object.prototype.hasOwnProperty.call(settings, 'note');
     document.getElementById('appDialogTitle').textContent = title;
     document.getElementById('appDialogBody').innerHTML = `
       <form class="modifier-sheet" id="modifierForm">
+        ${showNote ? `
+          <label class="modifier-note">
+            <span>Note for this item</span>
+            <textarea id="modifierItemNote" rows="2" placeholder="e.g. no onion, no lettuce, no sesame"></textarea>
+          </label>
+        ` : ''}
         <div class="modifier-grid" id="modifierSections"></div>
         <div class="modifier-actions">
           <button class="x" id="dlgCancel" type="button">Skip add-ons</button>
@@ -205,16 +214,53 @@
       });
       (section.options || []).forEach((opt, idx)=>{
         const label = document.createElement('label');
-        label.className = 'choice-row';
-        const input = document.createElement('input');
-        input.type = section.type || 'checkbox';
-        input.name = section.name;
-        input.value = opt.value || '';
-        input.checked = !!opt.checked || (section.type === 'radio' && idx === 0 && !section.options.some(o=>o.checked));
-        label.appendChild(input);
-        const text = document.createElement('span');
-        text.textContent = opt.label;
-        label.appendChild(text);
+        label.className = section.type === 'quantity' ? 'choice-row qty-row' : 'choice-row';
+
+        if(section.type === 'quantity'){
+          const name = document.createElement('span');
+          name.textContent = opt.label;
+          label.appendChild(name);
+
+          const controls = document.createElement('span');
+          controls.className = 'qty-controls';
+          const minus = document.createElement('button');
+          minus.type = 'button';
+          minus.className = 'qty-btn';
+          minus.textContent = '−';
+          const qty = document.createElement('output');
+          qty.className = 'qty-value';
+          qty.dataset.name = section.name;
+          qty.dataset.value = opt.value || '';
+          qty.dataset.label = opt.label || opt.value || '';
+          qty.value = '0';
+          qty.textContent = '0';
+          const plus = document.createElement('button');
+          plus.type = 'button';
+          plus.className = 'qty-btn';
+          plus.textContent = '+';
+          const setQty = next=>{
+            const max = Number.isFinite(Number(section.max)) ? Number(section.max) : 9;
+            const val = Math.max(0, Math.min(max, Number(next) || 0));
+            qty.value = String(val);
+            qty.textContent = String(val);
+          };
+          minus.onclick = ()=> setQty(Number(qty.value) - 1);
+          plus.onclick = ()=> setQty(Number(qty.value) + 1);
+          controls.appendChild(minus);
+          controls.appendChild(qty);
+          controls.appendChild(plus);
+          label.appendChild(controls);
+        }else{
+          const input = document.createElement('input');
+          input.type = section.type || 'checkbox';
+          input.name = section.name;
+          input.value = opt.value || '';
+          input.checked = !!opt.checked || (section.type === 'radio' && idx === 0 && !section.options.some(o=>o.checked));
+          label.appendChild(input);
+          const text = document.createElement('span');
+          text.textContent = opt.label;
+          label.appendChild(text);
+        }
         fieldset.appendChild(label);
       });
       wrap.appendChild(fieldset);
@@ -222,12 +268,23 @@
 
     return new Promise(resolve=>{
       host.classList.add('open');
-      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve({}); };
+      const noteBox = document.getElementById('modifierItemNote');
+      if(noteBox){ noteBox.value = settings.note || ''; noteBox.focus(); noteBox.select(); }
+      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve({ itemNote: noteBox ? noteBox.value.trim() : '' }); };
       document.getElementById('modifierForm').onsubmit = (e)=>{
         e.preventDefault();
         const form = e.currentTarget;
-        const values = {};
+        const values = { itemNote: noteBox ? noteBox.value.trim() : '' };
         (sections || []).forEach(section=>{
+          if(section.type === 'quantity'){
+            const picked = [];
+            form.querySelectorAll(`output[data-name="${section.name}"]`).forEach(out=>{
+              const qty = Number(out.value || out.textContent || 0) || 0;
+              if(qty > 0) picked.push({ value: out.dataset.value, label: out.dataset.label || out.dataset.value, qty });
+            });
+            values[section.name] = picked;
+            return;
+          }
           const selected = [...form.querySelectorAll(`[name="${section.name}"]:checked`)].map(input=>input.value).filter(Boolean);
           values[section.name] = section.type === 'radio' ? (selected[0] || null) : selected;
         });
@@ -237,9 +294,33 @@
     });
   }
 
+  function addQuantities(picks, note){
+    (picks || []).forEach(pick=>{
+      const qty = Math.max(0, Number(pick.qty) || 0);
+      if(!pick.value) return;
+      for(let i=0; i<qty; i++) BK_STATE.addItem(pick.value, note || '');
+    });
+  }
+
+  function describeQuantities(picks){
+    return (picks || [])
+      .filter(pick=> Number(pick.qty) > 0)
+      .map(pick=> `${pick.label || pick.value}${Number(pick.qty) > 1 ? ` x${Number(pick.qty)}` : ''}`)
+      .join(', ');
+  }
+
+  function joinNotes(){
+    return Array.from(arguments).map(x=>String(x || '').trim()).filter(Boolean).join(' · ');
+  }
+
+  function modifierLinkNote(prefix, productName, itemNote){
+    const lead = prefix === 'for' ? 'for' : `${prefix} for`;
+    return `${lead} ${productName}${itemNote ? `: ${itemNote}` : ''}`;
+  }
+
   async function addProductWithFlow(product){
-    const note = (document.getElementById('noteInput').value||'').trim();
-    BK_STATE.addItem(product.id, note);
+    const noteInput = document.getElementById('noteInput');
+    const pendingNote = (noteInput && noteInput.value || '').trim();
 
     const sauceOptions = [
       {label:'No Sauce Wanted', value:''},
@@ -249,17 +330,19 @@
       {label:'Dutch Special', value:'x_sauce_dutch_special'},
       {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'}
     ];
+    const paidSauceOptions = sauceOptions.filter(opt=>opt.value);
 
     if(['fries_standard', 'fries_large', 'fries_family'].includes(product.id)){
       const picked = await openModifierSheet(`${product.name} options`, [
-        { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one included sauce for this fries item.', options:sauceOptions },
-        { title:'Extra sauce cup (+5 GHS)', name:'extraSauce', type:'radio', help:'Optional paid extra sauce.', options:sauceOptions }
-      ]);
-      if(picked.includedSauce) BK_STATE.addItem(picked.includedSauce, 'included');
-      if(picked.extraSauce) BK_STATE.addItem(picked.extraSauce, 'extra');
-    }
-
-    if(['hamburger', 'cheeseburger', 'double_burger', 'double_cheeseburger', 'chicken_burger', 'chicken_shawarma_burger'].includes(product.id)){
+        { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one free sauce for this fries item.', options:sauceOptions },
+        { title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add several paid sauces.', options:paidSauceOptions }
+      ], { note: pendingNote });
+      const extraSummary = describeQuantities(picked.extraSauce);
+      const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
+      BK_STATE.addItem(product.id, itemNote);
+      if(picked.includedSauce) BK_STATE.addItem(picked.includedSauce, modifierLinkNote('included', product.name, picked.itemNote));
+      addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
+    }else if(['hamburger', 'cheeseburger', 'double_burger', 'double_cheeseburger', 'chicken_burger', 'chicken_shawarma_burger'].includes(product.id)){
       const askCheeseDefault = product.id !== 'cheeseburger' && product.id !== 'double_cheeseburger';
       const extras = [
         {label:'Extra Beef Patty', value:'x_beef_patty'},
@@ -269,29 +352,37 @@
         {label:'Chicken Shawarma Patty', value:'x_chicken_shawarma_patty'}
       ];
       const picked = await openModifierSheet(`${product.name} add-ons`, [
-        { title:'Burger add-ons', name:'burgerExtras', type:'checkbox', help:'Select all paid add-ons for this burger.', options:extras },
-        { title:'Egg', name:'egg', type:'radio', options:[
-          {label:'No egg', value:''},
+        { title:'Burger add-ons', name:'burgerExtras', type:'quantity', help:'Use + / − for multiple paid add-ons.', options:extras },
+        { title:'Egg add-ons', name:'eggExtras', type:'quantity', options:[
           {label:'Fried Egg', value:'x_fried_egg'},
           {label:'Omelette', value:'x_omelette'}
         ]}
-      ]);
-      (picked.burgerExtras || []).forEach(id=> BK_STATE.addItem(id, ''));
-      if(picked.egg) BK_STATE.addItem(picked.egg, '');
-    }
-
-    if(['wings_6','wings_12','wings_24'].includes(product.id)){
+      ], { note: pendingNote });
+      const burgerSummary = describeQuantities([...(picked.burgerExtras || []), ...(picked.eggExtras || [])]);
+      const itemNote = joinNotes(picked.itemNote, burgerSummary ? `Add-ons: ${burgerSummary}` : '');
+      BK_STATE.addItem(product.id, itemNote);
+      const addonNote = modifierLinkNote('for', product.name, picked.itemNote);
+      addQuantities(picked.burgerExtras, addonNote);
+      addQuantities(picked.eggExtras, addonNote);
+    }else if(['wings_6','wings_12','wings_24'].includes(product.id)){
       const picked = await openModifierSheet(`${product.name} sauce`, [
         { title:'Included sauce', name:'wingsSauce', type:'radio', help:'Choose one included sauce for the wings.', options:[
           {label:'No Sauce Wanted', value:''},
           {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'},
           {label:'Chipotle', value:'x_sauce_chipotle'}
-        ]}
-      ]);
-      if(picked.wingsSauce) BK_STATE.addItem(picked.wingsSauce, 'included');
+        ]},
+        { title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add extra sauce cups.', options:paidSauceOptions }
+      ], { note: pendingNote });
+      const extraSummary = describeQuantities(picked.extraSauce);
+      const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
+      BK_STATE.addItem(product.id, itemNote);
+      if(picked.wingsSauce) BK_STATE.addItem(picked.wingsSauce, modifierLinkNote('included', product.name, picked.itemNote));
+      addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
+    }else{
+      BK_STATE.addItem(product.id, pendingNote);
     }
 
-    document.getElementById('noteInput').value='';
+    if(noteInput) noteInput.value='';
     renderOrder();
     renderMake();
     refreshTotals();
@@ -355,14 +446,152 @@
     ctl.forEach(c=>bar.appendChild(c));
   }
 
+
+  function baseCustomerNote(note){
+    return String(note || '')
+      .replace(/\s+·\s+Add-ons:.*$/i, '')
+      .replace(/\s+·\s+Extra sauces:.*$/i, '')
+      .trim();
+  }
+
+  function parseLinkedModifierNote(note){
+    const txt = String(note || '').trim();
+    const m = txt.match(/^(included|extra)?\s*for\s+(.+?)(?::\s*(.*))?$/i);
+    if(!m) return null;
+    return {
+      prefix: (m[1] || 'for').toLowerCase(),
+      productName: (m[2] || '').trim(),
+      itemNote: (m[3] || '').trim()
+    };
+  }
+
+
+  function linkedGroupKey(productName, note){
+    return `${String(productName || '').trim()}|${baseCustomerNote(note)}`;
+  }
+
+  function groupedCartRows(items){
+    const groups = [];
+    const linkedChildren = [];
+    const parentByKey = new Map();
+    const parentsByName = new Map();
+    const standalone = [];
+
+    BK_LOGIC.groupedLines(items).forEach(line=>{
+      const linked = parseLinkedModifierNote(line.note);
+      if(linked){
+        linkedChildren.push(Object.assign({}, line, { linked }));
+        return;
+      }
+
+      const prod = BK_DATA.BASE.find(x=>x.id===line.id);
+      const isModifierProduct = prod && (prod.cat === 'extra' || String(prod.id || '').startsWith('x_sauce_'));
+      if(isModifierProduct){
+        standalone.push(line);
+        return;
+      }
+
+      const group = Object.assign({}, line, { children: [] });
+      const groupKey = linkedGroupKey(line.name, line.note);
+      groups.push(group);
+      parentByKey.set(groupKey, group);
+      const nameKey = String(line.name || '').trim().toLowerCase();
+      if(!parentsByName.has(nameKey)) parentsByName.set(nameKey, []);
+      parentsByName.get(nameKey).push(group);
+    });
+
+    linkedChildren.forEach(child=>{
+      const linked = child.linked;
+      const exactParent = parentByKey.get(linkedGroupKey(linked.productName, linked.itemNote));
+      const fallbackParents = parentsByName.get(String(linked.productName || '').trim().toLowerCase()) || [];
+      const parent = exactParent || fallbackParents[fallbackParents.length - 1];
+      if(parent) parent.children.push(child);
+      else standalone.push(child);
+    });
+
+    return groups.concat(standalone.map(line=>Object.assign({}, line, { children: [] })));
+  }
+
+  function groupedEntryTotal(entry){
+    return entry.total + (entry.children || []).reduce((sum, child)=> sum + child.total, 0);
+  }
+
+  function groupedEntryDone(slot, entry){
+    const keys = [entry.key, ...(entry.children || []).map(child=>child.key)];
+    return keys.every(key=>{
+      const [id, note=''] = BK_LOGIC.parseItemKey(key);
+      return slot.items
+        .filter(it=> it.itemId===id && (it.note||'')===note)
+        .every(it=>!!it.done);
+    });
+  }
+
+  function setGroupedEntryDone(entry, done){
+    BK_STATE.setDoneForKey(entry.key, done);
+    (entry.children || []).forEach(child=> BK_STATE.setDoneForKey(child.key, done));
+  }
+
+  function groupedEntryText(entry){
+    const parent = `${entry.qty}x ${entry.name}${entry.note ? ` (${entry.note})` : ''}`;
+    const children = (entry.children || []).map(child=>`↳ ${child.qty}x ${child.name}${child.note ? ` (${child.note})` : ''}`);
+    return [parent, ...children].join(' · ');
+  }
+
+  function appendGroupedEntry(host, slot, entry, slotIndex, opts){
+    const settings = opts || {};
+    const row = document.createElement('div');
+    row.className = settings.compact ? 'grouped-meal compact' : 'grouped-meal';
+
+    const header = document.createElement('div');
+    header.className = 'grouped-meal-head';
+    if(settings.checkbox){
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = groupedEntryDone(slot, entry);
+      cb.disabled = !!slot.issued;
+      cb.onchange = ()=>{
+        if(settings.onToggle) settings.onToggle(entry, cb.checked);
+        else setGroupedEntryDone(entry, cb.checked);
+      };
+      header.appendChild(cb);
+    }
+
+    const titleWrap = document.createElement('span');
+    titleWrap.className = 'grouped-meal-title';
+    const title = document.createElement('b');
+    title.textContent = `${entry.qty}x ${entry.name}`;
+    titleWrap.appendChild(title);
+    if(entry.note){
+      const note = document.createElement('small');
+      note.textContent = entry.note;
+      titleWrap.appendChild(note);
+    }
+    header.appendChild(titleWrap);
+
+    const price = document.createElement('span');
+    price.className = 'grouped-meal-price';
+    price.textContent = `${groupedEntryTotal(entry)} GHS`;
+    header.appendChild(price);
+    row.appendChild(header);
+
+    (entry.children || []).forEach(child=>{
+      const childLine = document.createElement('div');
+      childLine.className = 'grouped-meal-child';
+      childLine.textContent = `↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''} · ${child.total} GHS`;
+      row.appendChild(childLine);
+    });
+
+    host.appendChild(row);
+    return row;
+  }
+
   function renderOrder(){
     const {slots, active} = BK_STATE.getState();
     const lines = document.getElementById('lines'); lines.innerHTML='';
     if(!slots.length){ setSlotTotals(0,0,0); return; }
     const s = slots[active];
 
-    const counts = BK_LOGIC.groupCounts(s.items);
-    const entries = Object.entries(counts);
+    const entries = groupedCartRows(s.items);
     if(entries.length===0){
       const row = document.createElement('div');
       row.className = 'empty-state';
@@ -375,10 +604,11 @@
       renderIssue();
       refreshTotals();
     };
-    entries.forEach(([key,qty])=>{
-      const [id, note=''] = BK_LOGIC.parseItemKey(key);
+    const repeat = (n, fn)=>{ for(let i=0; i<Math.max(0, n); i++) fn(); };
+    entries.forEach(entry=>{
+      const [id, note=''] = BK_LOGIC.parseItemKey(entry.key);
       const prod = BK_DATA.BASE.find(x=>x.id===id);
-      const unitPrice = (note==='included' && String(id).startsWith('x_sauce_')) ? 0 : BK_PRICES.getPrice(id);
+      const totalPrice = entry.total + (entry.children || []).reduce((sum, child)=> sum + child.total, 0);
       const row = document.createElement('div'); row.className='row cart-row';
 
       const controls = document.createElement('div');
@@ -388,13 +618,21 @@
       dec.type = 'button';
       dec.textContent = '−';
       dec.disabled = !!s.issued;
-      dec.onclick = ()=>{ BK_STATE.decItemForKey(key); refreshOrderViews(); };
+      dec.onclick = ()=>{
+        (entry.children || []).forEach(child=> repeat(Math.max(1, Math.round(child.qty / Math.max(1, entry.qty))), ()=> BK_STATE.decItemForKey(child.key)));
+        BK_STATE.decItemForKey(entry.key);
+        refreshOrderViews();
+      };
       const inc = document.createElement('button');
       inc.className = 'mini';
       inc.type = 'button';
       inc.textContent = '+';
       inc.disabled = !!s.issued;
-      inc.onclick = ()=>{ BK_STATE.addItemForKey(key); refreshOrderViews(); };
+      inc.onclick = ()=>{
+        BK_STATE.addItemForKey(entry.key);
+        (entry.children || []).forEach(child=> repeat(Math.max(1, Math.round(child.qty / Math.max(1, entry.qty))), ()=> BK_STATE.addItemForKey(child.key)));
+        refreshOrderViews();
+      };
       controls.append(dec, inc);
 
       const detail = document.createElement('div');
@@ -402,19 +640,29 @@
       const title = document.createElement('b');
       title.textContent = prod ? prod.name : id;
       const meta = document.createElement('small');
-      meta.textContent = `× ${qty}${note ? ` · ${note}` : ''}`;
+      meta.textContent = `× ${entry.qty}${note ? ` · ${note}` : ''}`;
       detail.append(title, meta);
+      (entry.children || []).forEach(child=>{
+        const childLine = document.createElement('small');
+        childLine.className = 'cart-child-line';
+        childLine.textContent = `↳ ${child.name} × ${child.qty} · ${child.total} GHS`;
+        detail.appendChild(childLine);
+      });
 
       const price = document.createElement('div');
       price.className = 'cart-price';
-      price.textContent = `${qty*unitPrice} GHS`;
+      price.textContent = `${totalPrice} GHS`;
 
       const remove = document.createElement('button');
       remove.className = 'mini remove-line';
       remove.type = 'button';
       remove.textContent = 'Remove';
       remove.disabled = !!s.issued;
-      remove.onclick = ()=>{ BK_STATE.removeItemForKey(key); refreshOrderViews(); };
+      remove.onclick = ()=>{
+        (entry.children || []).forEach(child=> BK_STATE.removeItemForKey(child.key));
+        BK_STATE.removeItemForKey(entry.key);
+        refreshOrderViews();
+      };
 
       row.append(controls, detail, price, remove);
       lines.appendChild(row);
@@ -444,17 +692,19 @@
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS · Combos: ${c.combos} · In kitchen: ${formatAge(s.createdAt)}</div>
           <div><button onclick="BK_STATE.setActive(${i}); BK_UI.renderOrder(); BK_UI.refreshTotals();">Focus</button></div>
         </div>
-        <div class="todo" id="todo-${i}"></div>`;
+        <div class="todo grouped-todo" id="todo-${i}"></div>`;
       box.appendChild(card);
       const list = card.querySelector(`#todo-${i}`);
-      s.items.forEach((it,idx)=>{
-        const p = BK_DATA.BASE.find(x=>x.id===it.itemId);
-        const li = document.createElement('div'); li.className='li';
-        li.innerHTML = `
-          <input type="checkbox" ${it.done?'checked':''} ${s.issued ? 'disabled' : ''} onchange="BK_STATE.toggleDone(${i},${idx},this.checked); BK_UI.renderIssue();">
-          <span>${p ? p.name : it.itemId}${it.note?` · <small>${it.note}</small>`:''}</span>
-          <span style="margin-left:auto">${BK_PRICES.getPrice((p&&p.id)||it.itemId)} GHS</span>`;
-        list.appendChild(li);
+      groupedCartRows(s.items).forEach(entry=>{
+        appendGroupedEntry(list, s, entry, i, {
+          checkbox: true,
+          onToggle: (picked, done)=>{
+            BK_STATE.setActive(i);
+            setGroupedEntryDone(picked, done);
+            renderMake();
+            renderIssue();
+          }
+        });
       });
     });
     ensureFlowActions('makeList', [
@@ -511,7 +761,6 @@
       const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
       const canIssue = s.pay !== 'unpaid' && allDone;
       const card = document.createElement('div'); card.className='slot-card';
-      const checkItems = BK_LOGIC.groupedLines(s.items).map(x=>`${x.qty}x ${x.name}${x.note ? ` (${x.note})` : ''}`).join(' · ');
       card.innerHTML = `
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
@@ -521,10 +770,19 @@
           </div>
         </div>`;
       const checklist = document.createElement('div');
-      checklist.className = 'row';
-      checklist.style.borderTop = '1px dashed #2a2f39';
-      checklist.style.padding = '8px 0';
-      checklist.innerHTML = `<span><small>Final check:</small> ${checkItems || 'No items'}</span>`;
+      checklist.className = 'issue-checklist';
+      const label = document.createElement('small');
+      label.textContent = 'Final check:';
+      checklist.appendChild(label);
+      const grouped = groupedCartRows(s.items);
+      if(grouped.length){
+        grouped.forEach(entry=> appendGroupedEntry(checklist, s, entry, i, { compact:true }));
+      }else{
+        const emptyLine = document.createElement('div');
+        emptyLine.className = 'empty-state';
+        emptyLine.textContent = 'No items';
+        checklist.appendChild(emptyLine);
+      }
       card.appendChild(checklist);
       box.appendChild(card);
     });
@@ -534,6 +792,7 @@
       { label:'🆕 Start Next Order', onClick:()=> startNextOrder() }
     ]);
   }
+
 
   function goTab(name){
     const valid = new Set(['order','make','pay','issue']);
@@ -589,12 +848,13 @@
       host.appendChild(row);
     }
     row.innerHTML = '';
-    (actions || []).forEach(({label, onClick, disabled})=>{
+    (actions || []).forEach(action=>{
       const btn = document.createElement('button');
+      btn.type = 'button';
       btn.className = 'x';
-      btn.textContent = label;
-      btn.disabled = !!disabled;
-      btn.onclick = onClick;
+      btn.textContent = action.label;
+      btn.disabled = !!action.disabled;
+      btn.onclick = action.onClick;
       row.appendChild(btn);
     });
   }
@@ -814,9 +1074,13 @@
     const st = BK_STATE.getState();
     const slot = st.slots[i];
     if(!slot) return;
-    const lines = BK_LOGIC.groupedLines(slot.items || []);
+    const lines = groupedCartRows(slot.items || []);
     const checkHtml = lines.length
-      ? lines.map(x=>`<div>${x.qty}x <b>${x.name}</b>${x.note ? ` <small>(${x.note})</small>` : ''}</div>`).join('')
+      ? lines.map(entry=>`
+        <div class="grouped-meal compact">
+          <div class="grouped-meal-head"><span class="grouped-meal-title"><b>${entry.qty}x ${entry.name}</b>${entry.note ? `<small>${entry.note}</small>` : ''}</span></div>
+          ${(entry.children || []).map(child=>`<div class="grouped-meal-child">↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''}</div>`).join('')}
+        </div>`).join('')
       : '<div>No items in this order.</div>';
     confirmDialog(
       `Final handover check – ${slot.orderNo || slot.name}`,

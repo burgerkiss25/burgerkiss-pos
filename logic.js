@@ -4,7 +4,7 @@
     return JSON.stringify([itemId, note || '']);
   }
   function isIncludedSauce(itemId, note){
-    return String(note || '').toLowerCase() === 'included' && String(itemId || '').startsWith('x_sauce_');
+    return String(note || '').toLowerCase().startsWith('included') && String(itemId || '').startsWith('x_sauce_');
   }
   function parseItemKey(key){
     try{
