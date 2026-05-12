@@ -4,6 +4,7 @@
   const {
     normalizeId,
     num,
+    locationLabel,
     sanitizeIngredient,
     sanitizeIngredients,
     sanitizeRecipes,
@@ -168,21 +169,65 @@
   }
 
   function ingredientRowHtml(id, def){
-    return `<div class="row" data-ing-row>
-      <span class="left" style="display:grid;grid-template-columns:120px 1fr 110px 80px 110px 120px 120px 100px 100px auto;gap:8px;flex:1">
-        <input data-field="id" value="${id}" placeholder="ingredient_id">
-        <input data-field="name" value="${def.name || ''}" placeholder="Name">
-        <input data-field="category" value="${def.category || ''}" placeholder="category">
-        <input data-field="unit" value="${def.unit || ''}" placeholder="unit">
-        <select data-field="stock_location"><option value="storage" ${def.stock_location==='storage'?'selected':''}>storage</option><option value="foodtruck" ${def.stock_location==='foodtruck'?'selected':''}>foodtruck</option><option value="both" ${def.stock_location==='both'?'selected':''}>both</option></select>
-        <input data-field="current_stock_storage" type="number" min="0" step="1" value="${num(def.current_stock_storage,0)}">
-        <input data-field="current_stock_foodtruck" type="number" min="0" step="1" value="${num(def.current_stock_foodtruck,0)}">
-        <input data-field="moq_storage" type="number" min="0" step="1" value="${num(def.moq_storage,0)}">
-        <input data-field="moq_foodtruck" type="number" min="0" step="1" value="${num(def.moq_foodtruck,0)}">
+    const locationOptions = ['storage', 'foodtruck', 'both'].map(loc=>
+      `<option value="${loc}" ${def.stock_location===loc?'selected':''}>${locationLabel(loc)}</option>`
+    ).join('');
+    return `<article class="stock-ingredient-card" data-ing-row>
+      <div class="stock-ingredient-head">
+        <div class="stock-field stock-field-id">
+          <label>ID</label>
+          <input data-field="id" value="${id}" placeholder="ingredient_id">
+        </div>
+        <div class="stock-field stock-field-name">
+          <label>Name</label>
+          <input data-field="name" value="${def.name || ''}" placeholder="Name">
+        </div>
+        <div class="stock-field">
+          <label>Category</label>
+          <input data-field="category" value="${def.category || ''}" placeholder="category">
+        </div>
+        <div class="stock-field stock-field-unit">
+          <label>Unit</label>
+          <input data-field="unit" value="${def.unit || ''}" placeholder="unit">
+        </div>
+        <div class="stock-field stock-field-location">
+          <label>Available at</label>
+          <select data-field="stock_location">${locationOptions}</select>
+        </div>
+        <label class="stock-track"><input data-field="track_stock" type="checkbox" ${def.track_stock !== false ? 'checked' : ''}> Track</label>
         <button class="mini" data-remove>Delete</button>
-      </span>
-      <label style="margin-left:8px;font-size:12px"><input data-field="track_stock" type="checkbox" ${def.track_stock !== false ? 'checked' : ''}> track</label>
-    </div>`;
+      </div>
+      <div class="stock-location-grid">
+        <section class="stock-location-card stock-location-store">
+          <div class="stock-location-title">
+            <span>BurgerKiss Store</span>
+            <small>Main warehouse</small>
+          </div>
+          <div class="stock-location-fields">
+            <label>Current stock
+              <input data-field="current_stock_storage" type="number" min="0" step="1" value="${num(def.current_stock_storage,0)}">
+            </label>
+            <label>Minimum stock
+              <input data-field="moq_storage" type="number" min="0" step="1" value="${num(def.moq_storage,0)}">
+            </label>
+          </div>
+        </section>
+        <section class="stock-location-card stock-location-branch">
+          <div class="stock-location-title">
+            <span>BurgerKiss Block Factory</span>
+            <small>Restaurant / production stock</small>
+          </div>
+          <div class="stock-location-fields">
+            <label>Current stock
+              <input data-field="current_stock_foodtruck" type="number" min="0" step="1" value="${num(def.current_stock_foodtruck,0)}">
+            </label>
+            <label>Minimum stock
+              <input data-field="moq_foodtruck" type="number" min="0" step="1" value="${num(def.moq_foodtruck,0)}">
+            </label>
+          </div>
+        </section>
+      </div>
+    </article>`;
   }
 
   function recipeRowHtml(p, ingredientOptions){
@@ -236,8 +281,25 @@
       ? productList.filter(p=> p && (p.cat === 'extra' || p.cat === 'sauce'))
       : productList;
     body.innerHTML = `
-      ${showIngredients ? '<h4 style="margin:4px 0 8px">Ingredients</h4><div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button class="x" id="sAddIngredient">+ Ingredient</button></div><div style="font-size:12px;color:#9aa3ad;margin-bottom:8px">Columns: id, name, category, unit, location, stock(storage/truck), MOQ(storage/truck), track</div><div id="stockIngredients"></div>' : ''}
-      ${(showIngredients && showRecipes) ? '<hr style="border:0;border-top:1px solid #2a2f39;margin:12px 0">' : ''}
+      ${showIngredients ? `<div class="stock-editor-intro">
+        <div>
+          <h4>Stock locations</h4>
+          <p>Phase 1 keeps the existing data fields, but presents them as real BurgerKiss locations.</p>
+        </div>
+        <div class="stock-tabs" aria-label="Stock location sections">
+          <span>BurgerKiss Store</span>
+          <span>BurgerKiss Block Factory</span>
+        </div>
+      </div>
+      <div class="stock-section-head">
+        <div>
+          <h4>Ingredients</h4>
+          <p>Each ingredient has separate stock and minimum levels for the main warehouse and the Block Factory.</p>
+        </div>
+        <button class="x" id="sAddIngredient">+ Ingredient</button>
+      </div>
+      <div id="stockIngredients" class="stock-ingredients-list"></div>` : ''}
+      ${(showIngredients && showRecipes) ? '<hr style="border:0;border-top:1px solid #2a2f39;margin:16px 0">' : ''}
       ${showRecipes ? `<h4 style="margin:4px 0 8px">${mode === 'addons' ? 'Add-on Recipes' : 'Product Recipes'}</h4><div style="font-size:12px;color:#9aa3ad;margin-bottom:8px">Format: ingredient_id:qty, ingredient_id2:qty</div><div id="stockRecipes"></div>` : ''}
     `;
     if(showIngredients){
