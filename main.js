@@ -2,6 +2,7 @@
 (function(){
   BK_PRICES.load();
   BK_PRODUCTS.load();
+  BK_MENUS.load();
   BK_IMAGES.load();
   BK_STOCK.load();
   const had = BK_STATE.load();
@@ -47,11 +48,6 @@
     add.classList.remove('disabled');
     add.onclick = ()=> BK_UI.addNewOrderSlot();
   }
-
-  // Quick notes
-  document.querySelectorAll('.quick-note').forEach(el=>{
-    el.onclick = ()=>{ const inp=document.getElementById('noteInput'); inp.value=el.textContent; inp.focus(); };
-  });
 
   const syncWorkflowA11y = (name)=>{
     const tabs = { order:'tabOrder', make:'tabMake', pay:'tabPay', issue:'tabIssue' };

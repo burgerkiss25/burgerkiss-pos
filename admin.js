@@ -32,6 +32,7 @@
       { label: 'Live State', path: livePath() },
       { label: 'Images', path: pathFor('BK_IMAGES_PATH', '/pos/config/images') },
       { label: 'Products', path: pathFor('BK_PRODUCTS_PATH', '/pos/catalog/products') },
+      { label: 'Menus', path: pathFor('BK_MENUS_PATH', '/pos/catalog/menus') },
       { label: 'Prices', path: pathFor('BK_PRICES_PATH', '/pos/catalog/prices') },
       { label: 'Stock Ingredients', path: pathFor('BK_STOCK_INGREDIENTS_PATH', '/pos/stock/ingredients') },
       { label: 'Stock Recipes', path: pathFor('BK_STOCK_RECIPES_PATH', '/pos/stock/recipes') },
@@ -100,6 +101,7 @@
 
   BK_PRICES.load();
   BK_PRODUCTS.load();
+  BK_MENUS.load();
   BK_IMAGES.load();
   BK_STOCK.load();
 
@@ -113,6 +115,12 @@
   document.getElementById('prodAdd').onclick     = ()=> BK_UI.addProductRow();
   document.getElementById('prodSave').onclick    = ()=>{ BK_UI.saveProducts(); setTimeout(refreshDbStatus, 800); };
   document.getElementById('prodReset').onclick   = ()=>{ BK_UI.resetProducts(); setTimeout(refreshDbStatus, 800); };
+
+  document.getElementById('btnMenus').onclick = ()=> BK_UI.openMenus();
+  document.getElementById('menuClose').onclick  = ()=> BK_UI.closeMenus();
+  document.getElementById('menuAdd').onclick    = ()=> BK_UI.addMenuRow();
+  document.getElementById('menuSave').onclick   = ()=>{ BK_UI.saveMenus(); setTimeout(refreshDbStatus, 800); };
+  document.getElementById('menuReset').onclick  = ()=>{ BK_UI.resetMenus(); setTimeout(refreshDbStatus, 800); };
 
   document.getElementById('btnImages').onclick = ()=> BK_UI.openImages();
   document.getElementById('iClose').onclick    = ()=> BK_UI.closeImages();
