@@ -7,6 +7,7 @@
   const CATEGORY_LABELS = { all:'All', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
   let historyFilterText = '';
   let historyFilterToday = false;
+  const QUICK_NOTES = ['No onion', 'Extra onion', 'No lettuce', 'Extra spicy'];
 
   const STOCK_DEFAULT = {
     INGREDIENTS: {
@@ -183,6 +184,8 @@
     const host = ensureDialogHost();
     const settings = opts || {};
     const showNote = Object.prototype.hasOwnProperty.call(settings, 'note');
+    const cancelLabel = settings.cancelLabel || 'Skip add-ons';
+    const confirmLabel = settings.confirmLabel || 'Add selected';
     document.getElementById('appDialogTitle').textContent = title;
     document.getElementById('appDialogBody').innerHTML = `
       <form class="modifier-sheet" id="modifierForm">
@@ -191,11 +194,14 @@
             <span>Note for this item</span>
             <textarea id="modifierItemNote" rows="2" placeholder="e.g. no onion, no lettuce, no sesame"></textarea>
           </label>
+          <div class="modifier-quick" aria-label="Quick note shortcuts">
+            ${QUICK_NOTES.map(note=>`<button class="chip modifier-quick-note" type="button" data-note="${note}">${note}</button>`).join('')}
+          </div>
         ` : ''}
         <div class="modifier-grid" id="modifierSections"></div>
         <div class="modifier-actions">
-          <button class="x" id="dlgCancel" type="button">Skip add-ons</button>
-          <button class="x modifier-primary" id="dlgConfirm" type="submit">Add selected</button>
+          <button class="x" id="dlgCancel" type="button">${cancelLabel}</button>
+          <button class="x modifier-primary" id="dlgConfirm" type="submit">${confirmLabel}</button>
         </div>
       </form>
     `;
@@ -269,8 +275,27 @@
     return new Promise(resolve=>{
       host.classList.add('open');
       const noteBox = document.getElementById('modifierItemNote');
-      if(noteBox){ noteBox.value = settings.note || ''; noteBox.focus(); noteBox.select(); }
-      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve({ itemNote: noteBox ? noteBox.value.trim() : '' }); };
+      if(noteBox){
+        noteBox.value = settings.note || '';
+        document.querySelectorAll('.modifier-quick-note').forEach(btn=>{
+          btn.onclick = ()=>{
+            const note = String(btn.dataset.note || btn.textContent || '').trim();
+            if(!note) return;
+            const current = noteBox.value.trim();
+            const parts = current ? current.split(/\s+·\s+/).map(x=>x.trim()).filter(Boolean) : [];
+            if(!parts.some(part=>part.toLowerCase() === note.toLowerCase())) parts.push(note);
+            noteBox.value = parts.join(' · ');
+            noteBox.focus();
+          };
+        });
+        noteBox.focus();
+        noteBox.select();
+      }
+      document.getElementById('dlgCancel').onclick = ()=>{
+        closeDialog();
+        if(Object.prototype.hasOwnProperty.call(settings, 'cancelValue')) resolve(settings.cancelValue);
+        else resolve({ itemNote: noteBox ? noteBox.value.trim() : '' });
+      };
       document.getElementById('modifierForm').onsubmit = (e)=>{
         e.preventDefault();
         const form = e.currentTarget;
@@ -318,11 +343,34 @@
     return `${lead} ${productName}${itemNote ? `: ${itemNote}` : ''}`;
   }
 
-  async function addProductWithFlow(product){
-    const noteInput = document.getElementById('noteInput');
-    const pendingNote = (noteInput && noteInput.value || '').trim();
+  function productById(id){
+    return (BK_DATA.BASE || []).find(x=>x.id===id) || null;
+  }
 
-    const sauceOptions = [
+  function optionLabel(id, fallback){
+    const p = productById(id);
+    if(!p) return fallback || id;
+    return `${p.name} (${BK_PRICES.getPrice(id)} GHS)`;
+  }
+
+  function mealBasePrice(product){
+    return Number(BK_DATA.MENU && BK_DATA.MENU[product.id]) || 0;
+  }
+
+  function isMealBase(product){
+    return !!(product && mealBasePrice(product) > 0);
+  }
+
+  function isBurgerBase(product){
+    return !!(product && ['hamburger', 'cheeseburger', 'double_burger', 'double_cheeseburger', 'chicken_burger', 'chicken_shawarma_burger'].includes(product.id));
+  }
+
+  function isWingsBase(product){
+    return !!(product && ['wings_6','wings_12','wings_24'].includes(product.id));
+  }
+
+  function sauceOptions(){
+    return [
       {label:'No Sauce Wanted', value:''},
       {label:'Ketchup', value:'x_sauce_ketchup'},
       {label:'Mayonnaise', value:'x_sauce_mayonnaise'},
@@ -330,59 +378,163 @@
       {label:'Dutch Special', value:'x_sauce_dutch_special'},
       {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'}
     ];
-    const paidSauceOptions = sauceOptions.filter(opt=>opt.value);
+  }
 
+  function paidSauceOptions(){
+    return sauceOptions().filter(opt=>opt.value);
+  }
+
+  function burgerExtraSections(product){
+    const askCheeseDefault = product.id !== 'cheeseburger' && product.id !== 'double_cheeseburger';
+    const extras = [
+      {label:'Extra Beef Patty', value:'x_beef_patty'},
+      ...(askCheeseDefault ? [{label:'Extra Cheese', value:'x_cheese'}] : []),
+      {label:'Bacon', value:'x_bacon'},
+      {label:'Chicken Patty', value:'x_chicken_patty'},
+      {label:'Chicken Shawarma Patty', value:'x_chicken_shawarma_patty'}
+    ];
+    return [
+      { title:'Burger add-ons', name:'burgerExtras', type:'quantity', help:'Use + / − for multiple paid add-ons.', options:extras },
+      { title:'Egg add-ons', name:'eggExtras', type:'quantity', options:[
+        {label:'Fried Egg', value:'x_fried_egg'},
+        {label:'Omelette', value:'x_omelette'}
+      ]}
+    ];
+  }
+
+  function addBurgerExtras(product, picked){
+    const burgerSummary = describeQuantities([...(picked.burgerExtras || []), ...(picked.eggExtras || [])]);
+    const itemNote = joinNotes(picked.itemNote, burgerSummary ? `Add-ons: ${burgerSummary}` : '');
+    BK_STATE.addItem(product.id, itemNote);
+    const addonNote = modifierLinkNote('for', product.name, picked.itemNote);
+    addQuantities(picked.burgerExtras, addonNote);
+    addQuantities(picked.eggExtras, addonNote);
+  }
+
+  function addWingsExtras(product, picked){
+    const extraSummary = describeQuantities(picked.extraSauce);
+    const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
+    BK_STATE.addItem(product.id, itemNote);
+    if(picked.wingsSauce) BK_STATE.addItem(picked.wingsSauce, modifierLinkNote('included', product.name, picked.itemNote));
+    addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
+  }
+
+  function openMealModeDialog(product){
+    return new Promise(resolve=>{
+      const host = ensureDialogHost();
+      const singlePrice = BK_PRICES.getPrice(product.id);
+      const menuPrice = mealBasePrice(product);
+      document.getElementById('appDialogTitle').textContent = `${product.name}: single or menu?`;
+      document.getElementById('appDialogBody').innerHTML = `
+        <div class="meal-choice">
+          <button class="meal-choice-card" id="mealSingle" type="button">
+            <span class="meal-choice-kicker">Single item</span>
+            <strong>${product.name}</strong>
+            <span>${singlePrice} GHS</span>
+          </button>
+          <button class="meal-choice-card recommended" id="mealMenu" type="button">
+            <span class="meal-choice-kicker">Guided menu</span>
+            <strong>${product.name} Menu</strong>
+            <span>${menuPrice} GHS base · choose fries + drink</span>
+          </button>
+        </div>
+        <div class="modifier-actions"><button class="x" id="dlgCancel" type="button">Cancel</button></div>
+      `;
+      host.classList.add('open');
+      document.getElementById('mealSingle').onclick = ()=>{ closeDialog(); resolve('single'); };
+      document.getElementById('mealMenu').onclick = ()=>{ closeDialog(); resolve('menu'); };
+      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(null); };
+    });
+  }
+
+  async function addSingleProductWithModifiers(product, pendingNote){
     if(['fries_standard', 'fries_large', 'fries_family'].includes(product.id)){
       const picked = await openModifierSheet(`${product.name} options`, [
-        { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one free sauce for this fries item.', options:sauceOptions },
-        { title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add several paid sauces.', options:paidSauceOptions }
+        { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one free sauce for this fries item.', options:sauceOptions() },
+        { title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add several paid sauces.', options:paidSauceOptions() }
       ], { note: pendingNote });
       const extraSummary = describeQuantities(picked.extraSauce);
       const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
       BK_STATE.addItem(product.id, itemNote);
       if(picked.includedSauce) BK_STATE.addItem(picked.includedSauce, modifierLinkNote('included', product.name, picked.itemNote));
       addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
-    }else if(['hamburger', 'cheeseburger', 'double_burger', 'double_cheeseburger', 'chicken_burger', 'chicken_shawarma_burger'].includes(product.id)){
-      const askCheeseDefault = product.id !== 'cheeseburger' && product.id !== 'double_cheeseburger';
-      const extras = [
-        {label:'Extra Beef Patty', value:'x_beef_patty'},
-        ...(askCheeseDefault ? [{label:'Extra Cheese', value:'x_cheese'}] : []),
-        {label:'Bacon', value:'x_bacon'},
-        {label:'Chicken Patty', value:'x_chicken_patty'},
-        {label:'Chicken Shawarma Patty', value:'x_chicken_shawarma_patty'}
-      ];
-      const picked = await openModifierSheet(`${product.name} add-ons`, [
-        { title:'Burger add-ons', name:'burgerExtras', type:'quantity', help:'Use + / − for multiple paid add-ons.', options:extras },
-        { title:'Egg add-ons', name:'eggExtras', type:'quantity', options:[
-          {label:'Fried Egg', value:'x_fried_egg'},
-          {label:'Omelette', value:'x_omelette'}
-        ]}
-      ], { note: pendingNote });
-      const burgerSummary = describeQuantities([...(picked.burgerExtras || []), ...(picked.eggExtras || [])]);
-      const itemNote = joinNotes(picked.itemNote, burgerSummary ? `Add-ons: ${burgerSummary}` : '');
-      BK_STATE.addItem(product.id, itemNote);
-      const addonNote = modifierLinkNote('for', product.name, picked.itemNote);
-      addQuantities(picked.burgerExtras, addonNote);
-      addQuantities(picked.eggExtras, addonNote);
-    }else if(['wings_6','wings_12','wings_24'].includes(product.id)){
+    }else if(isBurgerBase(product)){
+      const picked = await openModifierSheet(`${product.name} add-ons`, burgerExtraSections(product), { note: pendingNote });
+      addBurgerExtras(product, picked);
+    }else if(isWingsBase(product)){
       const picked = await openModifierSheet(`${product.name} sauce`, [
         { title:'Included sauce', name:'wingsSauce', type:'radio', help:'Choose one included sauce for the wings.', options:[
           {label:'No Sauce Wanted', value:''},
           {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'},
           {label:'Chipotle', value:'x_sauce_chipotle'}
         ]},
-        { title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add extra sauce cups.', options:paidSauceOptions }
+        { title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add extra sauce cups.', options:paidSauceOptions() }
       ], { note: pendingNote });
-      const extraSummary = describeQuantities(picked.extraSauce);
-      const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
-      BK_STATE.addItem(product.id, itemNote);
-      if(picked.wingsSauce) BK_STATE.addItem(picked.wingsSauce, modifierLinkNote('included', product.name, picked.itemNote));
-      addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
+      addWingsExtras(product, picked);
     }else{
       BK_STATE.addItem(product.id, pendingNote);
     }
+    return true;
+  }
 
-    if(noteInput) noteInput.value='';
+  async function addGuidedMenu(product, pendingNote){
+    const friesOptions = [
+      {label: optionLabel('fries_standard', 'Fries Standard'), value:'fries_standard', checked:true},
+      {label: `${optionLabel('fries_large', 'Fries Large')} · upgrade +${Math.max(0, BK_PRICES.getPrice('fries_large') - BK_DATA.MENU.included.fries)} GHS`, value:'fries_large'}
+    ].filter(opt=>productById(opt.value));
+    const preferredDrinks = ['d_cola','d_sprite','d_fanta_orange','d_fanta_coktail','d_biggoo_grape','d_coconut_fresh','d_coconut_water_bottle','d_iced_tea_lime','d_iced_tea_ginger','d_iced_tea_strawberry','d_iced_tea_pineapple','d_iced_tea_mint','d_iced_tea_apple','d_iced_tea_green_mint','d_iced_tea_vannile','d_club_beer_std','d_club_beer_large','d_guinness'];
+    const drinkOptions = preferredDrinks
+      .map(id=>productById(id))
+      .filter(Boolean)
+      .map((p, idx)=>({
+        label: `${p.name}${Math.max(0, BK_PRICES.getPrice(p.id) - BK_DATA.MENU.included.drink) ? ` · upgrade +${Math.max(0, BK_PRICES.getPrice(p.id) - BK_DATA.MENU.included.drink)} GHS` : ''}`,
+        value: p.id,
+        checked: idx === 0
+      }));
+    const sections = [
+      { title:'Menu fries', name:'menuFries', type:'radio', help:'Standard fries are included; large fries add the upgrade difference.', options:friesOptions },
+      { title:'Menu drink', name:'menuDrink', type:'radio', help:'Choose the drink for this menu.', options:drinkOptions }
+    ];
+    if(isBurgerBase(product)) sections.push(...burgerExtraSections(product));
+    if(isWingsBase(product)) sections.push({ title:'Included sauce', name:'wingsSauce', type:'radio', help:'Choose one included sauce for the wings.', options:[
+      {label:'No Sauce Wanted', value:''},
+      {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings', checked:true},
+      {label:'Chipotle', value:'x_sauce_chipotle'}
+    ]});
+    sections.push({ title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add extra sauce cups.', options:paidSauceOptions() });
+
+    const picked = await openModifierSheet(`${product.name} guided menu`, sections, {
+      note: pendingNote,
+      cancelLabel: 'Cancel menu',
+      confirmLabel: 'Add menu',
+      cancelValue: null
+    });
+    if(!picked) return false;
+
+    if(isBurgerBase(product)) addBurgerExtras(product, picked);
+    else if(isWingsBase(product)) addWingsExtras(product, picked);
+    else BK_STATE.addItem(product.id, picked.itemNote || pendingNote);
+
+    const menuNote = modifierLinkNote('menu', product.name, picked.itemNote);
+    if(picked.menuFries) BK_STATE.addItem(picked.menuFries, menuNote);
+    if(picked.menuDrink) BK_STATE.addItem(picked.menuDrink, menuNote);
+    if(!isWingsBase(product)) addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
+    return true;
+  }
+
+  async function addProductWithFlow(product){
+    const pendingNote = '';
+    let added = false;
+
+    if(isMealBase(product)){
+      const mode = await openMealModeDialog(product);
+      if(mode === 'menu') added = await addGuidedMenu(product, pendingNote);
+      else if(mode === 'single') added = await addSingleProductWithModifiers(product, pendingNote);
+    }else{
+      added = await addSingleProductWithModifiers(product, pendingNote);
+    }
+
+    if(!added) return;
     renderOrder();
     renderMake();
     refreshTotals();
@@ -456,13 +608,25 @@
 
   function parseLinkedModifierNote(note){
     const txt = String(note || '').trim();
-    const m = txt.match(/^(included|extra)?\s*for\s+(.+?)(?::\s*(.*))?$/i);
+    const m = txt.match(/^(included|extra|menu)?\s*for\s+(.+?)(?::\s*(.*))?$/i);
     if(!m) return null;
     return {
       prefix: (m[1] || 'for').toLowerCase(),
       productName: (m[2] || '').trim(),
       itemNote: (m[3] || '').trim()
     };
+  }
+
+  function hasMenuChildren(entry){
+    return (entry.children || []).some(child=> child.linked && child.linked.prefix === 'menu');
+  }
+
+  function childPrefixLabel(child){
+    const prefix = child && child.linked && child.linked.prefix;
+    if(prefix === 'menu') return 'Menu';
+    if(prefix === 'included') return 'Included';
+    if(prefix === 'extra') return 'Extra';
+    return '';
   }
 
 
@@ -609,7 +773,9 @@
       const [id, note=''] = BK_LOGIC.parseItemKey(entry.key);
       const prod = BK_DATA.BASE.find(x=>x.id===id);
       const totalPrice = entry.total + (entry.children || []).reduce((sum, child)=> sum + child.total, 0);
-      const row = document.createElement('div'); row.className='row cart-row';
+      const row = document.createElement('div');
+      const isMenuGroup = hasMenuChildren(entry);
+      row.className = `row cart-row${entry.children && entry.children.length ? ' cart-group-row' : ''}${isMenuGroup ? ' cart-menu-row' : ''}`;
 
       const controls = document.createElement('div');
       controls.className = 'cart-controls';
@@ -641,11 +807,18 @@
       title.textContent = prod ? prod.name : id;
       const meta = document.createElement('small');
       meta.textContent = `× ${entry.qty}${note ? ` · ${note}` : ''}`;
+      if(isMenuGroup){
+        const badge = document.createElement('span');
+        badge.className = 'cart-menu-badge';
+        badge.textContent = 'MENU';
+        title.appendChild(badge);
+      }
       detail.append(title, meta);
       (entry.children || []).forEach(child=>{
         const childLine = document.createElement('small');
-        childLine.className = 'cart-child-line';
-        childLine.textContent = `↳ ${child.name} × ${child.qty} · ${child.total} GHS`;
+        childLine.className = `cart-child-line${child.linked && child.linked.prefix === 'menu' ? ' cart-menu-child' : ''}`;
+        const label = childPrefixLabel(child);
+        childLine.textContent = `↳ ${label ? `${label}: ` : ''}${child.name} × ${child.qty} · ${child.total} GHS`;
         detail.appendChild(childLine);
       });
 
