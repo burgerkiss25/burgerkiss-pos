@@ -591,13 +591,25 @@
 
   function parseLinkedModifierNote(note){
     const txt = String(note || '').trim();
-    const m = txt.match(/^(included|extra)?\s*for\s+(.+?)(?::\s*(.*))?$/i);
+    const m = txt.match(/^(included|extra|menu)?\s*for\s+(.+?)(?::\s*(.*))?$/i);
     if(!m) return null;
     return {
       prefix: (m[1] || 'for').toLowerCase(),
       productName: (m[2] || '').trim(),
       itemNote: (m[3] || '').trim()
     };
+  }
+
+  function hasMenuChildren(entry){
+    return (entry.children || []).some(child=> child.linked && child.linked.prefix === 'menu');
+  }
+
+  function childPrefixLabel(child){
+    const prefix = child && child.linked && child.linked.prefix;
+    if(prefix === 'menu') return 'Menu';
+    if(prefix === 'included') return 'Included';
+    if(prefix === 'extra') return 'Extra';
+    return '';
   }
 
 
@@ -744,7 +756,9 @@
       const [id, note=''] = BK_LOGIC.parseItemKey(entry.key);
       const prod = BK_DATA.BASE.find(x=>x.id===id);
       const totalPrice = entry.total + (entry.children || []).reduce((sum, child)=> sum + child.total, 0);
-      const row = document.createElement('div'); row.className='row cart-row';
+      const row = document.createElement('div');
+      const isMenuGroup = hasMenuChildren(entry);
+      row.className = `row cart-row${entry.children && entry.children.length ? ' cart-group-row' : ''}${isMenuGroup ? ' cart-menu-row' : ''}`;
 
       const controls = document.createElement('div');
       controls.className = 'cart-controls';
@@ -776,11 +790,18 @@
       title.textContent = prod ? prod.name : id;
       const meta = document.createElement('small');
       meta.textContent = `× ${entry.qty}${note ? ` · ${note}` : ''}`;
+      if(isMenuGroup){
+        const badge = document.createElement('span');
+        badge.className = 'cart-menu-badge';
+        badge.textContent = 'MENU';
+        title.appendChild(badge);
+      }
       detail.append(title, meta);
       (entry.children || []).forEach(child=>{
         const childLine = document.createElement('small');
-        childLine.className = 'cart-child-line';
-        childLine.textContent = `↳ ${child.name} × ${child.qty} · ${child.total} GHS`;
+        childLine.className = `cart-child-line${child.linked && child.linked.prefix === 'menu' ? ' cart-menu-child' : ''}`;
+        const label = childPrefixLabel(child);
+        childLine.textContent = `↳ ${label ? `${label}: ` : ''}${child.name} × ${child.qty} · ${child.total} GHS`;
         detail.appendChild(childLine);
       });
 
