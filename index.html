@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – POS (Variante B: gespiegelt auf SN1)</title>
-  <link rel="stylesheet" href="./style.css?v=21" />
+  <link rel="stylesheet" href="./style.css?v=27" />
 
   <!-- POS-Konfiguration aus externer Datei -->
   <script src="./firebase-config.js?v=1"></script>
@@ -84,7 +84,9 @@
 
   <!-- Kategorien -->
   <div class="catbar" aria-label="Product categories">
-    <button class="tab active" data-cat="all">All</button>
+    <button class="tab active" data-cat="fast">Fast Lane</button>
+    <button class="tab" data-cat="all">All</button>
+    <button class="tab" data-cat="menu">Menus</button>
     <button class="tab" data-cat="burger">Burgers</button>
     <button class="tab" data-cat="wings">Wings</button>
     <button class="tab" data-cat="fries">Fries</button>
@@ -104,16 +106,6 @@
       <div class="order-layout">
         <div class="order-main">
           <div class="grid" id="buttons"></div>
-
-          <div class="note-box">
-            <input id="noteInput" placeholder="Note for NEXT item (e.g. 'no onion')" />
-            <div class="quick">
-              <button class="chip quick-note" type="button">No onion</button>
-              <button class="chip quick-note" type="button">Extra onion</button>
-              <button class="chip quick-note" type="button">No lettuce</button>
-              <button class="chip quick-note" type="button">Extra spicy</button>
-            </div>
-          </div>
         </div>
 
         <aside class="order-side panel">
@@ -235,14 +227,16 @@
   <script src="./data.js?v=12"></script>
   <script src="./prices.js?v=14"></script>
   <script src="./products.js?v=14"></script>
+  <script src="./menus.js?v=1"></script>
+  <script src="./fastlane.js?v=1"></script>
   <script src="./images.js?v=18"></script>
   <script src="./stock_data.js?v=13"></script>
   <script src="./stock_utils.js?v=15"></script>
   <script src="./stock.js?v=18"></script>
-  <script src="./state.js?v=13"></script>
+  <script src="./state.js?v=15"></script>
   <script src="./logic.js?v=13"></script>
-  <script src="./ui.js?v=24"></script>
-  <script src="./main.js?v=12"></script>
+  <script src="./ui.js?v=27"></script>
+  <script src="./main.js?v=14"></script>
 
   <!-- =============== Live-Sync (Variante B, Polling) =============== -->
   <script src="./sync_poll.js?v=12"></script>
