@@ -7,6 +7,7 @@
   const CATEGORY_LABELS = { all:'All', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
   let historyFilterText = '';
   let historyFilterToday = false;
+  const QUICK_NOTES = ['No onion', 'Extra onion', 'No lettuce', 'Extra spicy'];
 
   const STOCK_DEFAULT = {
     INGREDIENTS: {
@@ -193,6 +194,9 @@
             <span>Note for this item</span>
             <textarea id="modifierItemNote" rows="2" placeholder="e.g. no onion, no lettuce, no sesame"></textarea>
           </label>
+          <div class="modifier-quick" aria-label="Quick note shortcuts">
+            ${QUICK_NOTES.map(note=>`<button class="chip modifier-quick-note" type="button" data-note="${note}">${note}</button>`).join('')}
+          </div>
         ` : ''}
         <div class="modifier-grid" id="modifierSections"></div>
         <div class="modifier-actions">
@@ -271,7 +275,22 @@
     return new Promise(resolve=>{
       host.classList.add('open');
       const noteBox = document.getElementById('modifierItemNote');
-      if(noteBox){ noteBox.value = settings.note || ''; noteBox.focus(); noteBox.select(); }
+      if(noteBox){
+        noteBox.value = settings.note || '';
+        document.querySelectorAll('.modifier-quick-note').forEach(btn=>{
+          btn.onclick = ()=>{
+            const note = String(btn.dataset.note || btn.textContent || '').trim();
+            if(!note) return;
+            const current = noteBox.value.trim();
+            const parts = current ? current.split(/\s+·\s+/).map(x=>x.trim()).filter(Boolean) : [];
+            if(!parts.some(part=>part.toLowerCase() === note.toLowerCase())) parts.push(note);
+            noteBox.value = parts.join(' · ');
+            noteBox.focus();
+          };
+        });
+        noteBox.focus();
+        noteBox.select();
+      }
       document.getElementById('dlgCancel').onclick = ()=>{
         closeDialog();
         if(Object.prototype.hasOwnProperty.call(settings, 'cancelValue')) resolve(settings.cancelValue);
@@ -504,8 +523,7 @@
   }
 
   async function addProductWithFlow(product){
-    const noteInput = document.getElementById('noteInput');
-    const pendingNote = (noteInput && noteInput.value || '').trim();
+    const pendingNote = '';
     let added = false;
 
     if(isMealBase(product)){
@@ -517,7 +535,6 @@
     }
 
     if(!added) return;
-    if(noteInput) noteInput.value='';
     renderOrder();
     renderMake();
     refreshTotals();
