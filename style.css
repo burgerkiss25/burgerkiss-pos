@@ -112,9 +112,12 @@ button.item:active{transform:scale(.98)}
 button.item:hover{border-color:#4c586b;transform:translateY(-1px);filter:brightness(1.04)}
 button.item.item-with-bg{background-size:cover;background-position:center;background-repeat:no-repeat}
 button.item.item-with-bg::before{content:'';position:absolute;inset:0;background:linear-gradient(to top,rgba(6,9,14,.9) 0%,rgba(6,9,14,.58) 38%,rgba(6,9,14,.24) 100%)}
+button.item.standard-menu-item{border-color:#735f25;background:linear-gradient(135deg,#211b0e,#141923);box-shadow:inset 4px 0 0 rgba(255,210,77,.68),0 12px 28px rgba(0,0,0,.18)}
+button.item.standard-menu-item.item-with-bg::before{background:linear-gradient(to top,rgba(18,14,5,.94) 0%,rgba(18,14,5,.68) 42%,rgba(18,14,5,.3) 100%)}
 button.item > *{position:relative;z-index:1}
 .item-meta{position:absolute;left:12px;right:12px;bottom:12px;display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
 .name{font-weight:900;font-size:var(--fz-lg);line-height:1.15;max-width:85%}
+.item-subtitle{display:block;max-width:82%;margin-top:6px;color:#d9c98d;font-weight:850;line-height:1.25}
 .price{font-size:var(--fz-sm);color:#fff2c0;font-weight:900}
 .cat-badge{display:inline-flex;align-items:center;width:max-content;margin-bottom:8px;padding:4px 8px;border-radius:999px;background:rgba(255,210,77,.14);border:1px solid rgba(255,210,77,.28);color:#ffe69c;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em}
 .badge{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:32px;background:var(--accent);border:1px solid var(--accent-strong);padding:2px 9px;border-radius:10px;font-size:14px;color:#201600;font-weight:950}
