@@ -191,6 +191,15 @@ button:focus-visible,.chip:focus-visible,input:focus-visible,a:focus-visible,sum
 .qty-value{min-width:24px;text-align:center;color:#fff6d8;font-weight:950}
 .modifier-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;border-top:1px solid #252b35;padding-top:12px}
 .modifier-primary{background:var(--accent);border-color:var(--accent-strong);color:#201600}
+.meal-choice{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:12px;margin-bottom:14px}
+.meal-choice-card{display:grid;gap:8px;align-content:start;min-height:132px;padding:16px;border-radius:var(--radius-lg);border:1px solid #303948;background:#141923;color:#edf2f7;text-align:left;cursor:pointer;box-shadow:0 10px 24px rgba(0,0,0,.14)}
+.meal-choice-card:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.meal-choice-card strong{font-size:20px;color:#fff6d8;line-height:1.1}
+.meal-choice-card span:last-child{color:#c9d1dc;font-weight:800}
+.meal-choice-card.recommended{border-color:#806b2b;background:linear-gradient(135deg,#2d2511,#171d28)}
+.meal-choice-kicker{display:inline-flex;width:max-content;padding:5px 9px;border-radius:999px;background:#202633;border:1px solid #3a4352;color:#fff6d8!important;font-size:12px;font-weight:950;text-transform:uppercase;letter-spacing:.04em}
+.meal-choice-card.recommended .meal-choice-kicker{background:var(--accent);border-color:var(--accent-strong);color:#211700!important}
+@media (max-width:640px){.meal-choice{grid-template-columns:1fr}.meal-choice-card{min-height:110px}}
 
 /* Admin page */
 .admin-page .hud-wrap{position:sticky;top:0}
