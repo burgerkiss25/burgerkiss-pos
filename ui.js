@@ -8,13 +8,13 @@
   let historyFilterText = '';
   let historyFilterToday = false;
   const QUICK_NOTES = ['No onion', 'Extra onion', 'No lettuce', 'Extra spicy'];
-  const STANDARD_MENUS = [
-    { id:'menu_cheeseburger', name:'Cheeseburger Menu', baseId:'cheeseburger', defaultFries:'fries_standard', defaultDrink:'d_cola' },
-    { id:'menu_hamburger', name:'Hamburger Menu', baseId:'hamburger', defaultFries:'fries_standard', defaultDrink:'d_cola' },
-    { id:'menu_double_burger', name:'Double Burger Menu', baseId:'double_burger', defaultFries:'fries_standard', defaultDrink:'d_cola' },
-    { id:'menu_double_cheeseburger', name:'Double Cheeseburger Menu', baseId:'double_cheeseburger', defaultFries:'fries_standard', defaultDrink:'d_cola' },
-    { id:'menu_wings_6', name:'Wings 6 Menu', baseId:'wings_6', defaultFries:'fries_standard', defaultDrink:'d_cola', defaultWingsSauce:'x_sauce_chicken_wings' },
-    { id:'menu_wings_12', name:'Wings 12 Menu', baseId:'wings_12', defaultFries:'fries_standard', defaultDrink:'d_cola', defaultWingsSauce:'x_sauce_chicken_wings' }
+  const FALLBACK_STANDARD_MENUS = [
+    { id:'menu_cheeseburger', name:'Cheeseburger Menu', baseId:'cheeseburger', menuPrice:135, defaultFries:'fries_standard', defaultDrink:'d_cola' },
+    { id:'menu_hamburger', name:'Hamburger Menu', baseId:'hamburger', menuPrice:120, defaultFries:'fries_standard', defaultDrink:'d_cola' },
+    { id:'menu_double_burger', name:'Double Burger Menu', baseId:'double_burger', menuPrice:155, defaultFries:'fries_standard', defaultDrink:'d_cola' },
+    { id:'menu_double_cheeseburger', name:'Double Cheeseburger Menu', baseId:'double_cheeseburger', menuPrice:170, defaultFries:'fries_standard', defaultDrink:'d_cola' },
+    { id:'menu_wings_6', name:'Wings 6 Menu', baseId:'wings_6', menuPrice:65, defaultFries:'fries_standard', defaultDrink:'d_cola', defaultWingsSauce:'x_sauce_chicken_wings' },
+    { id:'menu_wings_12', name:'Wings 12 Menu', baseId:'wings_12', menuPrice:110, defaultFries:'fries_standard', defaultDrink:'d_cola', defaultWingsSauce:'x_sauce_chicken_wings' }
   ];
 
   const STOCK_DEFAULT = {
@@ -374,13 +374,19 @@
     const included = BK_DATA.MENU && BK_DATA.MENU.included ? BK_DATA.MENU.included : {fries:0, drink:0};
     const friesUpgrade = menu.defaultFries ? Math.max(0, BK_PRICES.getPrice(menu.defaultFries) - (Number(included.fries) || 0)) : 0;
     const drinkUpgrade = menu.defaultDrink ? Math.max(0, BK_PRICES.getPrice(menu.defaultDrink) - (Number(included.drink) || 0)) : 0;
-    return mealBasePrice(base) + friesUpgrade + drinkUpgrade;
+    const baseMenuPrice = Number(menu.menuPrice) > 0 ? Number(menu.menuPrice) : mealBasePrice(base);
+    return baseMenuPrice + friesUpgrade + drinkUpgrade;
+  }
+
+  function getStandardMenuPresets(){
+    if(window.BK_MENUS && typeof BK_MENUS.getMenus === 'function') return BK_MENUS.getMenus();
+    return FALLBACK_STANDARD_MENUS;
   }
 
   function buildStandardMenuCards(){
-    return STANDARD_MENUS.map(menu=>{
+    return getStandardMenuPresets().map(menu=>{
       const base = productById(menu.baseId);
-      if(!base || !mealBasePrice(base)) return null;
+      if(!base || standardMenuPrice(menu) <= 0) return null;
       const fries = productById(menu.defaultFries);
       const drink = productById(menu.defaultDrink);
       return Object.assign({}, menu, {
@@ -1562,6 +1568,13 @@
   const saveProducts = ()=> BK_PRODUCTS.save();
   const resetProducts = ()=> BK_PRODUCTS.reset();
 
+  // Menus modal
+  const openMenus = ()=> BK_MENUS.openEditor();
+  const closeMenus = ()=> BK_MENUS.closeEditor();
+  const addMenuRow = ()=> BK_MENUS.addRow();
+  const saveMenus = ()=> BK_MENUS.save();
+  const resetMenus = ()=> BK_MENUS.reset();
+
   // Images modal
   const openImages = ()=> BK_IMAGES.openEditor();
   const closeImages = ()=> BK_IMAGES.closeEditor();
@@ -1665,6 +1678,7 @@
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
     openProducts, closeProducts, addProductRow, saveProducts, resetProducts,
+    openMenus, closeMenus, addMenuRow, saveMenus, resetMenus,
     openImages, closeImages, saveImages, resetImages,
     openStock, closeStock, saveStock, resetStock,
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
