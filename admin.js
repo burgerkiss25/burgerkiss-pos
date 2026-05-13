@@ -33,6 +33,7 @@
       { label: 'Images', path: pathFor('BK_IMAGES_PATH', '/pos/config/images') },
       { label: 'Products', path: pathFor('BK_PRODUCTS_PATH', '/pos/catalog/products') },
       { label: 'Menus', path: pathFor('BK_MENUS_PATH', '/pos/catalog/menus') },
+      { label: 'Fast Lane', path: pathFor('BK_FASTLANE_PATH', '/pos/catalog/fastlane') },
       { label: 'Prices', path: pathFor('BK_PRICES_PATH', '/pos/catalog/prices') },
       { label: 'Stock Ingredients', path: pathFor('BK_STOCK_INGREDIENTS_PATH', '/pos/stock/ingredients') },
       { label: 'Stock Recipes', path: pathFor('BK_STOCK_RECIPES_PATH', '/pos/stock/recipes') },
@@ -102,6 +103,7 @@
   BK_PRICES.load();
   BK_PRODUCTS.load();
   BK_MENUS.load();
+  BK_FASTLANE.load();
   BK_IMAGES.load();
   BK_STOCK.load();
 
@@ -121,6 +123,12 @@
   document.getElementById('menuAdd').onclick    = ()=> BK_UI.addMenuRow();
   document.getElementById('menuSave').onclick   = ()=>{ BK_UI.saveMenus(); setTimeout(refreshDbStatus, 800); };
   document.getElementById('menuReset').onclick  = ()=>{ BK_UI.resetMenus(); setTimeout(refreshDbStatus, 800); };
+
+  document.getElementById('btnFastLane').onclick = ()=> BK_UI.openFastLane();
+  document.getElementById('fastClose').onclick   = ()=> BK_UI.closeFastLane();
+  document.getElementById('fastAdd').onclick     = ()=> BK_UI.addFastLaneRow();
+  document.getElementById('fastSave').onclick    = ()=>{ BK_UI.saveFastLane(); setTimeout(refreshDbStatus, 800); };
+  document.getElementById('fastReset').onclick   = ()=>{ BK_UI.resetFastLane(); setTimeout(refreshDbStatus, 800); };
 
   document.getElementById('btnImages').onclick = ()=> BK_UI.openImages();
   document.getElementById('iClose').onclick    = ()=> BK_UI.closeImages();

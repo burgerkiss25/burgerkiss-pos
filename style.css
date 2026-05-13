@@ -112,6 +112,8 @@ button.item:active{transform:scale(.98)}
 button.item:hover{border-color:#4c586b;transform:translateY(-1px);filter:brightness(1.04)}
 button.item.item-with-bg{background-size:cover;background-position:center;background-repeat:no-repeat}
 button.item.item-with-bg::before{content:'';position:absolute;inset:0;background:linear-gradient(to top,rgba(6,9,14,.9) 0%,rgba(6,9,14,.58) 38%,rgba(6,9,14,.24) 100%)}
+button.item.fast-lane-item{border-color:#2f7550;background:linear-gradient(135deg,#102519,#141923);box-shadow:inset 4px 0 0 rgba(116,217,159,.76),0 12px 28px rgba(0,0,0,.18)}
+button.item.fast-lane-item.item-with-bg::before{background:linear-gradient(to top,rgba(4,18,11,.94) 0%,rgba(4,18,11,.68) 42%,rgba(4,18,11,.3) 100%)}
 button.item.standard-menu-item{border-color:#735f25;background:linear-gradient(135deg,#211b0e,#141923);box-shadow:inset 4px 0 0 rgba(255,210,77,.68),0 12px 28px rgba(0,0,0,.18)}
 button.item.standard-menu-item.item-with-bg::before{background:linear-gradient(to top,rgba(18,14,5,.94) 0%,rgba(18,14,5,.68) 42%,rgba(18,14,5,.3) 100%)}
 button.item > *{position:relative;z-index:1}
@@ -161,7 +163,7 @@ button:focus-visible,.chip:focus-visible,input:focus-visible,a:focus-visible,sum
 }
 
 @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
-#productsBody input,#menusBody input,#menusBody select,#stockBody input{width:100%;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:6px}
+#productsBody input,#menusBody input,#menusBody select,#fastlaneBody input,#fastlaneBody select,#stockBody input{width:100%;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:6px}
 .cart-row{display:grid!important;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:10px}
 .cart-group-row{margin:8px 10px;border:1px solid #2d3544!important;border-radius:var(--radius-md);background:#101620}
 .cart-menu-row{border-color:#735f25!important;background:linear-gradient(180deg,rgba(255,210,77,.08),rgba(16,22,32,.98));box-shadow:inset 4px 0 0 rgba(255,210,77,.76)}
@@ -227,8 +229,9 @@ button:focus-visible,.chip:focus-visible,input:focus-visible,a:focus-visible,sum
 /* Stock location editor */
 #modalStock .sheet{width:min(1180px,96vw)}
 .menu-editor-grid{flex:1;display:grid!important;grid-template-columns:1fr 1.3fr .85fr 1.4fr 1.1fr 1.1fr 1.25fr;gap:8px;align-items:center}
-#menusBody select{width:100%;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:6px}
-@media (max-width:980px){.menu-editor-grid{grid-template-columns:1fr 1fr}}
+.fastlane-editor-grid{flex:1;display:grid!important;grid-template-columns:1fr 1.2fr 2fr;gap:8px;align-items:center}
+#menusBody select,#fastlaneBody select{width:100%;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:6px}
+@media (max-width:980px){.menu-editor-grid,.fastlane-editor-grid{grid-template-columns:1fr 1fr}}
 #stockBody select{width:100%;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:6px}
 .stock-editor-intro,.stock-section-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:4px 0 14px}
 .stock-editor-intro{padding:14px;border:1px solid #2c3440;border-radius:var(--radius-lg);background:#111620}

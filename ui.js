@@ -1,10 +1,10 @@
 // UI & Interaktionen – nutzt BK_STATE, BK_PRICES, BK_LOGIC
 (function(){
-  let currentCat = 'all';
+  let currentCat = 'fast';
   let productQuery = '';
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
-  const CATEGORY_LABELS = { all:'All', menu:'Menu', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
+  const CATEGORY_LABELS = { all:'All', fast:'Fast Lane', menu:'Menu', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
   let historyFilterText = '';
   let historyFilterToday = false;
   const QUICK_NOTES = ['No onion', 'Extra onion', 'No lettuce', 'Extra spicy'];
@@ -153,10 +153,11 @@
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
     const query = productQuery.trim().toLowerCase();
     const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
-    const productItems = base.filter(isFrontProduct).filter(it => currentCat==='menu' ? false : (currentCat==='all' ? true : it.cat===currentCat));
+    const productItems = base.filter(isFrontProduct).filter(it => (currentCat==='menu' || currentCat==='fast') ? false : (currentCat==='all' ? true : it.cat===currentCat));
     const menuItems = buildStandardMenuCards().filter(it => currentCat === 'all' || currentCat === 'menu');
-    const items = menuItems.concat(productItems)
-      .filter(it => query ? [it.name, it.searchText, it.baseName].filter(Boolean).join(' ').toLowerCase().includes(query) : true);
+    const fastItems = buildFastLaneCards().filter(it => currentCat === 'fast');
+    const items = fastItems.concat(menuItems, productItems)
+      .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true);
     if(!items.length){
       const empty = document.createElement('div');
       empty.className = 'empty-state product-empty';
@@ -167,7 +168,7 @@
     }
     items.forEach(it=>{
       const b = document.createElement('button');
-      b.className = 'item' + (it.isStandardMenu ? ' standard-menu-item' : '');
+      b.className = 'item' + (it.isStandardMenu ? ' standard-menu-item' : '') + (it.isFastLane ? ' fast-lane-item' : '');
       b.type = 'button';
       const img = BK_IMAGES.get(it.imageId || it.id);
       if(img){
@@ -183,9 +184,9 @@
                      ${it.subtitle ? `<small class="item-subtitle">${it.subtitle}</small>` : ''}
                      <div class="item-meta">
                        <div class="price">${itemDisplayPrice(it)} GHS</div>
-                       <span class="badge">${it.isStandardMenu ? 'Menu' : '+1'}</span>
+                       <span class="badge">${it.isFastLane ? 'Fast' : (it.isStandardMenu ? 'Menu' : '+1')}</span>
                      </div>`;
-      b.onclick = ()=> it.isStandardMenu ? addStandardMenuPreset(it) : addProductWithFlow(it);
+      b.onclick = ()=> it.isFastLane ? addFastLaneShortcut(it) : (it.isStandardMenu ? addStandardMenuPreset(it) : addProductWithFlow(it));
       grid.appendChild(b);
     });
   }
@@ -365,6 +366,7 @@
 
   function itemDisplayPrice(item){
     if(item && item.isStandardMenu) return standardMenuPrice(item);
+    if(item && item.isFastLane && item.fastTarget) return BK_PRICES.getPrice(item.fastTarget.id);
     return BK_PRICES.getPrice(item && item.id);
   }
 
@@ -396,6 +398,44 @@
         baseName: base.name,
         subtitle: [base.name, fries && fries.name, drink && drink.name].filter(Boolean).join(' + '),
         searchText: [base.name, fries && fries.name, drink && drink.name, 'standard menu combo'].filter(Boolean).join(' ')
+      });
+    }).filter(Boolean);
+  }
+
+  function getFastLanePresets(){
+    if(window.BK_FASTLANE && typeof BK_FASTLANE.getItems === 'function') return BK_FASTLANE.getItems();
+    return [];
+  }
+
+  function buildFastLaneCards(){
+    const menuCards = buildStandardMenuCards();
+    return getFastLanePresets().map(shortcut=>{
+      if(shortcut.targetType === 'menu'){
+        const menuCard = menuCards.find(menu=>menu.id === shortcut.targetId);
+        if(!menuCard) return null;
+        return Object.assign({}, menuCard, {
+          id: shortcut.id,
+          name: shortcut.label || menuCard.name,
+          subtitle: menuCard.name,
+          cat: 'fast',
+          isFastLane: true,
+          fastTargetType: 'menu',
+          fastTargetId: shortcut.targetId,
+          fastTarget: menuCard
+        });
+      }
+      const product = productById(shortcut.targetId);
+      if(!product) return null;
+      return Object.assign({}, product, {
+        id: shortcut.id,
+        name: shortcut.label || product.name,
+        subtitle: product.name,
+        cat: 'fast',
+        imageId: product.id,
+        isFastLane: true,
+        fastTargetType: 'product',
+        fastTargetId: product.id,
+        fastTarget: product
       });
     }).filter(Boolean);
   }
@@ -571,6 +611,12 @@
     if(picked.menuDrink) BK_STATE.addItem(picked.menuDrink, menuNote);
     if(!isWingsBase(product)) addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
     return true;
+  }
+
+  async function addFastLaneShortcut(shortcut){
+    if(shortcut.fastTargetType === 'menu') return addStandardMenuPreset(shortcut.fastTarget);
+    if(shortcut.fastTarget) return addProductWithFlow(shortcut.fastTarget);
+    infoDialog('This Fast Lane shortcut is not available anymore. Check Admin → Edit Fast Lane.');
   }
 
   async function addStandardMenuPreset(menu){
@@ -1575,6 +1621,13 @@
   const saveMenus = ()=> BK_MENUS.save();
   const resetMenus = ()=> BK_MENUS.reset();
 
+  // Fast Lane modal
+  const openFastLane = ()=> BK_FASTLANE.openEditor();
+  const closeFastLane = ()=> BK_FASTLANE.closeEditor();
+  const addFastLaneRow = ()=> BK_FASTLANE.addRow();
+  const saveFastLane = ()=> BK_FASTLANE.save();
+  const resetFastLane = ()=> BK_FASTLANE.reset();
+
   // Images modal
   const openImages = ()=> BK_IMAGES.openEditor();
   const closeImages = ()=> BK_IMAGES.closeEditor();
@@ -1659,7 +1712,7 @@
   function renderAll(){
     bindProductSearch();
     if(!document.querySelector('.catbar .tab.active')){
-      const first = document.querySelector('.catbar .tab[data-cat="all"]');
+      const first = document.querySelector('.catbar .tab[data-cat="fast"]') || document.querySelector('.catbar .tab[data-cat="all"]');
       if(first) first.classList.add('active');
     }
     buildProducts();
@@ -1679,6 +1732,7 @@
     openPrices, closePrices, savePrices, resetPrices,
     openProducts, closeProducts, addProductRow, saveProducts, resetProducts,
     openMenus, closeMenus, addMenuRow, saveMenus, resetMenus,
+    openFastLane, closeFastLane, addFastLaneRow, saveFastLane, resetFastLane,
     openImages, closeImages, saveImages, resetImages,
     openStock, closeStock, saveStock, resetStock,
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
