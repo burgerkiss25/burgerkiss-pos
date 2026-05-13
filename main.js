@@ -48,11 +48,6 @@
     add.onclick = ()=> BK_UI.addNewOrderSlot();
   }
 
-  // Quick notes
-  document.querySelectorAll('.quick-note').forEach(el=>{
-    el.onclick = ()=>{ const inp=document.getElementById('noteInput'); inp.value=el.textContent; inp.focus(); };
-  });
-
   const syncWorkflowA11y = (name)=>{
     const tabs = { order:'tabOrder', make:'tabMake', pay:'tabPay', issue:'tabIssue' };
     Object.entries(tabs).forEach(([key, id])=>{
