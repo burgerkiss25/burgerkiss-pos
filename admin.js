@@ -105,35 +105,35 @@
   BK_IMAGES.load();
   BK_STOCK.load();
 
-  document.getElementById('btnPrices').onclick = ()=> BK_UI.openPrices();
-  document.getElementById('pClose').onclick    = ()=> BK_UI.closePrices();
-  document.getElementById('pSave').onclick     = ()=>{ BK_UI.savePrices(); setTimeout(refreshDbStatus, 800); };
-  document.getElementById('pReset').onclick    = ()=>{ BK_UI.resetPrices(); setTimeout(refreshDbStatus, 800); };
+  document.getElementById('btnPrices').onclick = ()=> BK_PRICES.openEditor(false);
+  document.getElementById('pClose').onclick    = ()=> BK_PRICES.closeEditor();
+  document.getElementById('pSave').onclick     = ()=>{ BK_PRICES.save(); setTimeout(refreshDbStatus, 800); };
+  document.getElementById('pReset').onclick    = ()=>{ BK_PRICES.reset(); setTimeout(refreshDbStatus, 800); };
 
-  document.getElementById('btnProducts').onclick = ()=> BK_UI.openProducts();
-  document.getElementById('prodClose').onclick   = ()=> BK_UI.closeProducts();
-  document.getElementById('prodAdd').onclick     = ()=> BK_UI.addProductRow();
-  document.getElementById('prodSave').onclick    = ()=>{ BK_UI.saveProducts(); setTimeout(refreshDbStatus, 800); };
-  document.getElementById('prodReset').onclick   = ()=>{ BK_UI.resetProducts(); setTimeout(refreshDbStatus, 800); };
+  document.getElementById('btnProducts').onclick = ()=> BK_PRODUCTS.openEditor();
+  document.getElementById('prodClose').onclick   = ()=> BK_PRODUCTS.closeEditor();
+  document.getElementById('prodAdd').onclick     = ()=> BK_PRODUCTS.addRow();
+  document.getElementById('prodSave').onclick    = ()=>{ BK_PRODUCTS.save(); setTimeout(refreshDbStatus, 800); };
+  document.getElementById('prodReset').onclick   = ()=>{ BK_PRODUCTS.reset(); setTimeout(refreshDbStatus, 800); };
 
-  document.getElementById('btnMenus').onclick = ()=> BK_UI.openMenus();
-  document.getElementById('menuClose').onclick  = ()=> BK_UI.closeMenus();
-  document.getElementById('menuAdd').onclick    = ()=> BK_UI.addMenuRow();
-  document.getElementById('menuSave').onclick   = ()=>{ BK_UI.saveMenus(); setTimeout(refreshDbStatus, 800); };
-  document.getElementById('menuReset').onclick  = ()=>{ BK_UI.resetMenus(); setTimeout(refreshDbStatus, 800); };
+  document.getElementById('btnMenus').onclick = ()=> BK_MENUS.openEditor();
+  document.getElementById('menuClose').onclick  = ()=> BK_MENUS.closeEditor();
+  document.getElementById('menuAdd').onclick    = ()=> BK_MENUS.addRow();
+  document.getElementById('menuSave').onclick   = ()=>{ BK_MENUS.save(); setTimeout(refreshDbStatus, 800); };
+  document.getElementById('menuReset').onclick  = ()=>{ BK_MENUS.reset(); setTimeout(refreshDbStatus, 800); };
 
 
-  document.getElementById('btnImages').onclick = ()=> BK_UI.openImages();
-  document.getElementById('iClose').onclick    = ()=> BK_UI.closeImages();
-  document.getElementById('iSave').onclick     = ()=>{ Promise.resolve(BK_UI.saveImages()).finally(()=> setTimeout(refreshDbStatus, 200)); };
-  document.getElementById('iReset').onclick    = ()=>{ BK_UI.resetImages(); setTimeout(refreshDbStatus, 800); };
+  document.getElementById('btnImages').onclick = ()=> BK_IMAGES.openEditor();
+  document.getElementById('iClose').onclick    = ()=> BK_IMAGES.closeEditor();
+  document.getElementById('iSave').onclick     = ()=>{ Promise.resolve(BK_IMAGES.save()).finally(()=> setTimeout(refreshDbStatus, 200)); };
+  document.getElementById('iReset').onclick    = ()=>{ BK_IMAGES.reset(); setTimeout(refreshDbStatus, 800); };
 
-  document.getElementById('btnStock').onclick = ()=> BK_UI.openStock();
+  document.getElementById('btnStock').onclick = ()=> BK_STOCK.openEditor();
   document.getElementById('btnIngredients').onclick = ()=> BK_STOCK.openEditor('ingredients');
   document.getElementById('btnRecipes').onclick = ()=> BK_STOCK.openEditor('recipes');
   document.getElementById('btnAddons').onclick = ()=> BK_STOCK.openEditor('addons');
-  document.getElementById('sClose').onclick   = ()=> BK_UI.closeStock();
-  document.getElementById('sSave').onclick    = ()=>{ BK_UI.saveStock(); setTimeout(refreshDbStatus, 800); };
-  document.getElementById('sReset').onclick   = ()=>{ BK_UI.resetStock(); setTimeout(refreshDbStatus, 800); };
+  document.getElementById('sClose').onclick   = ()=> BK_STOCK.closeEditor();
+  document.getElementById('sSave').onclick    = ()=>{ BK_STOCK.save(); setTimeout(refreshDbStatus, 800); };
+  document.getElementById('sReset').onclick   = ()=>{ BK_STOCK.reset(); setTimeout(refreshDbStatus, 800); };
   document.getElementById('btnRefreshDbStatus').onclick = refreshDbStatus;
 })();
