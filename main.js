@@ -3,7 +3,6 @@
   BK_PRICES.load();
   BK_PRODUCTS.load();
   BK_MENUS.load();
-  BK_FASTLANE.load();
   BK_IMAGES.load();
   BK_STOCK.load();
   const had = BK_STATE.load();
