@@ -1,6 +1,6 @@
 // UI & Interaktionen – nutzt BK_STATE, BK_PRICES, BK_LOGIC
 (function(){
-  let currentCat = 'all';
+  let currentCat = 'fast';
   let productQuery = '';
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
@@ -1660,7 +1660,7 @@
   function renderAll(){
     bindProductSearch();
     if(!document.querySelector('.catbar .tab.active')){
-      const first = document.querySelector('.catbar .tab[data-cat="all"]');
+      const first = document.querySelector('.catbar .tab[data-cat="fast"]') || document.querySelector('.catbar .tab[data-cat="all"]');
       if(first) first.classList.add('active');
     }
     buildProducts();
