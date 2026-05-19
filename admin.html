@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – Admin Editors</title>
-  <link rel="stylesheet" href="./style.css?v=20" />
+  <link rel="stylesheet" href="./style.css?v=27" />
   <script src="./firebase-config.js?v=1"></script>
 </head>
 <body class="admin-page">
@@ -21,6 +21,7 @@
         <a class="x" href="index.html">← Back to POS</a>
         <button class="x" id="btnPrices" type="button">Edit Prices</button>
         <button class="x" id="btnProducts" type="button">Edit Products</button>
+        <button class="x" id="btnMenus" type="button">Edit Menus</button>
         <button class="x" id="btnImages" type="button">Edit Images</button>
         <button class="x" id="btnStock" type="button">Edit Stock</button>
         <button class="x" id="btnIngredients" type="button">Edit Ingredients</button>
@@ -50,6 +51,7 @@
 
   <div class="modal" id="modalPrices"><div class="sheet"><header><b>Edit Prices</b><div><button class="x" id="pSave">Save</button><button class="x" id="pReset">Reset</button><button class="x" id="pClose">Close</button></div></header><div class="body" id="pricesBody"></div></div></div>
   <div class="modal" id="modalProducts"><div class="sheet"><header><b>Edit Products</b><div><button class="x" id="prodAdd">+ Add</button><button class="x" id="prodSave">Save</button><button class="x" id="prodReset">Reset</button><button class="x" id="prodClose">Close</button></div></header><div class="body" id="productsBody"></div></div></div>
+  <div class="modal" id="modalMenus"><div class="sheet"><header><b>Edit Menus</b><div><button class="x" id="menuAdd">+ Add</button><button class="x" id="menuSave">Save</button><button class="x" id="menuReset">Reset</button><button class="x" id="menuClose">Close</button></div></header><div class="body" id="menusBody"></div></div></div>
   <div class="modal" id="modalImages"><div class="sheet"><header><b>Edit Images</b><div><button class="x" id="iSave">Save</button><button class="x" id="iReset">Reset</button><button class="x" id="iClose">Close</button></div></header><div class="body" id="imagesBody"></div></div></div>
   <div class="modal" id="modalStock"><div class="sheet"><header><b id="stockModalTitle">Edit Stock</b><div><button class="x" id="sSave">Save</button><button class="x" id="sReset">Reset</button><button class="x" id="sClose">Close</button></div></header><div class="body" id="stockBody"></div></div></div>
 
@@ -67,13 +69,14 @@
   <script src="./data.js?v=13"></script>
   <script src="./prices.js?v=14"></script>
   <script src="./products.js?v=14"></script>
+  <script src="./menus.js?v=1"></script>
   <script src="./images.js?v=18"></script>
   <script src="./stock_data.js?v=13"></script>
   <script src="./stock_utils.js?v=15"></script>
   <script src="./stock.js?v=18"></script>
-  <script src="./state.js?v=13"></script>
+  <script src="./state.js?v=15"></script>
   <script src="./logic.js?v=13"></script>
-  <script src="./ui.js?v=17"></script>
+  <script src="./ui.js?v=27"></script>
   <script src="admin.js"></script>
 </body>
 </html>

@@ -1,13 +1,21 @@
 // UI & Interaktionen – nutzt BK_STATE, BK_PRICES, BK_LOGIC
 (function(){
-  let currentCat = 'all';
+  let currentCat = 'fast';
   let productQuery = '';
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
-  const CATEGORY_LABELS = { all:'All', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
+  const CATEGORY_LABELS = { all:'All', menu:'Menu', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
   let historyFilterText = '';
   let historyFilterToday = false;
   const QUICK_NOTES = ['No onion', 'Extra onion', 'No lettuce', 'Extra spicy'];
+  const FALLBACK_STANDARD_MENUS = [
+    { id:'menu_cheeseburger', name:'Cheeseburger Menu', baseId:'cheeseburger', menuPrice:135, defaultFries:'fries_standard', defaultDrink:'d_cola' },
+    { id:'menu_hamburger', name:'Hamburger Menu', baseId:'hamburger', menuPrice:120, defaultFries:'fries_standard', defaultDrink:'d_cola' },
+    { id:'menu_double_burger', name:'Double Burger Menu', baseId:'double_burger', menuPrice:155, defaultFries:'fries_standard', defaultDrink:'d_cola' },
+    { id:'menu_double_cheeseburger', name:'Double Cheeseburger Menu', baseId:'double_cheeseburger', menuPrice:170, defaultFries:'fries_standard', defaultDrink:'d_cola' },
+    { id:'menu_wings_6', name:'Wings 6 Menu', baseId:'wings_6', menuPrice:65, defaultFries:'fries_standard', defaultDrink:'d_cola', defaultWingsSauce:'x_sauce_chicken_wings' },
+    { id:'menu_wings_12', name:'Wings 12 Menu', baseId:'wings_12', menuPrice:110, defaultFries:'fries_standard', defaultDrink:'d_cola', defaultWingsSauce:'x_sauce_chicken_wings' }
+  ];
 
   const STOCK_DEFAULT = {
     INGREDIENTS: {
@@ -145,9 +153,11 @@
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
     const query = productQuery.trim().toLowerCase();
     const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
-    const items = base.filter(isFrontProduct)
-      .filter(it => (currentCat==='all' ? true : it.cat===currentCat))
-      .filter(it => query ? it.name.toLowerCase().includes(query) : true);
+    const productItems = base.filter(isFrontProduct).filter(it => (currentCat==='menu' || currentCat==='fast') ? false : (currentCat==='all' ? true : it.cat===currentCat));
+    const menuItems = buildStandardMenuCards().filter(it => currentCat === 'all' || currentCat === 'menu');
+    const fastItems = buildFastLaneCards().filter(it => currentCat === 'fast');
+    const items = fastItems.concat(menuItems, productItems)
+      .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true);
     if(!items.length){
       const empty = document.createElement('div');
       empty.className = 'empty-state product-empty';
@@ -158,9 +168,9 @@
     }
     items.forEach(it=>{
       const b = document.createElement('button');
-      b.className='item';
+      b.className = 'item' + (it.isStandardMenu ? ' standard-menu-item' : '');
       b.type = 'button';
-      const img = BK_IMAGES.get(it.id);
+      const img = BK_IMAGES.get(it.imageId || it.id);
       if(img){
         b.classList.add('item-with-bg');
         b.style.backgroundImage = `url(${img})`;
@@ -171,11 +181,12 @@
       const catLabel = CATEGORY_LABELS[it.cat] || it.cat || 'Item';
       b.innerHTML = `<span class="cat-badge">${catLabel}</span>
                      <div class="name">${it.name}</div>
+                     ${it.subtitle ? `<small class="item-subtitle">${it.subtitle}</small>` : ''}
                      <div class="item-meta">
-                       <div class="price">${BK_PRICES.getPrice(it.id)} GHS</div>
-                       <span class="badge">+1</span>
+                       <div class="price">${itemDisplayPrice(it)} GHS</div>
+                       <span class="badge">${it.isStandardMenu ? 'Menu' : '+1'}</span>
                      </div>`;
-      b.onclick = ()=> addProductWithFlow(it);
+      b.onclick = ()=> it.isStandardMenu ? addStandardMenuPreset(it) : addProductWithFlow(it);
       grid.appendChild(b);
     });
   }
@@ -353,6 +364,43 @@
     return `${p.name} (${BK_PRICES.getPrice(id)} GHS)`;
   }
 
+  function itemDisplayPrice(item){
+    if(item && item.isStandardMenu) return standardMenuPrice(item);
+    return BK_PRICES.getPrice(item && item.id);
+  }
+
+  function standardMenuPrice(menu){
+    const base = productById(menu.baseId);
+    if(!base) return 0;
+    const included = BK_DATA.MENU && BK_DATA.MENU.included ? BK_DATA.MENU.included : {fries:0, drink:0};
+    const friesUpgrade = menu.defaultFries ? Math.max(0, BK_PRICES.getPrice(menu.defaultFries) - (Number(included.fries) || 0)) : 0;
+    const drinkUpgrade = menu.defaultDrink ? Math.max(0, BK_PRICES.getPrice(menu.defaultDrink) - (Number(included.drink) || 0)) : 0;
+    const baseMenuPrice = Number(menu.menuPrice) > 0 ? Number(menu.menuPrice) : mealBasePrice(base);
+    return baseMenuPrice + friesUpgrade + drinkUpgrade;
+  }
+
+  function getStandardMenuPresets(){
+    if(window.BK_MENUS && typeof BK_MENUS.getMenus === 'function') return BK_MENUS.getMenus();
+    return FALLBACK_STANDARD_MENUS;
+  }
+
+  function buildStandardMenuCards(){
+    return getStandardMenuPresets().map(menu=>{
+      const base = productById(menu.baseId);
+      if(!base || standardMenuPrice(menu) <= 0) return null;
+      const fries = productById(menu.defaultFries);
+      const drink = productById(menu.defaultDrink);
+      return Object.assign({}, menu, {
+        cat: 'menu',
+        isStandardMenu: true,
+        imageId: menu.baseId,
+        baseName: base.name,
+        subtitle: [base.name, fries && fries.name, drink && drink.name].filter(Boolean).join(' + '),
+        searchText: [base.name, fries && fries.name, drink && drink.name, 'standard menu combo'].filter(Boolean).join(' ')
+      });
+    }).filter(Boolean);
+  }
+
   function mealBasePrice(product){
     return Number(BK_DATA.MENU && BK_DATA.MENU[product.id]) || 0;
   }
@@ -477,10 +525,14 @@
     return true;
   }
 
-  async function addGuidedMenu(product, pendingNote){
+  async function addGuidedMenu(product, pendingNote, preset){
+    const menuPreset = preset || {};
+    const defaultFries = menuPreset.defaultFries || 'fries_standard';
+    const defaultDrink = menuPreset.defaultDrink || 'd_cola';
+    const defaultWingsSauce = Object.prototype.hasOwnProperty.call(menuPreset, 'defaultWingsSauce') ? menuPreset.defaultWingsSauce : 'x_sauce_chicken_wings';
     const friesOptions = [
-      {label: optionLabel('fries_standard', 'Fries Standard'), value:'fries_standard', checked:true},
-      {label: `${optionLabel('fries_large', 'Fries Large')} · upgrade +${Math.max(0, BK_PRICES.getPrice('fries_large') - BK_DATA.MENU.included.fries)} GHS`, value:'fries_large'}
+      {label: optionLabel('fries_standard', 'Fries Standard'), value:'fries_standard', checked: defaultFries === 'fries_standard'},
+      {label: `${optionLabel('fries_large', 'Fries Large')} · upgrade +${Math.max(0, BK_PRICES.getPrice('fries_large') - BK_DATA.MENU.included.fries)} GHS`, value:'fries_large', checked: defaultFries === 'fries_large'}
     ].filter(opt=>productById(opt.value));
     const preferredDrinks = ['d_cola','d_sprite','d_fanta_orange','d_fanta_coktail','d_biggoo_grape','d_coconut_fresh','d_coconut_water_bottle','d_iced_tea_lime','d_iced_tea_ginger','d_iced_tea_strawberry','d_iced_tea_pineapple','d_iced_tea_mint','d_iced_tea_apple','d_iced_tea_green_mint','d_iced_tea_vannile','d_club_beer_std','d_club_beer_large','d_guinness'];
     const drinkOptions = preferredDrinks
@@ -489,7 +541,7 @@
       .map((p, idx)=>({
         label: `${p.name}${Math.max(0, BK_PRICES.getPrice(p.id) - BK_DATA.MENU.included.drink) ? ` · upgrade +${Math.max(0, BK_PRICES.getPrice(p.id) - BK_DATA.MENU.included.drink)} GHS` : ''}`,
         value: p.id,
-        checked: idx === 0
+        checked: p.id === defaultDrink || (!defaultDrink && idx === 0)
       }));
     const sections = [
       { title:'Menu fries', name:'menuFries', type:'radio', help:'Standard fries are included; large fries add the upgrade difference.', options:friesOptions },
@@ -497,13 +549,13 @@
     ];
     if(isBurgerBase(product)) sections.push(...burgerExtraSections(product));
     if(isWingsBase(product)) sections.push({ title:'Included sauce', name:'wingsSauce', type:'radio', help:'Choose one included sauce for the wings.', options:[
-      {label:'No Sauce Wanted', value:''},
-      {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings', checked:true},
-      {label:'Chipotle', value:'x_sauce_chipotle'}
+      {label:'No Sauce Wanted', value:'', checked: defaultWingsSauce === ''},
+      {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings', checked: defaultWingsSauce === 'x_sauce_chicken_wings'},
+      {label:'Chipotle', value:'x_sauce_chipotle', checked: defaultWingsSauce === 'x_sauce_chipotle'}
     ]});
     sections.push({ title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add extra sauce cups.', options:paidSauceOptions() });
 
-    const picked = await openModifierSheet(`${product.name} guided menu`, sections, {
+    const picked = await openModifierSheet(menuPreset.name || `${product.name} guided menu`, sections, {
       note: pendingNote,
       cancelLabel: 'Cancel menu',
       confirmLabel: 'Add menu',
@@ -520,6 +572,19 @@
     if(picked.menuDrink) BK_STATE.addItem(picked.menuDrink, menuNote);
     if(!isWingsBase(product)) addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
     return true;
+  }
+
+  async function addStandardMenuPreset(menu){
+    const base = productById(menu.baseId);
+    if(!base){
+      infoDialog(`${menu.name} is not available in the current product catalog.`);
+      return;
+    }
+    const added = await addGuidedMenu(base, '', menu);
+    if(!added) return;
+    renderOrder();
+    renderMake();
+    refreshTotals();
   }
 
   async function addProductWithFlow(product){
@@ -1504,6 +1569,13 @@
   const saveProducts = ()=> BK_PRODUCTS.save();
   const resetProducts = ()=> BK_PRODUCTS.reset();
 
+  // Menus modal
+  const openMenus = ()=> BK_MENUS.openEditor();
+  const closeMenus = ()=> BK_MENUS.closeEditor();
+  const addMenuRow = ()=> BK_MENUS.addRow();
+  const saveMenus = ()=> BK_MENUS.save();
+  const resetMenus = ()=> BK_MENUS.reset();
+
   // Images modal
   const openImages = ()=> BK_IMAGES.openEditor();
   const closeImages = ()=> BK_IMAGES.closeEditor();
@@ -1588,7 +1660,7 @@
   function renderAll(){
     bindProductSearch();
     if(!document.querySelector('.catbar .tab.active')){
-      const first = document.querySelector('.catbar .tab[data-cat="all"]');
+      const first = document.querySelector('.catbar .tab[data-cat="fast"]') || document.querySelector('.catbar .tab[data-cat="all"]');
       if(first) first.classList.add('active');
     }
     buildProducts();
@@ -1607,6 +1679,7 @@
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
     openProducts, closeProducts, addProductRow, saveProducts, resetProducts,
+    openMenus, closeMenus, addMenuRow, saveMenus, resetMenus,
     openImages, closeImages, saveImages, resetImages,
     openStock, closeStock, saveStock, resetStock,
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
