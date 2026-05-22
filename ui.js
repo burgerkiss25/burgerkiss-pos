@@ -545,6 +545,7 @@
       }));
     const sections = [
       { title:'Menu fries', name:'menuFries', type:'radio', help:'Standard fries are included; large fries add the upgrade difference.', options:friesOptions },
+      { title:'Menu fries sauce', name:'menuFriesSauce', type:'radio', help:'Choose one sauce cup to hand over with menu fries.', options:sauceOptions() },
       { title:'Menu drink', name:'menuDrink', type:'radio', help:'Choose the drink for this menu.', options:drinkOptions }
     ];
     if(isBurgerBase(product)) sections.push(...burgerExtraSections(product));
@@ -569,6 +570,7 @@
 
     const menuNote = modifierLinkNote('menu', product.name, picked.itemNote);
     if(picked.menuFries) BK_STATE.addItem(picked.menuFries, menuNote);
+    if(picked.menuFriesSauce) BK_STATE.addItem(picked.menuFriesSauce, menuNote);
     if(picked.menuDrink) BK_STATE.addItem(picked.menuDrink, menuNote);
     if(!isWingsBase(product)) addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
     return true;
@@ -1324,6 +1326,40 @@
     const usage = window.BK_STOCK && typeof BK_STOCK.getUsageForSlot === 'function'
       ? BK_STOCK.getUsageForSlot(slot)
       : {};
+    const slotItems = Array.isArray(slot.items) ? slot.items : [];
+    const productByItemId = id => (BK_DATA.BASE || []).find(p=> p.id === id) || null;
+    const isDrinkItem = it=>{
+      const p = productByItemId(it.itemId);
+      return !!(p && p.cat === 'drink');
+    };
+    const isFoodItem = it=>{
+      const p = productByItemId(it.itemId);
+      if(!p) return false;
+      return p.cat !== 'drink' && p.cat !== 'extra' && !String(p.id || '').startsWith('x_sauce_');
+    };
+    const isMenuLinkedChild = it=>{
+      const linked = parseLinkedModifierNote(it && it.note);
+      return !!(linked && linked.prefix === 'menu');
+    };
+    const menuChildCount = slotItems.filter(isMenuLinkedChild).length;
+    const drinkCount = slotItems.filter(isDrinkItem).length;
+    const foodCount = slotItems.filter(isFoodItem).length;
+
+    function handoverPackagingRows(){
+      const rows = [];
+      if(drinkCount > 0){
+        rows.push({ name:'White plastic bag (drinks only)', qty: drinkCount, unit:'pcs' });
+      }
+      if(foodCount <= 0) return rows;
+      if(menuChildCount >= 2 || foodCount >= 4){
+        rows.push({ name:'Large paper bag', qty: 1, unit:'pcs' });
+      }else if(menuChildCount >= 1 || foodCount >= 2){
+        rows.push({ name:'Medium paper bag', qty: 1, unit:'pcs' });
+      }else{
+        rows.push({ name:'Medium paper bag', qty: 1, unit:'pcs' });
+      }
+      return rows;
+    }
     const ingredientDefs = window.BK_STOCK && typeof BK_STOCK.getIngredients === 'function'
       ? BK_STOCK.getIngredients()
       : {};
@@ -1332,14 +1368,19 @@
         const def = ingredientDefs[id];
         if(!def || Number(qty) <= 0) return null;
         const cat = String(def.category || '').toLowerCase();
-        const isChecklistExtra = ['packaging', 'sauce', 'cutlery'].includes(cat) || id === 'napkin';
+        const name = String(def.name || '').toLowerCase();
+        const isNapkin = id === 'napkin' || name.includes('napkin') || name.includes('serviette');
+        const isCutlery = cat === 'cutlery' || name.includes('fork') || name.includes('spoon');
+        const isChecklistExtra = isNapkin || isCutlery;
         if(!isChecklistExtra) return null;
         return { id, name: def.name || id, qty: Number(qty), unit: def.unit || '' };
       })
       .filter(Boolean)
       .sort((a,b)=> a.name.localeCompare(b.name));
-    const extrasHtml = extraRows.length
-      ? `<div style="margin:8px 0 2px"><b>Packing & extras:</b></div>${extraRows.map(row=>`<div class="grouped-meal-child">• ${row.name}: ${row.qty}${row.unit ? ` ${row.unit}` : ''}</div>`).join('')}`
+    const packagingRows = handoverPackagingRows();
+    const handoverRows = packagingRows.concat(extraRows);
+    const extrasHtml = handoverRows.length
+      ? `<div style="margin:8px 0 2px"><b>Handover extras:</b></div>${handoverRows.map(row=>`<div class="grouped-meal-child">• ${row.name}: ${row.qty}${row.unit ? ` ${row.unit}` : ''}</div>`).join('')}`
       : '';
     confirmDialog(
       `Final handover check – ${slot.orderNo || slot.name}`,
@@ -1536,12 +1577,18 @@
         renderStock();
       };
     });
-    host.querySelectorAll('[data-stock-filter]').forEach(btn=>{
-      btn.onclick = ()=>{
-        stockOverviewFilter = btn.dataset.stockFilter || 'all';
-        renderStock();
-      };
-    });
+  }
+
+  function openStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(!modal) return;
+    renderStock();
+    modal.classList.add('open');
+  }
+
+  function closeStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(modal) modal.classList.remove('open');
   }
 
   function openStockOverview(){
