@@ -1,6 +1,6 @@
 // UI & Interaktionen – nutzt BK_STATE, BK_PRICES, BK_LOGIC
 (function(){
-  let currentCat = 'fast';
+  let currentCat = 'all';
   let productQuery = '';
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
@@ -155,8 +155,7 @@
     const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
     const productItems = base.filter(isFrontProduct).filter(it => (currentCat==='menu' || currentCat==='fast') ? false : (currentCat==='all' ? true : it.cat===currentCat));
     const menuItems = buildStandardMenuCards().filter(it => currentCat === 'all' || currentCat === 'menu');
-    const fastItems = buildFastLaneCards().filter(it => currentCat === 'fast');
-    const items = fastItems.concat(menuItems, productItems)
+    const items = menuItems.concat(productItems)
       .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true);
     if(!items.length){
       const empty = document.createElement('div');
@@ -1660,7 +1659,7 @@
   function renderAll(){
     bindProductSearch();
     if(!document.querySelector('.catbar .tab.active')){
-      const first = document.querySelector('.catbar .tab[data-cat="fast"]') || document.querySelector('.catbar .tab[data-cat="all"]');
+      const first = document.querySelector('.catbar .tab[data-cat="all"]');
       if(first) first.classList.add('active');
     }
     buildProducts();
