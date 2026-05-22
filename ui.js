@@ -917,6 +917,7 @@
     const {slots} = BK_STATE.getState();
     const box = document.getElementById('makeList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
+    box.querySelectorAll('.empty-state').forEach(n=>n.remove());
     if(!slots.length){
       const empty = document.createElement('div');
       empty.className = 'empty-state';
@@ -957,6 +958,7 @@
     const {slots} = BK_STATE.getState();
     const box = document.getElementById('payList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
+    box.querySelectorAll('.empty-state').forEach(n=>n.remove());
     if(!slots.length){
       const empty = document.createElement('div');
       empty.className = 'empty-state';
@@ -990,6 +992,7 @@
     const box = document.getElementById('issueList');
     if(!box) return;
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
+    box.querySelectorAll('.empty-state').forEach(n=>n.remove());
     if(!slots.length){
       const empty = document.createElement('div');
       empty.className = 'empty-state';
@@ -1348,15 +1351,15 @@
     function handoverPackagingRows(){
       const rows = [];
       if(drinkCount > 0){
-        rows.push({ name:'White plastic bag (drinks only)', qty: drinkCount, unit:'pcs' });
+        rows.push({ id:'white_plastic_bag', name:'White plastic bag (drinks only)', qty: drinkCount, unit:'pcs' });
       }
       if(foodCount <= 0) return rows;
       if(menuChildCount >= 2 || foodCount >= 4){
-        rows.push({ name:'Large paper bag', qty: 1, unit:'pcs' });
+        rows.push({ id:'large_paper_bag', name:'Large paper bag', qty: 1, unit:'pcs' });
       }else if(menuChildCount >= 1 || foodCount >= 2){
-        rows.push({ name:'Medium paper bag', qty: 1, unit:'pcs' });
+        rows.push({ id:'medium_paper_bag', name:'Medium paper bag', qty: 1, unit:'pcs' });
       }else{
-        rows.push({ name:'Medium paper bag', qty: 1, unit:'pcs' });
+        rows.push({ id:'small_paper_bag', name:'Small paper bag', qty: 1, unit:'pcs' });
       }
       return rows;
     }
@@ -1371,7 +1374,11 @@
         const name = String(def.name || '').toLowerCase();
         const isNapkin = id === 'napkin' || name.includes('napkin') || name.includes('serviette');
         const isCutlery = cat === 'cutlery' || name.includes('fork') || name.includes('spoon');
-        const isChecklistExtra = isNapkin || isCutlery;
+        const isDrinkPackaging = id === 'white_plastic_bag';
+        const isCustomerPackaging = ['small_bag','medium_paper_bag','small_paper_bag','large_paper_bag','sauce_cup','standard_fries_cup','large_fries_cup'].includes(id);
+        const isChecklistExtra = isNapkin || isCutlery || isDrinkPackaging || isCustomerPackaging;
+        const isKitchenOnly = id === 'aluminium_foil';
+        if(isKitchenOnly) return null;
         if(!isChecklistExtra) return null;
         return { id, name: def.name || id, qty: Number(qty), unit: def.unit || '' };
       })
@@ -1577,6 +1584,18 @@
         renderStock();
       };
     });
+  }
+
+  function openStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(!modal) return;
+    renderStock();
+    modal.classList.add('open');
+  }
+
+  function closeStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(modal) modal.classList.remove('open');
   }
 
   function openStockOverview(){
