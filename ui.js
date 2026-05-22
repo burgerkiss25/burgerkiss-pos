@@ -1536,6 +1536,36 @@
         renderStock();
       };
     });
+    host.querySelectorAll('[data-stock-filter]').forEach(btn=>{
+      btn.onclick = ()=>{
+        stockOverviewFilter = btn.dataset.stockFilter || 'all';
+        renderStock();
+      };
+    });
+  }
+
+  function openStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(!modal) return;
+    renderStock();
+    modal.classList.add('open');
+  }
+
+  function closeStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(modal) modal.classList.remove('open');
+  }
+
+  function openStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(!modal) return;
+    renderStock();
+    modal.classList.add('open');
+  }
+
+  function closeStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(modal) modal.classList.remove('open');
   }
 
   function openStockOverview(){
