@@ -1598,6 +1598,54 @@
     if(modal) modal.classList.remove('open');
   }
 
+  function openStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(!modal) return;
+    renderStock();
+    modal.classList.add('open');
+  }
+
+  function closeStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(modal) modal.classList.remove('open');
+  }
+
+  function openStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(!modal) return;
+    renderStock();
+    modal.classList.add('open');
+  }
+
+  function closeStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(modal) modal.classList.remove('open');
+  }
+
+  function openStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(!modal) return;
+    renderStock();
+    modal.classList.add('open');
+  }
+
+  function closeStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(modal) modal.classList.remove('open');
+  }
+
+  function openStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(!modal) return;
+    renderStock();
+    modal.classList.add('open');
+  }
+
+  function closeStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(modal) modal.classList.remove('open');
+  }
+
   const openStock = ()=> BK_STOCK.openEditor();
   const closeStock = ()=> BK_STOCK.closeEditor();
   const saveStock = ()=>{
