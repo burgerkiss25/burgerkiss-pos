@@ -8,6 +8,7 @@
   let historyFilterText = '';
   let historyFilterToday = false;
   const QUICK_NOTES = ['No onion', 'Extra onion', 'No lettuce', 'Extra spicy'];
+  const PACK_RULES_KEY = 'bk_packaging_rules_v1';
   let stockOverviewFilter = 'all';
   const FALLBACK_STANDARD_MENUS = [
     { id:'menu_cheeseburger', name:'Cheeseburger Menu', baseId:'cheeseburger', menuPrice:135, defaultFries:'fries_standard', defaultDrink:'d_cola' },
@@ -1347,19 +1348,24 @@
     const menuChildCount = slotItems.filter(isMenuLinkedChild).length;
     const drinkCount = slotItems.filter(isDrinkItem).length;
     const foodCount = slotItems.filter(isFoodItem).length;
+    const packRules = getPackagingRules();
 
     function handoverPackagingRows(){
       const rows = [];
+      const nameFor = id=> {
+        const def = ingredientDefs[id];
+        return def && def.name ? def.name : id;
+      };
       if(drinkCount > 0){
-        rows.push({ id:'white_plastic_bag', name:'White plastic bag (drinks only)', qty: drinkCount, unit:'pcs' });
+        rows.push({ id:packRules.drinkBagId, name:`${nameFor(packRules.drinkBagId)} (drinks only)`, qty: drinkCount, unit:'pcs' });
       }
       if(foodCount <= 0) return rows;
-      if(menuChildCount >= 2 || foodCount >= 4){
-        rows.push({ id:'large_paper_bag', name:'Large paper bag', qty: 1, unit:'pcs' });
-      }else if(menuChildCount >= 1 || foodCount >= 2){
-        rows.push({ id:'medium_paper_bag', name:'Medium paper bag', qty: 1, unit:'pcs' });
+      if(menuChildCount >= Number(packRules.largeMenuChildMin) || foodCount >= Number(packRules.largeFoodMin)){
+        rows.push({ id:packRules.foodBagLargeId, name:nameFor(packRules.foodBagLargeId), qty: 1, unit:'pcs' });
+      }else if(foodCount >= Number(packRules.mediumFoodMin)){
+        rows.push({ id:packRules.foodBagMediumId, name:nameFor(packRules.foodBagMediumId), qty: 1, unit:'pcs' });
       }else{
-        rows.push({ id:'small_paper_bag', name:'Small paper bag', qty: 1, unit:'pcs' });
+        rows.push({ id:packRules.foodBagSmallId, name:nameFor(packRules.foodBagSmallId), qty: 1, unit:'pcs' });
       }
       return rows;
     }
@@ -1598,54 +1604,6 @@
     if(modal) modal.classList.remove('open');
   }
 
-  function openStockOverview(){
-    const modal = document.getElementById('modalStockOverview');
-    if(!modal) return;
-    renderStock();
-    modal.classList.add('open');
-  }
-
-  function closeStockOverview(){
-    const modal = document.getElementById('modalStockOverview');
-    if(modal) modal.classList.remove('open');
-  }
-
-  function openStockOverview(){
-    const modal = document.getElementById('modalStockOverview');
-    if(!modal) return;
-    renderStock();
-    modal.classList.add('open');
-  }
-
-  function closeStockOverview(){
-    const modal = document.getElementById('modalStockOverview');
-    if(modal) modal.classList.remove('open');
-  }
-
-  function openStockOverview(){
-    const modal = document.getElementById('modalStockOverview');
-    if(!modal) return;
-    renderStock();
-    modal.classList.add('open');
-  }
-
-  function closeStockOverview(){
-    const modal = document.getElementById('modalStockOverview');
-    if(modal) modal.classList.remove('open');
-  }
-
-  function openStockOverview(){
-    const modal = document.getElementById('modalStockOverview');
-    if(!modal) return;
-    renderStock();
-    modal.classList.add('open');
-  }
-
-  function closeStockOverview(){
-    const modal = document.getElementById('modalStockOverview');
-    if(modal) modal.classList.remove('open');
-  }
-
   const openStock = ()=> BK_STOCK.openEditor();
   const closeStock = ()=> BK_STOCK.closeEditor();
   const saveStock = ()=>{
@@ -1858,3 +1816,18 @@
     infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab
   };
 })();
+    function getPackagingRules(){
+      const fallback = {
+        drinkBagId: 'white_plastic_bag',
+        foodBagSmallId: 'small_paper_bag',
+        foodBagMediumId: 'medium_paper_bag',
+        foodBagLargeId: 'large_paper_bag',
+        mediumFoodMin: 2,
+        largeFoodMin: 4,
+        largeMenuChildMin: 2
+      };
+      try{
+        const parsed = JSON.parse(localStorage.getItem(PACK_RULES_KEY) || '{}');
+        return Object.assign({}, fallback, parsed || {});
+      }catch(e){ return fallback; }
+    }
