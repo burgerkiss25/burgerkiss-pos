@@ -603,6 +603,21 @@
     }
 
     if(!added) return;
+    const st = BK_STATE.getState();
+    const slot = st.slots[st.active];
+    if(slot && !slot._packAsked){
+      const foodCount = (slot.items || []).filter(it=>{
+        const p = productById(it.itemId);
+        return p && p.cat !== 'drink' && p.cat !== 'extra' && !String(p.id || '').startsWith('x_sauce_');
+      }).length;
+      if(foodCount >= 2){
+        slot._packAsked = true;
+        confirmDialog('Packaging preference', 'Pack together in one bag? (Cancel = split bags)').then(together=>{
+          BK_STATE.setPackMode(st.active, together ? 'shared' : 'split');
+          renderOrder();
+        });
+      }
+    }
     renderOrder();
     renderMake();
     refreshTotals();
@@ -1349,6 +1364,7 @@
     const drinkCount = slotItems.filter(isDrinkItem).length;
     const foodCount = slotItems.filter(isFoodItem).length;
     const packRules = getPackagingRules();
+    const slotPackMode = slot && slot.packMode === 'split' ? 'split' : 'shared';
 
     function handoverPackagingRows(){
       const rows = [];
@@ -1357,10 +1373,12 @@
         return def && def.name ? def.name : prettyName(id);
       };
       if(drinkCount > 0){
-        rows.push({ id:packRules.drinkBagId, name:`${nameFor(packRules.drinkBagId)} (drinks only)`, qty: drinkCount, unit:'pcs' });
+        rows.push({ id:packRules.drinkBagId, name:`${nameFor(packRules.drinkBagId)} (drinks only)`, qty: 1, unit:'pcs' });
       }
       if(foodCount <= 0) return rows;
-      if(menuChildCount >= Number(packRules.largeMenuChildMin) || foodCount >= Number(packRules.largeFoodMin)){
+      if(slotPackMode === 'split'){
+        rows.push({ id:packRules.foodBagSmallId, name:nameFor(packRules.foodBagSmallId), qty: foodCount, unit:'pcs' });
+      }else if(menuChildCount >= Number(packRules.largeMenuChildMin) || foodCount >= Number(packRules.largeFoodMin)){
         rows.push({ id:packRules.foodBagLargeId, name:nameFor(packRules.foodBagLargeId), qty: 1, unit:'pcs' });
       }else if(foodCount >= Number(packRules.mediumFoodMin)){
         rows.push({ id:packRules.foodBagMediumId, name:nameFor(packRules.foodBagMediumId), qty: 1, unit:'pcs' });
