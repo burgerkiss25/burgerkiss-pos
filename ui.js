@@ -1354,7 +1354,7 @@
       const rows = [];
       const nameFor = id=> {
         const def = ingredientDefs[id];
-        return def && def.name ? def.name : id;
+        return def && def.name ? def.name : prettyName(id);
       };
       if(drinkCount > 0){
         rows.push({ id:packRules.drinkBagId, name:`${nameFor(packRules.drinkBagId)} (drinks only)`, qty: drinkCount, unit:'pcs' });
@@ -1391,9 +1391,17 @@
       .filter(Boolean)
       .sort((a,b)=> a.name.localeCompare(b.name));
     const packagingRows = handoverPackagingRows();
-    const handoverRows = packagingRows.concat(extraRows);
-    const extrasHtml = handoverRows.length
-      ? `<div style="margin:8px 0 2px"><b>Handover extras:</b></div>${handoverRows.map(row=>`<div class="grouped-meal-child">• ${row.name}: ${row.qty}${row.unit ? ` ${row.unit}` : ''}</div>`).join('')}`
+    const essentialsRows = extraRows.filter(r=> /napkin|serviette|fork|spoon/i.test(String(r.name || r.id || '')));
+    const addonRows = extraRows.filter(r=> !essentialsRows.includes(r));
+    const sectionHtml = (title, rows, tone)=>{
+      if(!rows.length) return '';
+      return `<div class="handover-extra-section ${tone || ''}">
+        <div class="handover-extra-title">${title}</div>
+        ${rows.map(row=>`<div class="handover-extra-row"><span class="left">${prettyName(row.name)} <span class="handover-pill">Required</span></span><b>${row.qty}${row.unit ? ` ${row.unit}` : ''}</b></div>`).join('')}
+      </div>`;
+    };
+    const extrasHtml = (packagingRows.length || essentialsRows.length || addonRows.length)
+      ? `<div style="margin:8px 0 6px"><b>Handover extras:</b></div>${sectionHtml('Bags', packagingRows, 'tone-bag')}${sectionHtml('Essentials', essentialsRows, 'tone-essential')}${sectionHtml('Add-ons', addonRows, 'tone-addon')}`
       : '';
     confirmDialog(
       `Final handover check – ${slot.orderNo || slot.name}`,
@@ -1830,4 +1838,10 @@
         const parsed = JSON.parse(localStorage.getItem(PACK_RULES_KEY) || '{}');
         return Object.assign({}, fallback, parsed || {});
       }catch(e){ return fallback; }
+    }
+    function prettyName(raw){
+      const txt = String(raw || '').trim();
+      if(!txt) return '';
+      if(txt.includes('_')) return txt.split('_').map(x=> x ? x[0].toUpperCase() + x.slice(1) : '').join(' ');
+      return txt;
     }
