@@ -41,6 +41,7 @@
         <summary class="x more-trigger">More</summary>
         <div class="more-panel">
           <button class="x" id="btnSummary">Summary</button>
+          <button class="x" id="btnStockOverview">Stock <span class="stock-alert-badge hidden" id="stockAlertBadge">0</span></button>
           <button class="x" id="btnHistory">History</button>
           <button class="x" id="btnReceipt">Receipt</button>
           <button class="x" id="btnGroup">Group Ticket</button>
@@ -177,6 +178,17 @@
         </div>
       </header>
       <div class="body" id="historyBody"></div>
+    </div>
+  </div>
+
+  <!-- STOCK OVERVIEW MODAL -->
+  <div class="modal" id="modalStockOverview">
+    <div class="sheet">
+      <header>
+        <b>Stock overview</b>
+        <div><button class="x" id="stockOverviewClose">Close</button></div>
+      </header>
+      <div class="body" id="stockOverviewBody"></div>
     </div>
   </div>
 

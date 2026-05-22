@@ -21,10 +21,10 @@
   // Schutz gegen fehlerhafte Merge-Duplikate in index.html
   removeDuplicateIds([
     'tabOrder','tabMake','tabPay','tabIssue',
-    'btnSummary','btnHistory','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup',
+    'btnSummary','btnStockOverview','btnHistory','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup',
     'btnUndo','btnReset','btnClearDisc','btnClearStorage',
     'btnAddSlot','btnRenameSlot','btnDeleteSlot','activeSlotLabel',
-    'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalHistory','modalReceipt'
+    'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalHistory','modalReceipt','modalStockOverview'
   ]);
 
   // Buttons
@@ -88,6 +88,8 @@
 
   // Summary
   document.getElementById('btnSummary').onclick = ()=> BK_UI.openSummary();
+  document.getElementById('btnStockOverview').onclick = ()=> BK_UI.openStockOverview();
+  document.getElementById('stockOverviewClose').onclick = ()=> BK_UI.closeStockOverview();
   document.getElementById('sumClose').onclick   = ()=> BK_UI.closeSummary();
   document.getElementById('btnHistory').onclick = ()=> BK_UI.openHistory();
   document.getElementById('hClose').onclick     = ()=> BK_UI.closeHistory();

@@ -1,6 +1,6 @@
 // UI & Interaktionen – nutzt BK_STATE, BK_PRICES, BK_LOGIC
 (function(){
-  let currentCat = 'fast';
+  let currentCat = 'all';
   let productQuery = '';
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
@@ -8,6 +8,7 @@
   let historyFilterText = '';
   let historyFilterToday = false;
   const QUICK_NOTES = ['No onion', 'Extra onion', 'No lettuce', 'Extra spicy'];
+  let stockOverviewFilter = 'all';
   const FALLBACK_STANDARD_MENUS = [
     { id:'menu_cheeseburger', name:'Cheeseburger Menu', baseId:'cheeseburger', menuPrice:135, defaultFries:'fries_standard', defaultDrink:'d_cola' },
     { id:'menu_hamburger', name:'Hamburger Menu', baseId:'hamburger', menuPrice:120, defaultFries:'fries_standard', defaultDrink:'d_cola' },
@@ -155,8 +156,7 @@
     const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
     const productItems = base.filter(isFrontProduct).filter(it => (currentCat==='menu' || currentCat==='fast') ? false : (currentCat==='all' ? true : it.cat===currentCat));
     const menuItems = buildStandardMenuCards().filter(it => currentCat === 'all' || currentCat === 'menu');
-    const fastItems = buildFastLaneCards().filter(it => currentCat === 'fast');
-    const items = fastItems.concat(menuItems, productItems)
+    const items = menuItems.concat(productItems)
       .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true);
     if(!items.length){
       const empty = document.createElement('div');
@@ -1447,34 +1447,86 @@
 
   function renderStock(){
     if(!window.BK_STOCK) return;
-    const payList = document.getElementById('payList');
-    if(!payList) return;
+    const stockBody = document.getElementById('stockOverviewBody');
+    if(!stockBody) return;
+    const badge = document.getElementById('stockAlertBadge');
     let host = document.getElementById('stockCard');
     if(!host){
       host = document.createElement('div');
       host.id = 'stockCard';
-      host.className = 'slot-card';
-      payList.appendChild(host);
+      host.className = 'stock-overview-wrap';
+      stockBody.appendChild(host);
     }
     const {slots} = BK_STATE.getState();
     const rows = BK_STOCK.getSnapshot(slots);
-
-    host.innerHTML = '<div class="slot-head"><div><span class="label">Stock</span> · Sales consume BurgerKiss Block Factory only; Store stays for refill transfers</div></div>';
-    rows.forEach(r=>{
-      if(r.track === false) return;
+    const tracked = rows.filter(r=> r.track !== false);
+    const buyCount = tracked.filter(r=> !!r.buyNeeded).length;
+    const refillCount = tracked.filter(r=> !r.buyNeeded && !!r.refillNeeded).length;
+    const criticalCount = tracked.filter(r=> !!r.shortage || !!r.buyNeeded).length;
+    if(badge){
+      if(criticalCount > 0){
+        badge.classList.remove('hidden');
+        badge.classList.toggle('warn', buyCount === 0);
+        badge.textContent = String(criticalCount);
+      }else{
+        badge.classList.add('hidden');
+        badge.classList.remove('warn');
+      }
+    }
+    const stockStatus = r=> (r.buyNeeded || r.shortage) ? 'buy' : (r.refillNeeded ? 'refill' : 'ok');
+    const visible = tracked.filter(r=> stockOverviewFilter === 'all' ? true : stockStatus(r) === stockOverviewFilter);
+    host.innerHTML = `
+      <div class="stock-overview-summary">
+        <div class="stock-kpi"><span>Tracked</span><b>${tracked.length}</b></div>
+        <div class="stock-kpi crit"><span>Critical</span><b>${criticalCount}</b></div>
+        <div class="stock-kpi refill"><span>Refill</span><b>${refillCount}</b></div>
+        <div class="stock-kpi"><span>Buy</span><b>${buyCount}</b></div>
+      </div>
+      <div class="stock-overview-filters">
+        <button class="stock-filter ${stockOverviewFilter==='all'?'active':''}" data-stock-filter="all">All</button>
+        <button class="stock-filter ${stockOverviewFilter==='ok'?'active':''}" data-stock-filter="ok">OK</button>
+        <button class="stock-filter ${stockOverviewFilter==='refill'?'active':''}" data-stock-filter="refill">Refill</button>
+        <button class="stock-filter ${stockOverviewFilter==='buy'?'active':''}" data-stock-filter="buy">Critical / Buy</button>
+      </div>
+      <div class="stock-overview-list" id="stockOverviewList"></div>
+    `;
+    const list = host.querySelector('#stockOverviewList');
+    if(!visible.length){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No stock items in this filter.';
+      list.appendChild(empty);
+    }
+    visible.forEach(r=>{
+      const status = stockStatus(r);
+      const statusLabel = status === 'buy' ? 'Critical' : (status === 'refill' ? 'Refill' : 'OK');
       const row = document.createElement('div');
-      row.className = 'row';
-      const alerts = [
-        r.shortage ? `SHORT ${r.shortage} ${r.unit || ''} AT BLOCK FACTORY` : '',
-        r.refillNeeded ? 'REFILL FROM BURGERKISS STORE' : '',
-        r.buyNeeded ? 'BUY / ORDER FOR STORE' : ''
-      ].filter(Boolean).join(' · ');
+      row.className = 'stock-overview-row';
       row.innerHTML = `
-        <span class="left"><b>${r.name}</b> <small>used ${r.used} ${r.unit || ''}</small></span>
-        <span style="${alerts ? 'color:#ffb347' : ''}">Block Factory ${r.leftTruck} · Store ${r.leftStorage} ${r.unit || ''}${alerts ? ` · ${alerts}` : ''}</span>
+        <div><b>${r.name}</b><small>Used ${r.used} ${r.unit || ''}</small></div>
+        <div class="stock-overview-meta">Block Factory ${r.leftTruck} · Store ${r.leftStorage} ${r.unit || ''}</div>
+        <span class="stock-status ${status}">${statusLabel}</span>
       `;
-      host.appendChild(row);
+      list.appendChild(row);
     });
+    host.querySelectorAll('[data-stock-filter]').forEach(btn=>{
+      btn.onclick = ()=>{
+        stockOverviewFilter = btn.dataset.stockFilter || 'all';
+        renderStock();
+      };
+    });
+  }
+
+  function openStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(!modal) return;
+    renderStock();
+    modal.classList.add('open');
+  }
+
+  function closeStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(modal) modal.classList.remove('open');
   }
 
   const openStock = ()=> BK_STOCK.openEditor();
@@ -1660,7 +1712,7 @@
   function renderAll(){
     bindProductSearch();
     if(!document.querySelector('.catbar .tab.active')){
-      const first = document.querySelector('.catbar .tab[data-cat="fast"]') || document.querySelector('.catbar .tab[data-cat="all"]');
+      const first = document.querySelector('.catbar .tab[data-cat="all"]');
       if(first) first.classList.add('active');
     }
     buildProducts();
@@ -1676,6 +1728,7 @@
     renderAll, renderOrder, renderMake, renderPay, renderIssue, refreshTotals,
     renderStock,
     openSummary, closeSummary, openHistory, closeHistory, exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, clearHistory,
+    openStockOverview, closeStockOverview,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
     openProducts, closeProducts, addProductRow, saveProducts, resetProducts,
