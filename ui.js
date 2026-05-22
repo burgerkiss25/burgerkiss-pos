@@ -1320,9 +1320,30 @@
           ${(entry.children || []).map(child=>`<div class="grouped-meal-child">↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''}</div>`).join('')}
         </div>`).join('')
       : '<div>No items in this order.</div>';
+
+    const usage = window.BK_STOCK && typeof BK_STOCK.getUsageForSlot === 'function'
+      ? BK_STOCK.getUsageForSlot(slot)
+      : {};
+    const ingredientDefs = window.BK_STOCK && typeof BK_STOCK.getIngredients === 'function'
+      ? BK_STOCK.getIngredients()
+      : {};
+    const extraRows = Object.entries(usage)
+      .map(([id, qty])=>{
+        const def = ingredientDefs[id];
+        if(!def || Number(qty) <= 0) return null;
+        const cat = String(def.category || '').toLowerCase();
+        const isChecklistExtra = ['packaging', 'sauce', 'cutlery'].includes(cat) || id === 'napkin';
+        if(!isChecklistExtra) return null;
+        return { id, name: def.name || id, qty: Number(qty), unit: def.unit || '' };
+      })
+      .filter(Boolean)
+      .sort((a,b)=> a.name.localeCompare(b.name));
+    const extrasHtml = extraRows.length
+      ? `<div style="margin:8px 0 2px"><b>Packing & extras:</b></div>${extraRows.map(row=>`<div class="grouped-meal-child">• ${row.name}: ${row.qty}${row.unit ? ` ${row.unit}` : ''}</div>`).join('')}`
+      : '';
     confirmDialog(
       `Final handover check – ${slot.orderNo || slot.name}`,
-      `<div style="margin-bottom:8px">Please confirm all items are packed correctly before issuing to customer.</div>${checkHtml}`
+      `<div style="margin-bottom:8px">Please confirm all items are packed correctly before issuing to customer.</div>${checkHtml}${extrasHtml}`
     ).then(ok=>{
       if(!ok) return;
       const latestSlot = BK_STATE.getState().slots[i];
@@ -1515,6 +1536,24 @@
         renderStock();
       };
     });
+    host.querySelectorAll('[data-stock-filter]').forEach(btn=>{
+      btn.onclick = ()=>{
+        stockOverviewFilter = btn.dataset.stockFilter || 'all';
+        renderStock();
+      };
+    });
+  }
+
+  function openStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(!modal) return;
+    renderStock();
+    modal.classList.add('open');
+  }
+
+  function closeStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(modal) modal.classList.remove('open');
   }
 
   function openStockOverview(){
