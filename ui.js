@@ -1,6 +1,6 @@
 // UI & Interaktionen – nutzt BK_STATE, BK_PRICES, BK_LOGIC
 (function(){
-  let currentCat = 'fast';
+  let currentCat = 'all';
   let productQuery = '';
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
@@ -8,6 +8,8 @@
   let historyFilterText = '';
   let historyFilterToday = false;
   const QUICK_NOTES = ['No onion', 'Extra onion', 'No lettuce', 'Extra spicy'];
+  const PACK_RULES_KEY = 'bk_packaging_rules_v1';
+  let stockOverviewFilter = 'all';
   const FALLBACK_STANDARD_MENUS = [
     { id:'menu_cheeseburger', name:'Cheeseburger Menu', baseId:'cheeseburger', menuPrice:135, defaultFries:'fries_standard', defaultDrink:'d_cola' },
     { id:'menu_hamburger', name:'Hamburger Menu', baseId:'hamburger', menuPrice:120, defaultFries:'fries_standard', defaultDrink:'d_cola' },
@@ -155,8 +157,7 @@
     const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
     const productItems = base.filter(isFrontProduct).filter(it => (currentCat==='menu' || currentCat==='fast') ? false : (currentCat==='all' ? true : it.cat===currentCat));
     const menuItems = buildStandardMenuCards().filter(it => currentCat === 'all' || currentCat === 'menu');
-    const fastItems = buildFastLaneCards().filter(it => currentCat === 'fast');
-    const items = fastItems.concat(menuItems, productItems)
+    const items = menuItems.concat(productItems)
       .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true);
     if(!items.length){
       const empty = document.createElement('div');
@@ -545,6 +546,7 @@
       }));
     const sections = [
       { title:'Menu fries', name:'menuFries', type:'radio', help:'Standard fries are included; large fries add the upgrade difference.', options:friesOptions },
+      { title:'Menu fries sauce', name:'menuFriesSauce', type:'radio', help:'Choose one sauce cup to hand over with menu fries.', options:sauceOptions() },
       { title:'Menu drink', name:'menuDrink', type:'radio', help:'Choose the drink for this menu.', options:drinkOptions }
     ];
     if(isBurgerBase(product)) sections.push(...burgerExtraSections(product));
@@ -569,6 +571,7 @@
 
     const menuNote = modifierLinkNote('menu', product.name, picked.itemNote);
     if(picked.menuFries) BK_STATE.addItem(picked.menuFries, menuNote);
+    if(picked.menuFriesSauce) BK_STATE.addItem(picked.menuFriesSauce, menuNote);
     if(picked.menuDrink) BK_STATE.addItem(picked.menuDrink, menuNote);
     if(!isWingsBase(product)) addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
     return true;
@@ -600,6 +603,21 @@
     }
 
     if(!added) return;
+    const st = BK_STATE.getState();
+    const slot = st.slots[st.active];
+    if(slot && !slot._packAsked){
+      const foodCount = (slot.items || []).filter(it=>{
+        const p = productById(it.itemId);
+        return p && p.cat !== 'drink' && p.cat !== 'extra' && !String(p.id || '').startsWith('x_sauce_');
+      }).length;
+      if(foodCount >= 2){
+        slot._packAsked = true;
+        confirmDialog('Packaging preference', 'Pack together in one bag? (Cancel = split bags)').then(together=>{
+          BK_STATE.setPackMode(st.active, together ? 'shared' : 'split');
+          renderOrder();
+        });
+      }
+    }
     renderOrder();
     renderMake();
     refreshTotals();
@@ -915,6 +933,7 @@
     const {slots} = BK_STATE.getState();
     const box = document.getElementById('makeList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
+    box.querySelectorAll('.empty-state').forEach(n=>n.remove());
     if(!slots.length){
       const empty = document.createElement('div');
       empty.className = 'empty-state';
@@ -955,6 +974,7 @@
     const {slots} = BK_STATE.getState();
     const box = document.getElementById('payList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
+    box.querySelectorAll('.empty-state').forEach(n=>n.remove());
     if(!slots.length){
       const empty = document.createElement('div');
       empty.className = 'empty-state';
@@ -988,6 +1008,7 @@
     const box = document.getElementById('issueList');
     if(!box) return;
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
+    box.querySelectorAll('.empty-state').forEach(n=>n.remove());
     if(!slots.length){
       const empty = document.createElement('div');
       empty.className = 'empty-state';
@@ -1320,9 +1341,89 @@
           ${(entry.children || []).map(child=>`<div class="grouped-meal-child">↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''}</div>`).join('')}
         </div>`).join('')
       : '<div>No items in this order.</div>';
+
+    const usage = window.BK_STOCK && typeof BK_STOCK.getUsageForSlot === 'function'
+      ? BK_STOCK.getUsageForSlot(slot)
+      : {};
+    const slotItems = Array.isArray(slot.items) ? slot.items : [];
+    const productByItemId = id => (BK_DATA.BASE || []).find(p=> p.id === id) || null;
+    const isDrinkItem = it=>{
+      const p = productByItemId(it.itemId);
+      return !!(p && p.cat === 'drink');
+    };
+    const isFoodItem = it=>{
+      const p = productByItemId(it.itemId);
+      if(!p) return false;
+      return p.cat !== 'drink' && p.cat !== 'extra' && !String(p.id || '').startsWith('x_sauce_');
+    };
+    const isMenuLinkedChild = it=>{
+      const linked = parseLinkedModifierNote(it && it.note);
+      return !!(linked && linked.prefix === 'menu');
+    };
+    const menuChildCount = slotItems.filter(isMenuLinkedChild).length;
+    const drinkCount = slotItems.filter(isDrinkItem).length;
+    const foodCount = slotItems.filter(isFoodItem).length;
+    const packRules = getPackagingRules();
+    const slotPackMode = slot && slot.packMode === 'split' ? 'split' : 'shared';
+
+    function handoverPackagingRows(){
+      const rows = [];
+      const nameFor = id=> {
+        const def = ingredientDefs[id];
+        return def && def.name ? def.name : prettyName(id);
+      };
+      if(drinkCount > 0){
+        rows.push({ id:packRules.drinkBagId, name:`${nameFor(packRules.drinkBagId)} (drinks only)`, qty: 1, unit:'pcs' });
+      }
+      if(foodCount <= 0) return rows;
+      if(slotPackMode === 'split'){
+        rows.push({ id:packRules.foodBagSmallId, name:nameFor(packRules.foodBagSmallId), qty: foodCount, unit:'pcs' });
+      }else if(menuChildCount >= Number(packRules.largeMenuChildMin) || foodCount >= Number(packRules.largeFoodMin)){
+        rows.push({ id:packRules.foodBagLargeId, name:nameFor(packRules.foodBagLargeId), qty: 1, unit:'pcs' });
+      }else if(foodCount >= Number(packRules.mediumFoodMin)){
+        rows.push({ id:packRules.foodBagMediumId, name:nameFor(packRules.foodBagMediumId), qty: 1, unit:'pcs' });
+      }else{
+        rows.push({ id:packRules.foodBagSmallId, name:nameFor(packRules.foodBagSmallId), qty: 1, unit:'pcs' });
+      }
+      return rows;
+    }
+    const ingredientDefs = window.BK_STOCK && typeof BK_STOCK.getIngredients === 'function'
+      ? BK_STOCK.getIngredients()
+      : {};
+    const extraRows = Object.entries(usage)
+      .map(([id, qty])=>{
+        const def = ingredientDefs[id];
+        if(!def || Number(qty) <= 0) return null;
+        const cat = String(def.category || '').toLowerCase();
+        const name = String(def.name || '').toLowerCase();
+        const isNapkin = id === 'napkin' || name.includes('napkin') || name.includes('serviette');
+        const isCutlery = cat === 'cutlery' || name.includes('fork') || name.includes('spoon');
+        const isDrinkPackaging = id === 'white_plastic_bag';
+        const isCustomerPackaging = ['small_bag','medium_paper_bag','small_paper_bag','large_paper_bag','sauce_cup','standard_fries_cup','large_fries_cup'].includes(id);
+        const isChecklistExtra = isNapkin || isCutlery || isDrinkPackaging || isCustomerPackaging;
+        const isKitchenOnly = id === 'aluminium_foil';
+        if(isKitchenOnly) return null;
+        if(!isChecklistExtra) return null;
+        return { id, name: def.name || id, qty: Number(qty), unit: def.unit || '' };
+      })
+      .filter(Boolean)
+      .sort((a,b)=> a.name.localeCompare(b.name));
+    const packagingRows = handoverPackagingRows();
+    const essentialsRows = extraRows.filter(r=> /napkin|serviette|fork|spoon/i.test(String(r.name || r.id || '')));
+    const addonRows = extraRows.filter(r=> !essentialsRows.includes(r));
+    const sectionHtml = (title, rows, tone)=>{
+      if(!rows.length) return '';
+      return `<div class="handover-extra-section ${tone || ''}">
+        <div class="handover-extra-title">${title}</div>
+        ${rows.map(row=>`<div class="handover-extra-row"><span class="left">${prettyName(row.name)} <span class="handover-pill">Required</span></span><b>${row.qty}${row.unit ? ` ${row.unit}` : ''}</b></div>`).join('')}
+      </div>`;
+    };
+    const extrasHtml = (packagingRows.length || essentialsRows.length || addonRows.length)
+      ? `<div style="margin:8px 0 6px"><b>Handover extras:</b></div>${sectionHtml('Bags', packagingRows, 'tone-bag')}${sectionHtml('Essentials', essentialsRows, 'tone-essential')}${sectionHtml('Add-ons', addonRows, 'tone-addon')}`
+      : '';
     confirmDialog(
       `Final handover check – ${slot.orderNo || slot.name}`,
-      `<div style="margin-bottom:8px">Please confirm all items are packed correctly before issuing to customer.</div>${checkHtml}`
+      `<div style="margin-bottom:8px">Please confirm all items are packed correctly before issuing to customer.</div>${checkHtml}${extrasHtml}`
     ).then(ok=>{
       if(!ok) return;
       const latestSlot = BK_STATE.getState().slots[i];
@@ -1447,34 +1548,86 @@
 
   function renderStock(){
     if(!window.BK_STOCK) return;
-    const payList = document.getElementById('payList');
-    if(!payList) return;
+    const stockBody = document.getElementById('stockOverviewBody');
+    if(!stockBody) return;
+    const badge = document.getElementById('stockAlertBadge');
     let host = document.getElementById('stockCard');
     if(!host){
       host = document.createElement('div');
       host.id = 'stockCard';
-      host.className = 'slot-card';
-      payList.appendChild(host);
+      host.className = 'stock-overview-wrap';
+      stockBody.appendChild(host);
     }
     const {slots} = BK_STATE.getState();
     const rows = BK_STOCK.getSnapshot(slots);
-
-    host.innerHTML = '<div class="slot-head"><div><span class="label">Stock</span> · Sales consume BurgerKiss Block Factory only; Store stays for refill transfers</div></div>';
-    rows.forEach(r=>{
-      if(r.track === false) return;
+    const tracked = rows.filter(r=> r.track !== false);
+    const buyCount = tracked.filter(r=> !!r.buyNeeded).length;
+    const refillCount = tracked.filter(r=> !r.buyNeeded && !!r.refillNeeded).length;
+    const criticalCount = tracked.filter(r=> !!r.shortage || !!r.buyNeeded).length;
+    if(badge){
+      if(criticalCount > 0){
+        badge.classList.remove('hidden');
+        badge.classList.toggle('warn', buyCount === 0);
+        badge.textContent = String(criticalCount);
+      }else{
+        badge.classList.add('hidden');
+        badge.classList.remove('warn');
+      }
+    }
+    const stockStatus = r=> (r.buyNeeded || r.shortage) ? 'buy' : (r.refillNeeded ? 'refill' : 'ok');
+    const visible = tracked.filter(r=> stockOverviewFilter === 'all' ? true : stockStatus(r) === stockOverviewFilter);
+    host.innerHTML = `
+      <div class="stock-overview-summary">
+        <div class="stock-kpi"><span>Tracked</span><b>${tracked.length}</b></div>
+        <div class="stock-kpi crit"><span>Critical</span><b>${criticalCount}</b></div>
+        <div class="stock-kpi refill"><span>Refill</span><b>${refillCount}</b></div>
+        <div class="stock-kpi"><span>Buy</span><b>${buyCount}</b></div>
+      </div>
+      <div class="stock-overview-filters">
+        <button class="stock-filter ${stockOverviewFilter==='all'?'active':''}" data-stock-filter="all">All</button>
+        <button class="stock-filter ${stockOverviewFilter==='ok'?'active':''}" data-stock-filter="ok">OK</button>
+        <button class="stock-filter ${stockOverviewFilter==='refill'?'active':''}" data-stock-filter="refill">Refill</button>
+        <button class="stock-filter ${stockOverviewFilter==='buy'?'active':''}" data-stock-filter="buy">Critical / Buy</button>
+      </div>
+      <div class="stock-overview-list" id="stockOverviewList"></div>
+    `;
+    const list = host.querySelector('#stockOverviewList');
+    if(!visible.length){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No stock items in this filter.';
+      list.appendChild(empty);
+    }
+    visible.forEach(r=>{
+      const status = stockStatus(r);
+      const statusLabel = status === 'buy' ? 'Critical' : (status === 'refill' ? 'Refill' : 'OK');
       const row = document.createElement('div');
-      row.className = 'row';
-      const alerts = [
-        r.shortage ? `SHORT ${r.shortage} ${r.unit || ''} AT BLOCK FACTORY` : '',
-        r.refillNeeded ? 'REFILL FROM BURGERKISS STORE' : '',
-        r.buyNeeded ? 'BUY / ORDER FOR STORE' : ''
-      ].filter(Boolean).join(' · ');
+      row.className = 'stock-overview-row';
       row.innerHTML = `
-        <span class="left"><b>${r.name}</b> <small>used ${r.used} ${r.unit || ''}</small></span>
-        <span style="${alerts ? 'color:#ffb347' : ''}">Block Factory ${r.leftTruck} · Store ${r.leftStorage} ${r.unit || ''}${alerts ? ` · ${alerts}` : ''}</span>
+        <div><b>${r.name}</b><small>Used ${r.used} ${r.unit || ''}</small></div>
+        <div class="stock-overview-meta">Block Factory ${r.leftTruck} · Store ${r.leftStorage} ${r.unit || ''}</div>
+        <span class="stock-status ${status}">${statusLabel}</span>
       `;
-      host.appendChild(row);
+      list.appendChild(row);
     });
+    host.querySelectorAll('[data-stock-filter]').forEach(btn=>{
+      btn.onclick = ()=>{
+        stockOverviewFilter = btn.dataset.stockFilter || 'all';
+        renderStock();
+      };
+    });
+  }
+
+  function openStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(!modal) return;
+    renderStock();
+    modal.classList.add('open');
+  }
+
+  function closeStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(modal) modal.classList.remove('open');
   }
 
   const openStock = ()=> BK_STOCK.openEditor();
@@ -1660,7 +1813,7 @@
   function renderAll(){
     bindProductSearch();
     if(!document.querySelector('.catbar .tab.active')){
-      const first = document.querySelector('.catbar .tab[data-cat="fast"]') || document.querySelector('.catbar .tab[data-cat="all"]');
+      const first = document.querySelector('.catbar .tab[data-cat="all"]');
       if(first) first.classList.add('active');
     }
     buildProducts();
@@ -1676,6 +1829,7 @@
     renderAll, renderOrder, renderMake, renderPay, renderIssue, refreshTotals,
     renderStock,
     openSummary, closeSummary, openHistory, closeHistory, exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, clearHistory,
+    openStockOverview, closeStockOverview,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
     openProducts, closeProducts, addProductRow, saveProducts, resetProducts,
@@ -1688,3 +1842,24 @@
     infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab
   };
 })();
+    function getPackagingRules(){
+      const fallback = {
+        drinkBagId: 'white_plastic_bag',
+        foodBagSmallId: 'small_paper_bag',
+        foodBagMediumId: 'medium_paper_bag',
+        foodBagLargeId: 'large_paper_bag',
+        mediumFoodMin: 2,
+        largeFoodMin: 4,
+        largeMenuChildMin: 2
+      };
+      try{
+        const parsed = JSON.parse(localStorage.getItem(PACK_RULES_KEY) || '{}');
+        return Object.assign({}, fallback, parsed || {});
+      }catch(e){ return fallback; }
+    }
+    function prettyName(raw){
+      const txt = String(raw || '').trim();
+      if(!txt) return '';
+      if(txt.includes('_')) return txt.split('_').map(x=> x ? x[0].toUpperCase() + x.slice(1) : '').join(' ');
+      return txt;
+    }

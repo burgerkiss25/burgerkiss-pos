@@ -1,4 +1,61 @@
 (function(){
+  const PACK_RULES_KEY = 'bk_packaging_rules_v1';
+  const PACK_RULES_DEFAULT = {
+    drinkBagId: 'white_plastic_bag',
+    foodBagSmallId: 'small_paper_bag',
+    foodBagMediumId: 'medium_paper_bag',
+    foodBagLargeId: 'large_paper_bag',
+    mediumFoodMin: 2,
+    largeFoodMin: 4,
+    largeMenuChildMin: 2
+  };
+
+  function loadPackagingRules(){
+    try{
+      const parsed = JSON.parse(localStorage.getItem(PACK_RULES_KEY) || '{}');
+      return Object.assign({}, PACK_RULES_DEFAULT, parsed || {});
+    }catch(e){ return Object.assign({}, PACK_RULES_DEFAULT); }
+  }
+  function savePackagingRules(rules){
+    localStorage.setItem(PACK_RULES_KEY, JSON.stringify(Object.assign({}, PACK_RULES_DEFAULT, rules || {})));
+  }
+  function packagingRuleRow(label, id, value, help){
+    return `<label style="display:grid;gap:6px;margin-bottom:10px"><span style="font-weight:900">${label}</span><input id="${id}" value="${String(value || '')}" style="background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:8px"/><small style="color:#9aa3ad">${help}</small></label>`;
+  }
+  function openPackagingRules(){
+    const modal = document.getElementById('modalPackagingRules');
+    const body = document.getElementById('packagingRulesBody');
+    if(!modal || !body) return;
+    const cfg = loadPackagingRules();
+    body.innerHTML = `
+      <div class="stock-editor-intro"><div><h4>Handover packaging mapping</h4><p>Adjust bag IDs and thresholds without changing code.</p></div></div>
+      ${packagingRuleRow('Drink bag ID', 'packDrinkBagId', cfg.drinkBagId, 'Used for drinks only (e.g. white_plastic_bag).')}
+      ${packagingRuleRow('Food small bag ID', 'packFoodSmallBagId', cfg.foodBagSmallId, 'Used for small food orders.')}
+      ${packagingRuleRow('Food medium bag ID', 'packFoodMediumBagId', cfg.foodBagMediumId, 'Used when food count reaches medium threshold.')}
+      ${packagingRuleRow('Food large bag ID', 'packFoodLargeBagId', cfg.foodBagLargeId, 'Used when order is large or menu-heavy.')}
+      ${packagingRuleRow('Medium threshold (food items)', 'packMediumFoodMin', cfg.mediumFoodMin, 'Minimum food item count to use medium bag.')}
+      ${packagingRuleRow('Large threshold (food items)', 'packLargeFoodMin', cfg.largeFoodMin, 'Minimum food item count to use large bag.')}
+      ${packagingRuleRow('Large threshold (menu child lines)', 'packLargeMenuMin', cfg.largeMenuChildMin, 'Minimum menu-linked child count to force large bag.')}
+    `;
+    modal.classList.add('open');
+  }
+  function closePackagingRules(){
+    const modal = document.getElementById('modalPackagingRules');
+    if(modal) modal.classList.remove('open');
+  }
+  function savePackagingRulesFromModal(){
+    const next = {
+      drinkBagId: document.getElementById('packDrinkBagId').value.trim(),
+      foodBagSmallId: document.getElementById('packFoodSmallBagId').value.trim(),
+      foodBagMediumId: document.getElementById('packFoodMediumBagId').value.trim(),
+      foodBagLargeId: document.getElementById('packFoodLargeBagId').value.trim(),
+      mediumFoodMin: Number(document.getElementById('packMediumFoodMin').value || 2),
+      largeFoodMin: Number(document.getElementById('packLargeFoodMin').value || 4),
+      largeMenuChildMin: Number(document.getElementById('packLargeMenuMin').value || 2)
+    };
+    savePackagingRules(next);
+    closePackagingRules();
+  }
   let firebaseApp = null;
   let authPromise = Promise.resolve(false);
 
@@ -132,6 +189,10 @@
   document.getElementById('btnIngredients').onclick = ()=> BK_STOCK.openEditor('ingredients');
   document.getElementById('btnRecipes').onclick = ()=> BK_STOCK.openEditor('recipes');
   document.getElementById('btnAddons').onclick = ()=> BK_STOCK.openEditor('addons');
+  document.getElementById('btnPackagingRules').onclick = openPackagingRules;
+  document.getElementById('packClose').onclick = closePackagingRules;
+  document.getElementById('packSave').onclick = savePackagingRulesFromModal;
+  document.getElementById('packReset').onclick = ()=>{ savePackagingRules(PACK_RULES_DEFAULT); openPackagingRules(); };
   document.getElementById('sClose').onclick   = ()=> BK_STOCK.closeEditor();
   document.getElementById('sSave').onclick    = ()=>{ BK_STOCK.save(); setTimeout(refreshDbStatus, 800); };
   document.getElementById('sReset').onclick   = ()=>{ BK_STOCK.reset(); setTimeout(refreshDbStatus, 800); };
