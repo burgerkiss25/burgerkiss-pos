@@ -110,15 +110,18 @@
     document.getElementById('dlgOk').onclick = closeDialog;
   }
 
-  function confirmDialog(title, message){
+  function confirmDialog(title, message, opts){
     return new Promise(resolve=>{
+      const options = opts || {};
+      const cancelLabel = options.cancelLabel || 'Cancel';
+      const confirmLabel = options.confirmLabel || 'Confirm';
       const host = ensureDialogHost();
       document.getElementById('appDialogTitle').textContent = title;
       document.getElementById('appDialogBody').innerHTML = `
         <div style="margin-bottom:10px">${message}</div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="x" id="dlgCancel">Cancel</button>
-          <button class="x" id="dlgConfirm">Confirm</button>
+          <button class="x" id="dlgCancel">${cancelLabel}</button>
+          <button class="x" id="dlgConfirm">${confirmLabel}</button>
         </div>
       `;
       host.classList.add('open');
@@ -612,7 +615,10 @@
       }).length;
       if(foodCount >= 2){
         slot._packAsked = true;
-        confirmDialog('Packaging preference', 'Pack together in one bag? (Cancel = split bags)').then(together=>{
+        confirmDialog('Packaging preference', 'Choose how this order should be packed.', {
+          cancelLabel: 'Pack separately',
+          confirmLabel: 'Pack together'
+        }).then(together=>{
           BK_STATE.setPackMode(st.active, together ? 'shared' : 'split');
           renderOrder();
         });
@@ -989,6 +995,7 @@
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS</div>
           <div class="pay-status">
+            <button onclick="BK_UI.focusSlot(${i},'make');">Focus</button>
             <span>Status: ${s.pay.toUpperCase()}</span>
             <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Unpaid</button>
             <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
@@ -1025,7 +1032,8 @@
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
           <div class="pay-status">
             <span>Status: ${s.issued ? 'ISSUED' : 'WAITING'}</span>
-            <button ${(canIssue && !s.issued) ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark Issued</button>
+            <button onclick="BK_UI.focusSlot(${i},'issue');">Focus</button>
+            <button ${(canIssue && !s.issued) ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark as Issued</button>
           </div>
         </div>`;
       const checklist = document.createElement('div');
@@ -1088,6 +1096,15 @@
         else tab.removeAttribute('aria-current');
       }
     });
+  }
+
+  function focusSlot(slotIndex, tab){
+    const st = BK_STATE.getState();
+    if(!st.slots[slotIndex]) return;
+    BK_STATE.setActive(slotIndex);
+    renderSlotsBar();
+    refreshTotals();
+    goTab(tab || 'order');
   }
 
   function clearFlowAction(hostId){
@@ -1839,7 +1856,7 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot
   };
 })();
     function getPackagingRules(){
