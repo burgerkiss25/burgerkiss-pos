@@ -1446,14 +1446,14 @@
 
   function renderStock(){
     if(!window.BK_STOCK) return;
-    const payList = document.getElementById('payList');
-    if(!payList) return;
+    const stockBody = document.getElementById('stockOverviewBody');
+    if(!stockBody) return;
     let host = document.getElementById('stockCard');
     if(!host){
       host = document.createElement('div');
       host.id = 'stockCard';
       host.className = 'slot-card';
-      payList.appendChild(host);
+      stockBody.appendChild(host);
     }
     const {slots} = BK_STATE.getState();
     const rows = BK_STOCK.getSnapshot(slots);
@@ -1474,6 +1474,18 @@
       `;
       host.appendChild(row);
     });
+  }
+
+  function openStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(!modal) return;
+    renderStock();
+    modal.classList.add('open');
+  }
+
+  function closeStockOverview(){
+    const modal = document.getElementById('modalStockOverview');
+    if(modal) modal.classList.remove('open');
   }
 
   const openStock = ()=> BK_STOCK.openEditor();
@@ -1675,6 +1687,7 @@
     renderAll, renderOrder, renderMake, renderPay, renderIssue, refreshTotals,
     renderStock,
     openSummary, closeSummary, openHistory, closeHistory, exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, clearHistory,
+    openStockOverview, closeStockOverview,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
     openProducts, closeProducts, addProductRow, saveProducts, resetProducts,
