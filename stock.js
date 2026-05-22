@@ -311,6 +311,12 @@
     return { ok:true, movements, shortageCount, message: shortageCount ? `Stock consumed from BurgerKiss Block Factory with ${shortageCount} shortage warning(s).` : 'Stock consumed from BurgerKiss Block Factory.' };
   }
 
+  function getUsageForSlot(slot){
+    if(!slot || !Array.isArray(slot.items) || !slot.items.length) return {};
+    return usageForSlots([slot]);
+  }
+  function getIngredients(){ return clone(INGREDIENTS); }
+
   function ingredientRowHtml(id, def){
     const locationOptions = ['storage', 'foodtruck', 'both'].map(loc=>
       `<option value="${loc}" ${def.stock_location===loc?'selected':''}>${locationLabel(loc)}</option>`
@@ -594,5 +600,5 @@
     INGREDIENTS = syncAllIngredientStock(ingNext); RECIPES = recipeNext; persist(); persistRemoteSoon(); closeEditor(); return true;
   }
 
-  window.BK_STOCK = { KEY, TRANSFERS_KEY, MOVEMENTS_KEY, load, loadRemoteOnce, reset, getSnapshot, consumeSlot, openEditor, closeEditor, saveEditor, remoteEnabled, stockPaths };
+  window.BK_STOCK = { KEY, TRANSFERS_KEY, MOVEMENTS_KEY, load, loadRemoteOnce, reset, getSnapshot, getIngredients, getUsageForSlot, consumeSlot, openEditor, closeEditor, saveEditor, remoteEnabled, stockPaths };
 })();
