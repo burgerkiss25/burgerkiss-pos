@@ -78,6 +78,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .more-panel{position:absolute;right:0;top:calc(100% + 8px);display:grid;gap:8px;min-width:190px;padding:10px;background:#11141b;border:1px solid #2c3440;border-radius:var(--radius-lg);box-shadow:var(--shadow);z-index:120}
 .more-panel .x,.admin-link{width:100%;justify-content:flex-start;text-align:left;text-decoration:none;display:inline-flex;align-items:center}
 .admin-link{color:#eaeef2}
+.stock-alert-badge{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#5a2228;border:1px solid #a53a44;color:#ffd9de;font-size:11px;font-weight:900}
+.stock-alert-badge.warn{background:#4f3a1a;border-color:#a77324;color:#ffe6b9}
 
 .compact-actions{flex-wrap:nowrap;justify-content:flex-start}
 .compact-actions .order-tools{flex:0 0 auto}
@@ -266,3 +268,35 @@ button:focus-visible,.chip:focus-visible,input:focus-visible,a:focus-visible,sum
 .stock-transfer-row{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid #2b3340;border-radius:var(--radius-md);background:#10151e;color:#eaf0f6;font-size:var(--fz-sm)}
 .stock-transfer-row small{display:block;color:#aeb7c4;font-weight:700}
 @media (max-width:760px){.stock-transfer-form{grid-template-columns:1fr}.stock-transfer-row{display:grid}}
+
+/* Stock overview modal (staff-focused) */
+#modalStockOverview .sheet{width:min(980px,96vw)}
+.stock-overview-summary{display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:10px;margin-bottom:12px}
+.stock-kpi{padding:10px;border:1px solid #2e3746;border-radius:12px;background:#111826}
+.stock-kpi b{display:block;font-size:20px;color:#fff6d8}
+.stock-kpi span{color:#aeb7c4;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.stock-kpi.crit{border-color:#6f3238;background:#211318}
+.stock-kpi.refill{border-color:#6b4d1f;background:#211a10}
+.stock-overview-filters{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.stock-filter{min-height:34px;padding:7px 11px;border-radius:999px;border:1px solid #334055;background:#18202c;color:#eaf0f6;font-weight:850;cursor:pointer}
+.stock-filter.active{border-color:#8a7230;background:#2a2516;color:#fff2c3}
+.stock-overview-list{display:grid;gap:8px}
+.stock-overview-row{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:10px;align-items:center;padding:10px;border:1px solid #2b3340;border-radius:12px;background:#0f141d}
+.stock-overview-row b{display:block}
+.stock-overview-row small{color:#9fb0c4}
+.stock-overview-meta{color:#d9e1ec;font-weight:800}
+.stock-status{display:inline-flex;align-items:center;justify-content:center;min-width:86px;padding:5px 10px;border-radius:999px;font-size:11px;font-weight:950;letter-spacing:.04em;text-transform:uppercase}
+.stock-status.ok{background:#163224;border:1px solid #2b7f54;color:#aff2cc}
+.stock-status.refill{background:#2b2412;border:1px solid #9a7a2a;color:#ffe4a8}
+.stock-status.buy{background:#32171c;border:1px solid #a84854;color:#ffd0d6}
+@media (max-width:760px){.stock-overview-summary{grid-template-columns:repeat(2,minmax(120px,1fr))}.stock-overview-row{grid-template-columns:1fr}.stock-status{justify-self:start}}
+
+/* Handover checklist extras */
+.handover-extra-section{margin:8px 0;padding:8px 10px;border:1px solid #2b3340;border-radius:10px;background:#0f141d}
+.handover-extra-title{font-weight:900;color:#fff6d8;margin-bottom:6px}
+.handover-extra-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-top:1px dashed #2a2f39}
+.handover-extra-row:first-of-type{border-top:none}
+.handover-pill{display:inline-flex;align-items:center;margin-left:8px;padding:2px 6px;border-radius:999px;font-size:10px;font-weight:900;background:#2a2516;border:1px solid #8a7230;color:#fff2c3}
+.handover-extra-section.tone-bag{border-color:#3b4a61;background:#101722}
+.handover-extra-section.tone-essential{border-color:#3f5b43;background:#102016}
+.handover-extra-section.tone-addon{border-color:#3f3b2a;background:#1a180f}
