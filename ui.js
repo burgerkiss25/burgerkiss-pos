@@ -790,6 +790,20 @@
     return [parent, ...children].join(' · ');
   }
 
+  function splitEntryNoteLines(note){
+    const txt = String(note || '').trim();
+    if(!txt) return [];
+    const addOnMatch = txt.match(/^(.*?)(?:\s*·\s*)?Add-ons:\s*(.+)$/i);
+    if(!addOnMatch) return [txt];
+    const prefix = (addOnMatch[1] || '').trim();
+    const addOnItems = String(addOnMatch[2] || '')
+      .split(',')
+      .map(x=>x.trim())
+      .filter(Boolean)
+      .map(x=>`+ ${x}`);
+    return [prefix, ...addOnItems].filter(Boolean);
+  }
+
   function appendGroupedEntry(host, slot, entry, slotIndex, opts){
     const settings = opts || {};
     const row = document.createElement('div');
@@ -814,11 +828,11 @@
     const title = document.createElement('b');
     title.textContent = `${entry.qty}x ${entry.name}`;
     titleWrap.appendChild(title);
-    if(entry.note){
+    splitEntryNoteLines(entry.note).forEach((line, idx)=>{
       const note = document.createElement('small');
-      note.textContent = entry.note;
+      note.textContent = idx === 0 ? line : `↳ ${line}`;
       titleWrap.appendChild(note);
-    }
+    });
     header.appendChild(titleWrap);
 
     const price = document.createElement('span');
@@ -830,8 +844,15 @@
     (entry.children || []).forEach(child=>{
       const childLine = document.createElement('div');
       childLine.className = 'grouped-meal-child';
-      childLine.textContent = `↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''} · ${child.total} GHS`;
+      const childNote = splitEntryNoteLines(child.note);
+      childLine.textContent = `↳ ${child.qty}x ${child.name}${childNote.length ? ` · ${childNote[0]}` : ''} · ${child.total} GHS`;
       row.appendChild(childLine);
+      childNote.slice(1).forEach(line=>{
+        const extraLine = document.createElement('div');
+        extraLine.className = 'grouped-meal-child';
+        extraLine.textContent = `   ↳ ${line}`;
+        row.appendChild(extraLine);
+      });
     });
 
     host.appendChild(row);
