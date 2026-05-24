@@ -110,15 +110,18 @@
     document.getElementById('dlgOk').onclick = closeDialog;
   }
 
-  function confirmDialog(title, message){
+  function confirmDialog(title, message, opts){
     return new Promise(resolve=>{
+      const options = opts || {};
+      const cancelLabel = options.cancelLabel || 'Cancel';
+      const confirmLabel = options.confirmLabel || 'Confirm';
       const host = ensureDialogHost();
       document.getElementById('appDialogTitle').textContent = title;
       document.getElementById('appDialogBody').innerHTML = `
         <div style="margin-bottom:10px">${message}</div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="x" id="dlgCancel">Cancel</button>
-          <button class="x" id="dlgConfirm">Confirm</button>
+          <button class="x" id="dlgCancel">${cancelLabel}</button>
+          <button class="x" id="dlgConfirm">${confirmLabel}</button>
         </div>
       `;
       host.classList.add('open');
@@ -612,7 +615,10 @@
       }).length;
       if(foodCount >= 2){
         slot._packAsked = true;
-        confirmDialog('Packaging preference', 'Pack together in one bag? (Cancel = split bags)').then(together=>{
+        confirmDialog('Packaging preference', 'Choose how this order should be packed.', {
+          cancelLabel: 'Pack separately',
+          confirmLabel: 'Pack together'
+        }).then(together=>{
           BK_STATE.setPackMode(st.active, together ? 'shared' : 'split');
           renderOrder();
         });
@@ -784,6 +790,20 @@
     return [parent, ...children].join(' · ');
   }
 
+  function splitEntryNoteLines(note){
+    const txt = String(note || '').trim();
+    if(!txt) return [];
+    const addOnMatch = txt.match(/^(.*?)(?:\s*·\s*)?Add-ons:\s*(.+)$/i);
+    if(!addOnMatch) return [txt];
+    const prefix = (addOnMatch[1] || '').trim();
+    const addOnItems = String(addOnMatch[2] || '')
+      .split(',')
+      .map(x=>x.trim())
+      .filter(Boolean)
+      .map(x=>`+ ${x}`);
+    return [prefix, ...addOnItems].filter(Boolean);
+  }
+
   function appendGroupedEntry(host, slot, entry, slotIndex, opts){
     const settings = opts || {};
     const row = document.createElement('div');
@@ -808,11 +828,11 @@
     const title = document.createElement('b');
     title.textContent = `${entry.qty}x ${entry.name}`;
     titleWrap.appendChild(title);
-    if(entry.note){
+    splitEntryNoteLines(entry.note).forEach((line, idx)=>{
       const note = document.createElement('small');
-      note.textContent = entry.note;
+      note.textContent = idx === 0 ? line : `↳ ${line}`;
       titleWrap.appendChild(note);
-    }
+    });
     header.appendChild(titleWrap);
 
     const price = document.createElement('span');
@@ -824,8 +844,15 @@
     (entry.children || []).forEach(child=>{
       const childLine = document.createElement('div');
       childLine.className = 'grouped-meal-child';
-      childLine.textContent = `↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''} · ${child.total} GHS`;
+      const childNote = splitEntryNoteLines(child.note);
+      childLine.textContent = `↳ ${child.qty}x ${child.name}${childNote.length ? ` · ${childNote[0]}` : ''} · ${child.total} GHS`;
       row.appendChild(childLine);
+      childNote.slice(1).forEach(line=>{
+        const extraLine = document.createElement('div');
+        extraLine.className = 'grouped-meal-child';
+        extraLine.textContent = `   ↳ ${line}`;
+        row.appendChild(extraLine);
+      });
     });
 
     host.appendChild(row);
@@ -989,6 +1016,7 @@
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS</div>
           <div class="pay-status">
+            <button onclick="BK_UI.focusSlot(${i},'make');">Focus</button>
             <span>Status: ${s.pay.toUpperCase()}</span>
             <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Unpaid</button>
             <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
@@ -1025,7 +1053,8 @@
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
           <div class="pay-status">
             <span>Status: ${s.issued ? 'ISSUED' : 'WAITING'}</span>
-            <button ${(canIssue && !s.issued) ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark Issued</button>
+            <button onclick="BK_UI.focusSlot(${i},'issue');">Focus</button>
+            <button ${(canIssue && !s.issued) ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark as Issued</button>
           </div>
         </div>`;
       const checklist = document.createElement('div');
@@ -1088,6 +1117,15 @@
         else tab.removeAttribute('aria-current');
       }
     });
+  }
+
+  function focusSlot(slotIndex, tab){
+    const st = BK_STATE.getState();
+    if(!st.slots[slotIndex]) return;
+    BK_STATE.setActive(slotIndex);
+    renderSlotsBar();
+    refreshTotals();
+    goTab(tab || 'order');
   }
 
   function clearFlowAction(hostId){
@@ -1839,7 +1877,7 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot
   };
 })();
     function getPackagingRules(){
