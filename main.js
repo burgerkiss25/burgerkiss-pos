@@ -5,8 +5,14 @@
   BK_MENUS.load();
   BK_IMAGES.load();
   BK_STOCK.load();
-  const had = BK_STATE.load();
-  if(!had) BK_STATE.addSlot();
+  BK_STATE.load();
+  BK_STATE.whenReady().then(function(){
+    if(BK_STATE.getState().slots.length) return;
+    return BK_STATE.addSlot().then(function(){ BK_UI.renderAll(); });
+  }).catch(function(error){
+    console.error('Initial order number allocation failed:', error && error.message);
+    if(window.BK_UI) BK_UI.infoDialog('A new order could not be created because no unique order number could be reserved. Check the internet connection and reload.');
+  });
 
   const forceSlot = !!(window.BK_SYNC_FORCE_SLOT && typeof window.BK_SYNC_FORCE_SLOT === 'string');
 
@@ -21,10 +27,10 @@
   // Schutz gegen fehlerhafte Merge-Duplikate in index.html
   removeDuplicateIds([
     'tabOrder','tabMake','tabPay','tabIssue',
-    'btnSummary','btnStockOverview','btnHistory','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup',
+    'btnSummary','btnStockOverview','btnHistory','btnDailyReport','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup',
     'btnUndo','btnReset','btnClearDisc','btnClearStorage',
     'btnAddSlot','btnRenameSlot','btnDeleteSlot','activeSlotLabel',
-    'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalHistory','modalReceipt','modalStockOverview'
+    'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalHistory','modalHistoryDetail','modalDailyReport','modalReceipt','modalStockOverview'
   ]);
 
   // Buttons
@@ -94,10 +100,18 @@
   document.getElementById('btnHistory').onclick = ()=> BK_UI.openHistory();
   document.getElementById('hClose').onclick     = ()=> BK_UI.closeHistory();
   document.getElementById('hToday').onclick     = ()=> BK_UI.filterHistoryToday();
-  document.getElementById('hClear').onclick     = ()=> BK_UI.clearHistory();
+  document.getElementById('hClear').onclick     = ()=> BK_UI.clearHistoryFilters();
   document.getElementById('hSearch').oninput    = (e)=> BK_UI.filterHistoryText(e.target.value);
   document.getElementById('hExportJson').onclick= ()=> BK_UI.exportHistoryJson();
   document.getElementById('hExportCsv').onclick = ()=> BK_UI.exportHistoryCsv();
+  document.getElementById('hdClose').onclick     = ()=> BK_UI.closeHistoryOrder();
+  document.getElementById('hdReprint').onclick   = ()=> BK_UI.reprintHistoryOrder();
+  document.getElementById('hdVoid').onclick      = ()=> BK_UI.voidSelectedHistoryOrder();
+  document.getElementById('btnDailyReport').onclick = ()=> BK_UI.openDailyReport();
+  document.getElementById('reportDate').onchange = ()=> BK_UI.renderDailyReport();
+  document.getElementById('reportExport').onclick = ()=> BK_UI.exportDailyReportCsv();
+  document.getElementById('reportPrint').onclick = ()=> BK_UI.printDailyReport();
+  document.getElementById('reportClose').onclick = ()=> BK_UI.closeDailyReport();
 
   // Receipt
   document.getElementById('btnReceipt').onclick = ()=> BK_UI.openReceipt();

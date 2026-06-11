@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>BurgerKiss – POS (Variante B: gespiegelt auf SN1)</title>
-  <link rel="stylesheet" href="./style.css?v=27" />
+  <title>BurgerKiss – POS</title>
+  <link rel="stylesheet" href="./style.css?v=36" />
 
   <!-- POS-Konfiguration aus externer Datei -->
-  <script src="./firebase-config.js?v=1"></script>
+  <script src="./firebase-config.js?v=2"></script>
 </head>
 <body>
   <!-- Sticky HUD -->
@@ -43,6 +43,7 @@
           <button class="x" id="btnSummary">Summary</button>
           <button class="x" id="btnStockOverview">Stock <span class="stock-alert-badge hidden" id="stockAlertBadge">0</span></button>
           <button class="x" id="btnHistory">History</button>
+          <button class="x" id="btnDailyReport">Daily Report</button>
           <button class="x" id="btnReceipt">Receipt</button>
           <button class="x" id="btnGroup">Group Ticket</button>
           <button class="x danger-link" id="btnReset">Reset Order</button>
@@ -86,7 +87,6 @@
   <!-- Kategorien -->
   <div class="catbar" aria-label="Product categories">
     <button class="tab active" data-cat="all">All</button>
-    <button class="tab" data-cat="menu">Menus</button>
     <button class="tab" data-cat="burger">Burgers</button>
     <button class="tab" data-cat="wings">Wings</button>
     <button class="tab" data-cat="fries">Fries</button>
@@ -171,13 +171,44 @@
         <div>
           <input id="hSearch" placeholder="Search order no / slot" style="min-width:220px;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:8px" />
           <button class="x" id="hToday">Today</button>
-          <button class="x" id="hClear">Clear</button>
+          <button class="x" id="hClear">Clear Filters</button>
           <button class="x" id="hExportJson">Export JSON</button>
           <button class="x" id="hExportCsv">Export CSV</button>
           <button class="x" id="hClose">Close</button>
         </div>
       </header>
       <div class="body" id="historyBody"></div>
+    </div>
+  </div>
+
+  <!-- HISTORY ORDER DETAIL MODAL -->
+  <div class="modal" id="modalHistoryDetail">
+    <div class="sheet history-detail-sheet">
+      <header>
+        <b id="historyDetailTitle">Order details</b>
+        <div>
+          <button class="x" id="hdReprint">Reprint Receipt</button>
+          <button class="x danger-link" id="hdVoid">Void Order</button>
+          <button class="x" id="hdClose">Close</button>
+        </div>
+      </header>
+      <div class="body" id="historyDetailBody"></div>
+    </div>
+  </div>
+
+  <!-- DAILY REPORT MODAL -->
+  <div class="modal" id="modalDailyReport">
+    <div class="sheet report-sheet">
+      <header>
+        <b>Daily Sales Report</b>
+        <div>
+          <input id="reportDate" type="date" />
+          <button class="x" id="reportExport">Export CSV</button>
+          <button class="x" id="reportPrint">Print Report</button>
+          <button class="x" id="reportClose">Close</button>
+        </div>
+      </header>
+      <div class="body" id="dailyReportBody"></div>
     </div>
   </div>
 
@@ -238,17 +269,17 @@
   <script src="./data.js?v=12"></script>
   <script src="./prices.js?v=14"></script>
   <script src="./products.js?v=14"></script>
-  <script src="./menus.js?v=1"></script>
+  <script src="./menus.js?v=2"></script>
   <script src="./images.js?v=18"></script>
   <script src="./stock_data.js?v=13"></script>
   <script src="./stock_utils.js?v=15"></script>
   <script src="./stock.js?v=18"></script>
-  <script src="./state.js?v=15"></script>
+  <script src="./state.js?v=17"></script>
   <script src="./logic.js?v=13"></script>
-  <script src="./ui.js?v=27"></script>
-  <script src="./main.js?v=14"></script>
+  <script src="./ui.js?v=37"></script>
+  <script src="./main.js?v=16"></script>
 
   <!-- =============== Live-Sync (Variante B, Polling) =============== -->
-  <script src="./sync_poll.js?v=12"></script>
+  <script src="./sync_poll.js?v=13"></script>
 </body>
 </html>
