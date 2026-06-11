@@ -4,7 +4,7 @@
   let productQuery = '';
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
-  const CATEGORY_LABELS = { all:'All', menu:'Menu', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
+  const CATEGORY_LABELS = { all:'All', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
   let historyFilterText = '';
   let historyFilterToday = false;
   const QUICK_NOTES = ['No onion', 'Extra onion', 'No lettuce', 'Extra spicy'];
@@ -158,9 +158,8 @@
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
     const query = productQuery.trim().toLowerCase();
     const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
-    const productItems = base.filter(isFrontProduct).filter(it => (currentCat==='menu' || currentCat==='fast') ? false : (currentCat==='all' ? true : it.cat===currentCat));
-    const menuItems = buildStandardMenuCards().filter(it => currentCat === 'all' || currentCat === 'menu');
-    const items = menuItems.concat(productItems)
+    const items = base.filter(isFrontProduct)
+      .filter(it => currentCat === 'all' ? true : it.cat === currentCat)
       .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true);
     if(!items.length){
       const empty = document.createElement('div');
@@ -172,7 +171,7 @@
     }
     items.forEach(it=>{
       const b = document.createElement('button');
-      b.className = 'item' + (it.isStandardMenu ? ' standard-menu-item' : '');
+      b.className = 'item';
       b.type = 'button';
       const img = BK_IMAGES.get(it.imageId || it.id);
       if(img){
@@ -188,9 +187,9 @@
                      ${it.subtitle ? `<small class="item-subtitle">${it.subtitle}</small>` : ''}
                      <div class="item-meta">
                        <div class="price">${itemDisplayPrice(it)} GHS</div>
-                       <span class="badge">${it.isStandardMenu ? 'Menu' : '+1'}</span>
+                       <span class="badge">+1</span>
                      </div>`;
-      b.onclick = ()=> it.isStandardMenu ? addStandardMenuPreset(it) : addProductWithFlow(it);
+      b.onclick = ()=> addProductWithFlow(it);
       grid.appendChild(b);
     });
   }
@@ -369,18 +368,7 @@
   }
 
   function itemDisplayPrice(item){
-    if(item && item.isStandardMenu) return standardMenuPrice(item);
     return BK_PRICES.getPrice(item && item.id);
-  }
-
-  function standardMenuPrice(menu){
-    const base = productById(menu.baseId);
-    if(!base) return 0;
-    const included = BK_DATA.MENU && BK_DATA.MENU.included ? BK_DATA.MENU.included : {fries:0, drink:0};
-    const friesUpgrade = menu.defaultFries ? Math.max(0, BK_PRICES.getPrice(menu.defaultFries) - (Number(included.fries) || 0)) : 0;
-    const drinkUpgrade = menu.defaultDrink ? Math.max(0, BK_PRICES.getPrice(menu.defaultDrink) - (Number(included.drink) || 0)) : 0;
-    const baseMenuPrice = Number(menu.menuPrice) > 0 ? Number(menu.menuPrice) : mealBasePrice(base);
-    return baseMenuPrice + friesUpgrade + drinkUpgrade;
   }
 
   function getStandardMenuPresets(){
@@ -388,21 +376,8 @@
     return FALLBACK_STANDARD_MENUS;
   }
 
-  function buildStandardMenuCards(){
-    return getStandardMenuPresets().map(menu=>{
-      const base = productById(menu.baseId);
-      if(!base || standardMenuPrice(menu) <= 0) return null;
-      const fries = productById(menu.defaultFries);
-      const drink = productById(menu.defaultDrink);
-      return Object.assign({}, menu, {
-        cat: 'menu',
-        isStandardMenu: true,
-        imageId: menu.baseId,
-        baseName: base.name,
-        subtitle: [base.name, fries && fries.name, drink && drink.name].filter(Boolean).join(' + '),
-        searchText: [base.name, fries && fries.name, drink && drink.name, 'standard menu combo'].filter(Boolean).join(' ')
-      });
-    }).filter(Boolean);
+  function standardMenuPresetFor(baseId){
+    return getStandardMenuPresets().find(menu=>menu.baseId === baseId) || {};
   }
 
   function mealBasePrice(product){
@@ -530,7 +505,7 @@
   }
 
   async function addGuidedMenu(product, pendingNote, preset){
-    const menuPreset = preset || {};
+    const menuPreset = preset || standardMenuPresetFor(product.id);
     const defaultFries = menuPreset.defaultFries || 'fries_standard';
     const defaultDrink = menuPreset.defaultDrink || 'd_cola';
     const defaultWingsSauce = Object.prototype.hasOwnProperty.call(menuPreset, 'defaultWingsSauce') ? menuPreset.defaultWingsSauce : 'x_sauce_chicken_wings';
@@ -580,18 +555,7 @@
     return true;
   }
 
-  async function addStandardMenuPreset(menu){
-    const base = productById(menu.baseId);
-    if(!base){
-      infoDialog(`${menu.name} is not available in the current product catalog.`);
-      return;
-    }
-    const added = await addGuidedMenu(base, '', menu);
-    if(!added) return;
-    renderOrder();
-    renderMake();
-    refreshTotals();
-  }
+
 
   async function addProductWithFlow(product){
     const pendingNote = '';
