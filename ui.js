@@ -1015,7 +1015,72 @@
 
     const c = BK_LOGIC.computeSlot(s);
     setSlotTotals(c.subtotal, 0, c.subtotal);
-    ensureFlowActions('orderFlowNav', [{ label:'➡️ Go to Make', onClick:()=> goTab('make') }]);
+    const orderNext = workflowNextState('order', s);
+    renderWorkflowNext('orderFlowNav', Object.assign({}, orderNext, {onClick:()=>goTab(orderNext.target)}));
+  }
+
+  function workflowNextState(stage, slot){
+    const hasItems = !!(slot && Array.isArray(slot.items) && slot.items.length);
+    if(stage === 'order') return hasItems
+      ? {state:'ready', title:'Order ready for kitchen', detail:'Products and packaging can now be sent to preparation.', label:'Continue to Kitchen', target:'make', disabled:false}
+      : {state:'blocked', title:'Order not ready', detail:'Add at least one product to continue.', label:'Continue to Kitchen', target:'make', disabled:true};
+    if(stage === 'make'){
+      const done = hasItems && slot.items.every(item=>!!item.done);
+      return done
+        ? {state:'ready', title:'Kitchen complete', detail:'All items are prepared.', label:slot.pay === 'unpaid' ? 'Continue to Payment' : 'Continue to Handover', target:slot.pay === 'unpaid' ? 'pay' : 'issue', disabled:false}
+        : {state:'blocked', title:'Kitchen preparation required', detail:'Mark every item as prepared to continue.', label:'Continue to Payment', target:'pay', disabled:true};
+    }
+    if(stage === 'pay') return hasItems && slot.pay !== 'unpaid'
+      ? {state:'ready', title:'Payment complete', detail:'Payment is confirmed. Continue with the same order to handover.', label:'Continue to Handover', target:'issue', disabled:false}
+      : {state:'blocked', title:'Payment required', detail:'Confirm Cash or MoMo payment to continue.', label:'Continue to Handover', target:'issue', disabled:true};
+    return {state:'blocked', title:'Step incomplete', detail:'Complete this step to continue.', label:'Continue', target:'order', disabled:true};
+  }
+
+  function renderWorkflowNext(hostId, options){
+    const host = document.getElementById(hostId);
+    if(!host) return;
+    const opts = options || {};
+    host.className = `workflow-next ${opts.state || 'blocked'}`;
+    host.innerHTML = `<div class="workflow-next-copy"><strong>${escapeHtml(opts.title || '')}</strong><small>${escapeHtml(opts.detail || '')}</small></div><button type="button" class="workflow-next-button" ${opts.disabled ? 'disabled' : ''}>${escapeHtml(opts.label || 'Continue')}</button>`;
+    const button = host.querySelector('.workflow-next-button');
+    button.onclick = ()=>{ if(!button.disabled && typeof opts.onClick === 'function') opts.onClick(); };
+  }
+
+  function currentWorkflowTab(){
+    const activeTab = document.querySelector('.workflow-step[aria-current="step"]');
+    const idMap = { tabOrder:'order', tabMake:'make', tabPay:'pay', tabIssue:'issue' };
+    return idMap[activeTab && activeTab.id] || 'order';
+  }
+
+  function makeSlotCardSelectable(card, slotIndex, tab, active){
+    card.classList.add('selectable');
+    card.classList.toggle('active-slot-card', !!active);
+    card.tabIndex = 0;
+    card.setAttribute('role', 'group');
+    card.setAttribute('aria-label', `${active ? 'Active order. ' : ''}Order card; press Enter or Space to select`);
+    if(active) card.setAttribute('aria-current', 'true');
+    const select = event=>{
+      if(event.target.closest('button, input, label, a, select, textarea')) return;
+      focusSlot(slotIndex, tab);
+    };
+    card.addEventListener('click', select);
+    card.addEventListener('keydown', event=>{
+      if(event.target !== card || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      focusSlot(slotIndex, tab);
+    });
+  }
+
+  function kitchenProgress(slot){
+    const entries = groupedCartRows(slot.items || []);
+    const total = entries.length;
+    const complete = entries.filter(entry=>groupedEntryDone(slot, entry)).length;
+    const percent = total ? Math.round((complete / total) * 100) : 0;
+    if(slot.issued) return { state:'complete', label:'Kitchen complete', complete, total, percent:100, detail:'Order already issued.' };
+    if(total === 0) return { state:'empty', label:'No items', complete:0, total:0, percent:0, detail:'Add products before preparation.' };
+    if(complete === total) return { state:'complete', label:'Kitchen complete', complete, total, percent:100, detail:'All items are prepared.' };
+    if(complete === 0) return { state:'not-started', label:'Not started', complete, total, percent, detail:'Preparation has not started.' };
+    return { state:'in-progress', label:'In progress', complete, total, percent, detail:'Continue preparing the remaining items.' };
   }
 
   function currentWorkflowTab(){
@@ -1070,6 +1135,7 @@
     slots.forEach((s,i)=>{
       const c = BK_LOGIC.computeSlot(s);
       const progress = kitchenProgress(s);
+      const makeNext = workflowNextState('make', s);
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
         <div class="slot-head">
@@ -1079,11 +1145,11 @@
         <div class="kitchen-progress ${progress.state}">
           <div class="kitchen-progress-copy"><strong>${progress.label}</strong><span>${progress.complete} of ${progress.total} items prepared</span><small>${progress.detail}</small></div>
           <div class="kitchen-progress-track" role="progressbar" aria-label="Kitchen progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="width:${progress.percent}%"></span></div>
-          ${progress.state === 'complete' && !s.issued ? `<button class="kitchen-next-action" type="button">${s.pay === 'unpaid' ? 'Continue to Payment' : 'Go to Handover'}</button>` : ''}
+          ${progress.state === 'complete' && !s.issued ? `<button class="workflow-next-button kitchen-next-action" type="button">${makeNext.label}</button>` : ''}
         </div>
         <div class="todo grouped-todo" id="todo-${i}"></div>`;
       const nextAction = card.querySelector('.kitchen-next-action');
-      if(nextAction) nextAction.onclick = ()=> focusSlot(i, s.pay === 'unpaid' ? 'pay' : 'issue');
+      if(nextAction) nextAction.onclick = ()=> focusSlot(i, makeNext.target);
       card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
       makeSlotCardSelectable(card, i, 'make', i === active);
       box.appendChild(card);
@@ -1103,8 +1169,7 @@
       });
     });
     ensureFlowActions('makeList', [
-      { label:'⬅️ Back to Order', onClick:()=> goTab('order') },
-      { label:'➡️ Go to Payment', onClick:()=> goTab('pay') }
+      { label:'⬅️ Back to Order', onClick:()=> goTab('order') }
     ]);
   }
 
@@ -1162,6 +1227,7 @@
     slots.forEach((s,i)=>{
       const c = BK_LOGIC.computeSlot(s);
       const payment = paymentDisplay(s);
+      const payNext = workflowNextState('pay', s);
       const paymentDisabled = s.issued || !Array.isArray(s.items) || s.items.length === 0;
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
@@ -1176,13 +1242,18 @@
             <button class="payment-method ${s.pay === 'cash' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'cash');">Cash</button>
             <button class="payment-method ${s.pay === 'momo' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'momo');">MoMo</button>
           </div>
+        </div>
+        <div class="workflow-next ${payNext.state}">
+          <div class="workflow-next-copy"><strong>${payNext.title}</strong><small>${payNext.detail}</small></div>
+          <button type="button" class="workflow-next-button payment-next-action" ${payNext.disabled ? 'disabled' : ''}>${payNext.label}</button>
         </div>`;
+      const paymentNext = card.querySelector('.payment-next-action');
+      paymentNext.onclick = ()=>{ if(!paymentNext.disabled) focusSlot(i, payNext.target); };
       makeSlotCardSelectable(card, i, 'pay', i === active);
       box.appendChild(card);
     });
     ensureFlowActions('payList', [
-      { label:'⬅️ Back to Make', onClick:()=> goTab('make') },
-      { label:'➡️ Go to Issue / Handover', onClick:()=> goTab('issue') }
+      { label:'⬅️ Back to Make', onClick:()=> goTab('make') }
     ]);
   }
 
@@ -1207,7 +1278,7 @@
     if(!paid && !kitchenDone) return { state:'blocked', label:'2 steps remaining', detail:'Payment required · Kitchen not finished', action:'Go to Payment', target:'pay' };
     if(!paid) return { state:'blocked', label:'Payment required', detail:'Complete payment before handover.', action:'Go to Payment', target:'pay' };
     if(!kitchenDone) return { state:'waiting', label:'Kitchen not finished', detail:'Complete every kitchen item before handover.', action:'Go to Make', target:'make' };
-    return { state:'ready', label:'Ready for handover', detail:'Paid and all kitchen items are complete.', action:'Start final handover', target:'issue' };
+    return { state:'ready', label:'Ready for handover', detail:'Paid and all kitchen items are complete.', action:'Start Final Handover', target:'issue' };
   }
 
   function renderIssue(){
@@ -1234,9 +1305,9 @@
             ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
           </div>
         </div>
-        <div class="issue-readiness ${readiness.state}">
-          <div><strong>${readiness.label}</strong><small>${readiness.detail}</small></div>
-          <button class="issue-next-action" ${readiness.disabled ? 'disabled' : ''}>${readiness.action}</button>
+        <div class="workflow-next issue-readiness ${readiness.state}">
+          <div class="workflow-next-copy"><strong>${readiness.label}</strong><small>${readiness.detail}</small></div>
+          <button class="workflow-next-button issue-next-action" ${readiness.disabled ? 'disabled' : ''}>${readiness.action}</button>
         </div>`;
       const actionButton = card.querySelector('.issue-next-action');
       actionButton.onclick = ()=>{
@@ -1260,22 +1331,11 @@
         checklist.appendChild(emptyLine);
       }
       card.appendChild(checklist);
-      if(s.issued){
-        const lifecycle = document.createElement('div');
-        lifecycle.className = 'issued-order-actions';
-        lifecycle.innerHTML = `<span>This order remains available until you start the next order.</span><div><button type="button" class="x keep-issued">Keep Slot Open</button><button type="button" class="x view-issued">View Receipt</button><button type="button" class="x modifier-primary next-issued">Start Next Order</button></div>`;
-        lifecycle.querySelector('.keep-issued').onclick = event=>{ event.stopPropagation(); infoDialog('The completed order will remain in this slot until Start Next Order is selected.'); };
-        lifecycle.querySelector('.view-issued').onclick = event=>{ event.stopPropagation(); viewIssuedOrder(i); };
-        lifecycle.querySelector('.next-issued').onclick = event=>{ event.stopPropagation(); quickStartNext(i); };
-        card.appendChild(lifecycle);
-      }
       makeSlotCardSelectable(card, i, 'issue', i === active);
       box.appendChild(card);
     });
-    const activeIssued = BK_STATE.getState().slots[BK_STATE.getState().active]?.issued;
     ensureFlowActions('issueList', [
-      { label:'⬅️ Back to Payment', onClick:()=> goTab('pay'), disabled: !!activeIssued },
-      { label:'🆕 Start Next Order', onClick:()=> startNextOrder() }
+      { label:'⬅️ Back to Payment', onClick:()=> goTab('pay') }
     ]);
   }
 
@@ -1429,14 +1489,6 @@
       renderAll();
       goTab('order');
     }).catch(showOrderNumberError);
-  }
-
-  function viewIssuedOrder(slotIndex){
-    const slot = BK_STATE.getState().slots[slotIndex];
-    if(!slot || !slot.issued) return;
-    pushHistory(slotSnapshot(slot));
-    const entry = getHistory().find(item=>item.orderNo === slot.orderNo);
-    if(entry) openHistoryOrder(entry.id);
   }
 
   function historyRemoteEnabled(){
@@ -1600,6 +1652,21 @@
     return recovered;
   }
 
+  function archiveCompletedSlots(){
+    const state = BK_STATE.getState();
+    const completed = state.slots.filter(slot=>slot && slot.issued);
+    if(!completed.length) return 0;
+    completed.forEach(slot=>{
+      if(Array.isArray(slot.items) && slot.items.length) pushHistory(slotSnapshot(slot));
+    });
+    const activeOrderNo = state.slots[state.active] && state.slots[state.active].orderNo;
+    state.slots = state.slots.filter(slot=>!slot.issued);
+    const preservedActive = state.slots.findIndex(slot=>slot.orderNo === activeOrderNo);
+    state.active = preservedActive >= 0 ? preservedActive : Math.min(state.active, Math.max(0, state.slots.length - 1));
+    BK_STATE.setState(state);
+    return completed.length;
+  }
+
   function markIssued(i){
     const st = BK_STATE.getState();
     const slot = st.slots[i];
@@ -1710,12 +1777,22 @@
       const stockResult = window.BK_STOCK && typeof BK_STOCK.consumeSlot === 'function'
         ? BK_STOCK.consumeSlot(latestSlot)
         : null;
-      BK_STATE.setIssued(i, true);
       pushHistory(slotSnapshot({...latestSlot, issued:true}));
-      renderIssue();
-      renderStock();
-      const suffix = stockResult && stockResult.message ? ` ${stockResult.message}` : '';
-      infoDialog(`Order marked as issued.${suffix}`);
+      const nextState = BK_STATE.getState();
+      nextState.slots.splice(i, 1);
+      nextState.active = Math.min(i, Math.max(0, nextState.slots.length - 1));
+      BK_STATE.setState(nextState);
+      const finish = ()=>{
+        renderAll();
+        renderStock();
+        const suffix = stockResult && stockResult.message ? ` ${stockResult.message}` : '';
+        infoDialog(`Order completed and archived. It is now available only in History.${suffix}`);
+      };
+      if(nextState.slots.length){
+        finish();
+      }else{
+        BK_STATE.addSlot().then(function(){ finish(); goTab('order'); }).catch(showOrderNumberError);
+      }
     });
   }
 
@@ -2345,7 +2422,7 @@
     renderStock,
     openSummary, closeSummary, openHistory, closeHistory, openHistoryOrder, closeHistoryOrder, reprintHistoryOrder, voidSelectedHistoryOrder,
     exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, clearHistoryFilters,
-    openDailyReport, closeDailyReport, renderDailyReport, exportDailyReportCsv, printDailyReport, dailyReportData, voidHistoryOrder,
+    openDailyReport, closeDailyReport, renderDailyReport, exportDailyReportCsv, printDailyReport, dailyReportData, voidHistoryOrder, archiveCompletedSlots, workflowNextState,
     openStockOverview, closeStockOverview,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,

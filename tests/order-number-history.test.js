@@ -115,13 +115,14 @@ function testIssuedOrderHistoryRecovery() {
     items: [{itemId: 'burger', note: '', done: true}],
     pay: 'cash', issued: true, createdAt: 1000
   };
+  let activeState = {slots: [slot], active: 0, discountRate: 0};
   const context = {
     console, Promise, Map, Set, Date, Math, Number, String, Array, Object, JSON,
     localStorage: storage,
     document: {getElementById: id => elements[id] || null},
     setTimeout, clearTimeout,
     BK_SYNC_ENABLED: false,
-    BK_STATE: {getState: () => ({slots: [slot], active: 0, discountRate: 0}), setState() {}},
+    BK_STATE: {getState: () => activeState, setState(next) { activeState = next; }},
     BK_LOGIC: {
       computeSlot: () => ({subtotal: 100, combos: 0}),
       groupedLines: () => [{name: 'Burger', qty: 1, note: '', total: 100}]
@@ -150,6 +151,41 @@ function testIssuedOrderHistoryRecovery() {
   assert.strictEqual(reportAfterVoid.voided.length, 1);
   assert.strictEqual(reportAfterVoid.netSales, 0);
   assert.strictEqual(reportAfterVoid.voidValue, 100);
+
+  const archivedCount = context.BK_UI.archiveCompletedSlots();
+  assert.strictEqual(archivedCount, 1);
+  assert.strictEqual(activeState.slots.length, 0);
+  const preservedHistory = JSON.parse(storage.getItem('bk_order_history_v1') || '[]');
+  assert.strictEqual(preservedHistory.length, 1);
+  assert.strictEqual(preservedHistory[0].status, 'voided');
+}
+
+function testInlineWorkflowProgression() {
+  const storage = createStorage();
+  const context = {
+    console, Promise, Map, Set, Date, Math, Number, String, Array, Object, JSON,
+    localStorage: storage, document: {getElementById: () => null}, setTimeout, clearTimeout,
+    BK_SYNC_ENABLED: false, BK_STATE: {getState: () => ({slots: [], active: 0, discountRate: 0})},
+    BK_LOGIC: {}, BK_DATA: {BASE: []}
+  };
+  context.window = context;
+  vm.createContext(context);
+  vm.runInContext(uiCode, context);
+
+  const empty = {items: [], pay: 'unpaid'};
+  const cooking = {items: [{itemId: 'burger', done: false}], pay: 'unpaid'};
+  const prepared = {items: [{itemId: 'burger', done: true}], pay: 'unpaid'};
+  const paid = {items: [{itemId: 'burger', done: true}], pay: 'cash'};
+
+  assert.strictEqual(context.BK_UI.workflowNextState('order', empty).disabled, true);
+  assert.strictEqual(context.BK_UI.workflowNextState('order', cooking).label, 'Continue to Kitchen');
+  assert.strictEqual(context.BK_UI.workflowNextState('order', cooking).target, 'make');
+  assert.strictEqual(context.BK_UI.workflowNextState('make', cooking).disabled, true);
+  assert.strictEqual(context.BK_UI.workflowNextState('make', prepared).label, 'Continue to Payment');
+  assert.strictEqual(context.BK_UI.workflowNextState('make', prepared).target, 'pay');
+  assert.strictEqual(context.BK_UI.workflowNextState('pay', prepared).disabled, true);
+  assert.strictEqual(context.BK_UI.workflowNextState('pay', paid).label, 'Continue to Handover');
+  assert.strictEqual(context.BK_UI.workflowNextState('pay', paid).target, 'issue');
 }
 
 (async () => {
@@ -157,6 +193,7 @@ function testIssuedOrderHistoryRecovery() {
   await testAtomicRemoteSequence();
   await testDuplicateRepair();
   testIssuedOrderHistoryRecovery();
+  testInlineWorkflowProgression();
   console.log('Order number and history regression tests passed.');
 })().catch(error => {
   console.error(error);

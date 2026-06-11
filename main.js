@@ -7,7 +7,8 @@
   BK_STOCK.load();
   BK_STATE.load();
   BK_STATE.whenReady().then(function(){
-    if(BK_STATE.getState().slots.length) return;
+    BK_UI.archiveCompletedSlots();
+    if(BK_STATE.getState().slots.length){ BK_UI.renderAll(); return; }
     return BK_STATE.addSlot().then(function(){ BK_UI.renderAll(); });
   }).catch(function(error){
     console.error('Initial order number allocation failed:', error && error.message);
@@ -126,21 +127,6 @@
   document.getElementById('gMake').onclick    = ()=> BK_UI.groupMakeReceipt();
   document.getElementById('gPaid').onclick    = ()=> BK_UI.groupMarkPaid();
 
-
-  // Inline workflow navigation buttons
-  const navBindings = [
-    ['btnOrderToMake', 'make'],
-    ['btnMakeToOrder', 'order'],
-    ['btnMakeToPay', 'pay'],
-    ['btnPayToMake', 'make'],
-    ['btnPayToIssue', 'issue'],
-    ['btnIssueToMake', 'make'],
-    ['btnIssueToPay', 'pay']
-  ];
-  navBindings.forEach(([id, tab])=>{
-    const el = document.getElementById(id);
-    if(el) el.onclick = ()=> BK_UI.goTab(tab);
-  });
 
   // Category tabs
   document.querySelectorAll('.catbar .tab[data-cat]').forEach(btn=>{
