@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – POS</title>
-  <link rel="stylesheet" href="./style.css?v=35" />
+  <link rel="stylesheet" href="./style.css?v=36" />
 
   <!-- POS-Konfiguration aus externer Datei -->
   <script src="./firebase-config.js?v=2"></script>
@@ -43,6 +43,7 @@
           <button class="x" id="btnSummary">Summary</button>
           <button class="x" id="btnStockOverview">Stock <span class="stock-alert-badge hidden" id="stockAlertBadge">0</span></button>
           <button class="x" id="btnHistory">History</button>
+          <button class="x" id="btnDailyReport">Daily Report</button>
           <button class="x" id="btnReceipt">Receipt</button>
           <button class="x" id="btnGroup">Group Ticket</button>
           <button class="x danger-link" id="btnReset">Reset Order</button>
@@ -180,6 +181,37 @@
     </div>
   </div>
 
+  <!-- HISTORY ORDER DETAIL MODAL -->
+  <div class="modal" id="modalHistoryDetail">
+    <div class="sheet history-detail-sheet">
+      <header>
+        <b id="historyDetailTitle">Order details</b>
+        <div>
+          <button class="x" id="hdReprint">Reprint Receipt</button>
+          <button class="x danger-link" id="hdVoid">Void Order</button>
+          <button class="x" id="hdClose">Close</button>
+        </div>
+      </header>
+      <div class="body" id="historyDetailBody"></div>
+    </div>
+  </div>
+
+  <!-- DAILY REPORT MODAL -->
+  <div class="modal" id="modalDailyReport">
+    <div class="sheet report-sheet">
+      <header>
+        <b>Daily Sales Report</b>
+        <div>
+          <input id="reportDate" type="date" />
+          <button class="x" id="reportExport">Export CSV</button>
+          <button class="x" id="reportPrint">Print Report</button>
+          <button class="x" id="reportClose">Close</button>
+        </div>
+      </header>
+      <div class="body" id="dailyReportBody"></div>
+    </div>
+  </div>
+
   <!-- STOCK OVERVIEW MODAL -->
   <div class="modal" id="modalStockOverview">
     <div class="sheet">
@@ -244,8 +276,8 @@
   <script src="./stock.js?v=18"></script>
   <script src="./state.js?v=17"></script>
   <script src="./logic.js?v=13"></script>
-  <script src="./ui.js?v=36"></script>
-  <script src="./main.js?v=15"></script>
+  <script src="./ui.js?v=37"></script>
+  <script src="./main.js?v=16"></script>
 
   <!-- =============== Live-Sync (Variante B, Polling) =============== -->
   <script src="./sync_poll.js?v=13"></script>

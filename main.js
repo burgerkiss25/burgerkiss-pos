@@ -27,10 +27,10 @@
   // Schutz gegen fehlerhafte Merge-Duplikate in index.html
   removeDuplicateIds([
     'tabOrder','tabMake','tabPay','tabIssue',
-    'btnSummary','btnStockOverview','btnHistory','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup',
+    'btnSummary','btnStockOverview','btnHistory','btnDailyReport','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup',
     'btnUndo','btnReset','btnClearDisc','btnClearStorage',
     'btnAddSlot','btnRenameSlot','btnDeleteSlot','activeSlotLabel',
-    'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalHistory','modalReceipt','modalStockOverview'
+    'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalHistory','modalHistoryDetail','modalDailyReport','modalReceipt','modalStockOverview'
   ]);
 
   // Buttons
@@ -104,6 +104,14 @@
   document.getElementById('hSearch').oninput    = (e)=> BK_UI.filterHistoryText(e.target.value);
   document.getElementById('hExportJson').onclick= ()=> BK_UI.exportHistoryJson();
   document.getElementById('hExportCsv').onclick = ()=> BK_UI.exportHistoryCsv();
+  document.getElementById('hdClose').onclick     = ()=> BK_UI.closeHistoryOrder();
+  document.getElementById('hdReprint').onclick   = ()=> BK_UI.reprintHistoryOrder();
+  document.getElementById('hdVoid').onclick      = ()=> BK_UI.voidSelectedHistoryOrder();
+  document.getElementById('btnDailyReport').onclick = ()=> BK_UI.openDailyReport();
+  document.getElementById('reportDate').onchange = ()=> BK_UI.renderDailyReport();
+  document.getElementById('reportExport').onclick = ()=> BK_UI.exportDailyReportCsv();
+  document.getElementById('reportPrint').onclick = ()=> BK_UI.printDailyReport();
+  document.getElementById('reportClose').onclick = ()=> BK_UI.closeDailyReport();
 
   // Receipt
   document.getElementById('btnReceipt').onclick = ()=> BK_UI.openReceipt();

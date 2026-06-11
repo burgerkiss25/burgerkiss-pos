@@ -76,10 +76,12 @@ async function testAtomicRemoteSequence() {
   const numbers = await Promise.all([
     terminalA.BK_STATE.allocateOrderNo(),
     terminalB.BK_STATE.allocateOrderNo(),
+    terminalA.BK_STATE.allocateOrderNo(),
+    terminalB.BK_STATE.allocateOrderNo(),
     terminalA.BK_STATE.allocateOrderNo()
   ]);
-  assert.strictEqual(new Set(numbers).size, 3);
-  assert.strictEqual(numbers.map(number => number.slice(-8)).sort().join(','), '00000001,00000002,00000003');
+  assert.strictEqual(new Set(numbers).size, 5);
+  assert.strictEqual(numbers.map(number => number.slice(-8)).sort().join(','), '00000001,00000002,00000003,00000004,00000005');
 }
 
 async function testDuplicateRepair() {
@@ -104,7 +106,7 @@ async function testDuplicateRepair() {
 function testIssuedOrderHistoryRecovery() {
   const storage = createStorage();
   const elements = {
-    historyBody: {innerHTML: ''},
+    historyBody: {innerHTML: '', querySelectorAll: () => []},
     modalHistory: {classList: {add() {}, remove() {}}},
     hSearch: {value: ''}
   };
@@ -119,7 +121,7 @@ function testIssuedOrderHistoryRecovery() {
     document: {getElementById: id => elements[id] || null},
     setTimeout, clearTimeout,
     BK_SYNC_ENABLED: false,
-    BK_STATE: {getState: () => ({slots: [slot], active: 0, discountRate: 0})},
+    BK_STATE: {getState: () => ({slots: [slot], active: 0, discountRate: 0}), setState() {}},
     BK_LOGIC: {
       computeSlot: () => ({subtotal: 100, combos: 0}),
       groupedLines: () => [{name: 'Burger', qty: 1, note: '', total: 100}]
@@ -134,6 +136,20 @@ function testIssuedOrderHistoryRecovery() {
   assert.strictEqual(history.length, 1);
   assert.strictEqual(history[0].orderNo, slot.orderNo);
   assert.ok(elements.historyBody.innerHTML.includes(slot.orderNo));
+
+  const reportDate = new Date(history[0].closedAt).toISOString().slice(0, 10);
+  const reportBeforeVoid = context.BK_UI.dailyReportData(reportDate);
+  assert.strictEqual(reportBeforeVoid.completed.length, 1);
+  assert.strictEqual(reportBeforeVoid.netSales, 100);
+
+  const voided = context.BK_UI.voidHistoryOrder(history[0].id, 'Manager correction');
+  assert.strictEqual(voided.status, 'voided');
+  assert.strictEqual(voided.voidReason, 'Manager correction');
+  const reportAfterVoid = context.BK_UI.dailyReportData(reportDate);
+  assert.strictEqual(reportAfterVoid.completed.length, 0);
+  assert.strictEqual(reportAfterVoid.voided.length, 1);
+  assert.strictEqual(reportAfterVoid.netSales, 0);
+  assert.strictEqual(reportAfterVoid.voidValue, 100);
 }
 
 (async () => {

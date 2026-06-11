@@ -30,6 +30,8 @@
       items: rawItems.map(normalizeItem).filter(Boolean),
       pay: PAY_SET.has(slot && slot.pay) ? slot.pay : 'unpaid',
       issued: !!(slot && slot.issued),
+      voided: !!(slot && slot.voided),
+      voidReason: String((slot && slot.voidReason) || ''),
       packMode: (slot && slot.packMode === 'split') ? 'split' : 'shared',
       packAsked: !!(slot && slot.packAsked),
       orderNo: (slot && typeof slot.orderNo==='string' && slot.orderNo.trim()) ? slot.orderNo.trim() : null,
@@ -237,7 +239,7 @@
   function addSlot(label){
     const idx = slots.length+1;
     return allocateOrderNo().then(function(orderNo){
-      slots.push({name: label || `SN${idx}`, items: [], pay:'unpaid', issued:false, packMode:'shared', packAsked:false, orderNo, createdAt: Date.now()});
+      slots.push({name: label || `SN${idx}`, items: [], pay:'unpaid', issued:false, voided:false, voidReason:'', packMode:'shared', packAsked:false, orderNo, createdAt: Date.now()});
       active = slots.length-1;
       save();
       return active;

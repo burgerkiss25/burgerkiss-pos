@@ -7,6 +7,7 @@
   const CATEGORY_LABELS = { all:'All', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
   let historyFilterText = '';
   let historyFilterToday = false;
+  let selectedHistoryOrderId = null;
   const QUICK_NOTES = ['No onion', 'Extra onion', 'No lettuce', 'Extra spicy'];
   const PACK_RULES_KEY = 'bk_packaging_rules_v1';
   let stockOverviewFilter = 'all';
@@ -81,6 +82,12 @@
         <span>${total} GHS</span>
       </div>
     `).join('');
+  }
+
+  function escapeHtml(value){
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   }
 
   function ensureDialogHost(){
@@ -656,6 +663,7 @@
   function slotStatus(slot){
     const progress = kitchenProgress(slot);
     const progressText = `${progress.complete}/${progress.total} prepared`;
+    if(slot.voided) return { state:'voided', label:'Voided', detail:'Order cancelled and retained for audit', shortDetail:'Voided' };
     if(slot.issued) return { state:'issued', label:'Issued', detail:'Handover completed', shortDetail:progressText };
     if(progress.total === 0) return { state:'draft', label:'Draft', detail:'No products added', shortDetail:'Empty' };
     if(progress.complete === progress.total && slot.pay === 'unpaid') return { state:'payment', label:'Payment due', detail:`Kitchen complete · ${progressText}`, shortDetail:progressText };
@@ -1193,6 +1201,7 @@
     const hasItems = Array.isArray(slot.items) && slot.items.length > 0;
     const kitchenDone = hasItems && slot.items.every(item=>!!item.done);
     const paid = slot.pay !== 'unpaid';
+    if(slot.voided) return { state:'voided', label:'Order voided', detail:slot.voidReason || 'Retained in history for audit.', action:'Voided', target:'issue', disabled:true };
     if(slot.issued) return { state:'issued', label:'Order issued', detail:'Handover completed and locked.', action:'Issued', target:'issue', disabled:true };
     if(!hasItems) return { state:'blocked', label:'Order is empty', detail:'Add at least one product before handover.', action:'Go to Order', target:'order' };
     if(!paid && !kitchenDone) return { state:'blocked', label:'2 steps remaining', detail:'Payment required · Kitchen not finished', action:'Go to Payment', target:'pay' };
@@ -1251,6 +1260,15 @@
         checklist.appendChild(emptyLine);
       }
       card.appendChild(checklist);
+      if(s.issued){
+        const lifecycle = document.createElement('div');
+        lifecycle.className = 'issued-order-actions';
+        lifecycle.innerHTML = `<span>This order remains available until you start the next order.</span><div><button type="button" class="x keep-issued">Keep Slot Open</button><button type="button" class="x view-issued">View Receipt</button><button type="button" class="x modifier-primary next-issued">Start Next Order</button></div>`;
+        lifecycle.querySelector('.keep-issued').onclick = event=>{ event.stopPropagation(); infoDialog('The completed order will remain in this slot until Start Next Order is selected.'); };
+        lifecycle.querySelector('.view-issued').onclick = event=>{ event.stopPropagation(); viewIssuedOrder(i); };
+        lifecycle.querySelector('.next-issued').onclick = event=>{ event.stopPropagation(); quickStartNext(i); };
+        card.appendChild(lifecycle);
+      }
       makeSlotCardSelectable(card, i, 'issue', i === active);
       box.appendChild(card);
     });
@@ -1348,6 +1366,8 @@
         items: [],
         pay: 'unpaid',
         issued: false,
+        voided: false,
+        voidReason: '',
         packMode: 'shared',
         packAsked: false,
         orderNo,
@@ -1411,6 +1431,14 @@
     }).catch(showOrderNumberError);
   }
 
+  function viewIssuedOrder(slotIndex){
+    const slot = BK_STATE.getState().slots[slotIndex];
+    if(!slot || !slot.issued) return;
+    pushHistory(slotSnapshot(slot));
+    const entry = getHistory().find(item=>item.orderNo === slot.orderNo);
+    if(entry) openHistoryOrder(entry.id);
+  }
+
   function historyRemoteEnabled(){
     return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database);
   }
@@ -1444,14 +1472,29 @@
       createdAt: Number(entry.createdAt) || closedAt,
       closedAt,
       subtotal: Number(entry.subtotal) || 0,
+      discountRate: Math.max(0, Number(entry.discountRate) || 0),
+      discount: Math.max(0, Number(entry.discount) || 0),
+      total: Number.isFinite(Number(entry.total)) ? Number(entry.total) : Math.max(0, (Number(entry.subtotal) || 0) - (Number(entry.discount) || 0)),
       combos: Number(entry.combos) || 0,
-      items: Array.isArray(entry.items) ? entry.items : []
+      packMode: entry.packMode === 'split' ? 'split' : 'shared',
+      status: entry.status === 'voided' ? 'voided' : 'completed',
+      voidReason: String(entry.voidReason || ''),
+      voidedAt: Number(entry.voidedAt) || 0,
+      voidedBy: String(entry.voidedBy || ''),
+      items: Array.isArray(entry.items) ? entry.items : [],
+      rawItems: Array.isArray(entry.rawItems) ? entry.rawItems : []
     };
   }
   function mergeHistory(local, remote){
     const map = new Map();
-    (Array.isArray(local) ? local : []).forEach(h=>{ const clean = sanitizeHistoryEntry(h); if(clean) map.set(clean.id, clean); });
-    (Array.isArray(remote) ? remote : []).forEach(h=>{ const clean = sanitizeHistoryEntry(h); if(clean) map.set(clean.id, clean); });
+    const add = h=>{
+      const clean = sanitizeHistoryEntry(h);
+      if(!clean) return;
+      const saved = map.get(clean.id);
+      if(!saved || (clean.status === 'voided' && saved.status !== 'voided') || Number(clean.voidedAt||clean.closedAt) >= Number(saved.voidedAt||saved.closedAt)) map.set(clean.id, clean);
+    };
+    (Array.isArray(local) ? local : []).forEach(add);
+    (Array.isArray(remote) ? remote : []).forEach(add);
     return Array.from(map.values()).sort((a,b)=> Number(b.closedAt||0) - Number(a.closedAt||0)).slice(0, 1000);
   }
   function flattenRemoteHistory(raw){
@@ -1482,8 +1525,11 @@
     return database.ref(historyRemotePath()).get().then(function(snap){
       const remote = flattenRemoteHistory(snap.val());
       const local = getHistory();
-      const remoteIds = new Set(remote.map(entry=>entry.id));
-      const missingRemote = local.filter(entry=>!remoteIds.has(entry.id));
+      const remoteById = new Map(remote.map(entry=>[entry.id, entry]));
+      const missingRemote = local.filter(entry=>{
+        const saved = remoteById.get(entry.id);
+        return !saved || (entry.status === 'voided' && (saved.status !== 'voided' || Number(saved.voidedAt) < Number(entry.voidedAt)));
+      });
       saveHistory(mergeHistory(local, remote));
       if(!missingRemote.length) return remote.length > 0;
       return Promise.all(missingRemote.map(saveHistoryRemote)).then(()=>true);
@@ -1510,6 +1556,8 @@
   }
   function slotSnapshot(slot){
     const c = BK_LOGIC.computeSlot(slot);
+    const discountRate = Math.max(0, Number(BK_STATE.getState().discountRate) || 0);
+    const discount = Math.round(c.subtotal * discountRate);
     return {
       id: String(slot.orderNo || `ORD-${Date.now()}`).replace(/[^a-zA-Z0-9_\-]/g, '_'),
       orderNo: slot.orderNo || '-',
@@ -1519,8 +1567,14 @@
       createdAt: slot.createdAt || Date.now(),
       closedAt: Date.now(),
       subtotal: c.subtotal,
+      discountRate,
+      discount,
+      total: c.subtotal - discount,
       combos: c.combos,
-      items: BK_LOGIC.groupedLines(slot.items || []).map(x=>({name:x.name, qty:x.qty, note:x.note, total:x.total}))
+      packMode: slot.packMode === 'split' ? 'split' : 'shared',
+      status: 'completed',
+      items: BK_LOGIC.groupedLines(slot.items || []).map(x=>({name:x.name, qty:x.qty, note:x.note, total:x.total})),
+      rawItems: JSON.parse(JSON.stringify(slot.items || []))
     };
   }
   function pushHistory(entry){
@@ -1665,6 +1719,20 @@
     });
   }
 
+  function historyStatusLabel(entry){
+    return entry.status === 'voided' ? 'VOIDED' : 'COMPLETED';
+  }
+  function historyItemsHtml(entry){
+    const items = Array.isArray(entry.items) ? entry.items : [];
+    if(!items.length) return '<div class="empty-state">No saved item details.</div>';
+    return `<div class="history-item-list">${items.map(item=>{
+      const notes = splitEntryNoteLines(item.note);
+      return `<div class="history-item">
+        <div class="history-item-main"><strong>${Number(item.qty)||1}x ${escapeHtml(item.name)}</strong><b>${Number(item.total)||0} GHS</b></div>
+        ${notes.map(note=>`<div class="history-item-extra">+ ${escapeHtml(String(note).replace(/^\+\s*/, ''))}</div>`).join('')}
+      </div>`;
+    }).join('')}</div>`;
+  }
   function renderHistoryBody(){
     const body = document.getElementById('historyBody');
     const hist = getFilteredHistory();
@@ -1672,20 +1740,27 @@
       body.innerHTML = '<div class="empty-state">No completed orders in history yet.</div>';
       return;
     }
-    const totalSales = hist.reduce((a,h)=> a + Number(h.subtotal||0), 0);
-    const cashCount = hist.filter(h=>h.pay==='cash').length;
-    const momoCount = hist.filter(h=>h.pay==='momo').length;
+    const completed = hist.filter(h=>h.status !== 'voided');
+    const totalSales = completed.reduce((a,h)=> a + Number(h.total||h.subtotal||0), 0);
+    const cashCount = completed.filter(h=>h.pay==='cash').length;
+    const momoCount = completed.filter(h=>h.pay==='momo').length;
+    const voidCount = hist.length - completed.length;
     body.innerHTML = `
-      <div class="row" style="border-top:none;padding:8px 0 14px">
-        <span><b>Orders:</b> ${hist.length} · <b>Cash:</b> ${cashCount} · <b>MoMo:</b> ${momoCount}</span>
-        <span><b>Sales:</b> ${totalSales} GHS</span>
+      <div class="history-summary">
+        <span><b>Orders:</b> ${completed.length}</span><span><b>Cash:</b> ${cashCount}</span>
+        <span><b>MoMo:</b> ${momoCount}</span><span><b>Voided:</b> ${voidCount}</span>
+        <span class="history-summary-total"><b>Net sales:</b> ${totalSales} GHS</span>
       </div>
-    ` + hist.slice(0,100).map(h=>`
-      <div class="row" style="border-top:1px dashed #2a2f39;padding:8px 0">
-        <span><b>${h.orderNo}</b> · ${h.slotName} · ${h.pay.toUpperCase()} · ${new Date(h.closedAt).toLocaleString()}</span>
-        <span>${h.subtotal} GHS</span>
-      </div>
-    `).join('');
+      <div class="history-order-list">
+      ${hist.slice(0,200).map(h=>`
+        <button type="button" class="history-order-row ${h.status === 'voided' ? 'voided' : ''}" data-history-id="${escapeHtml(h.id)}">
+          <span><strong>${escapeHtml(h.orderNo)}</strong><small>${escapeHtml(h.slotName)} · ${escapeHtml(String(h.pay).toUpperCase())} · ${new Date(h.closedAt).toLocaleString()}</small></span>
+          <span><b>${Number(h.total||h.subtotal||0)} GHS</b><small class="history-status">${historyStatusLabel(h)}</small></span>
+        </button>`).join('')}
+      </div>`;
+    body.querySelectorAll('[data-history-id]').forEach(button=>{
+      button.onclick = ()=> openHistoryOrder(button.dataset.historyId);
+    });
   }
   function openHistory(){
     recoverIssuedSlotsToHistory();
@@ -1701,7 +1776,8 @@
       if(historyFilterToday && Number(h.closedAt || 0) < today.getTime()) return false;
       if(!text) return true;
       return String(h.orderNo || '').toLowerCase().includes(text)
-        || String(h.slotName || '').toLowerCase().includes(text);
+        || String(h.slotName || '').toLowerCase().includes(text)
+        || String(h.voidReason || '').toLowerCase().includes(text);
     });
   }
   function filterHistoryText(v){
@@ -1720,6 +1796,177 @@
     renderHistoryBody();
   }
   function closeHistory(){ document.getElementById('modalHistory').classList.remove('open'); }
+  function selectedHistoryOrder(){
+    return getHistory().find(entry=>entry.id === selectedHistoryOrderId) || null;
+  }
+  function openHistoryOrder(id){
+    const entry = getHistory().find(item=>item.id === id);
+    if(!entry) return;
+    selectedHistoryOrderId = entry.id;
+    document.getElementById('historyDetailTitle').textContent = `Order ${entry.orderNo}`;
+    const voided = entry.status === 'voided';
+    document.getElementById('hdVoid').disabled = voided;
+    document.getElementById('hdVoid').textContent = voided ? 'Order Voided' : 'Void Order';
+    document.getElementById('historyDetailBody').innerHTML = `
+      <div class="history-detail-meta">
+        <div><small>Order number</small><strong>${escapeHtml(entry.orderNo)}</strong></div>
+        <div><small>Slot</small><strong>${escapeHtml(entry.slotName)}</strong></div>
+        <div><small>Payment</small><strong>${escapeHtml(String(entry.pay).toUpperCase())}</strong></div>
+        <div><small>Packaging</small><strong>${entry.packMode === 'split' ? 'Packed separately' : 'Packed together'}</strong></div>
+        <div><small>Created</small><strong>${new Date(entry.createdAt).toLocaleString()}</strong></div>
+        <div><small>Issued</small><strong>${new Date(entry.closedAt).toLocaleString()}</strong></div>
+      </div>
+      ${voided ? `<div class="void-notice"><strong>VOIDED ORDER</strong><span>${escapeHtml(entry.voidReason)}</span><small>${new Date(entry.voidedAt).toLocaleString()} · ${escapeHtml(entry.voidedBy || 'POS terminal')}</small></div>` : ''}
+      ${historyItemsHtml(entry)}
+      <div class="history-totals">
+        <div><span>Subtotal</span><b>${entry.subtotal} GHS</b></div>
+        <div><span>Discount (${Math.round((entry.discountRate||0)*100)}%)</span><b>-${entry.discount||0} GHS</b></div>
+        <div class="total"><span>${voided ? 'Original total' : 'Total'}</span><b>${entry.total} GHS</b></div>
+      </div>`;
+    document.getElementById('modalHistoryDetail').classList.add('open');
+  }
+  function closeHistoryOrder(){
+    document.getElementById('modalHistoryDetail').classList.remove('open');
+    selectedHistoryOrderId = null;
+  }
+  function historyReceiptHtml(entry){
+    return `<div class="receipt-archive">
+      <div><b>BurgerKiss – Receipt</b></div>
+      <div>Order: <b>${escapeHtml(entry.orderNo)}</b></div>
+      <div>Date: ${new Date(entry.closedAt).toLocaleString()}</div>
+      <div>Payment: ${escapeHtml(String(entry.pay).toUpperCase())}</div>
+      <div>Packaging: ${entry.packMode === 'split' ? 'Packed separately' : 'Packed together'}</div>
+      <hr>${historyItemsHtml(entry)}
+      <div class="sumline"><span>Subtotal</span><b>${entry.subtotal} GHS</b></div>
+      <div class="sumline"><span>Discount</span><b>-${entry.discount||0} GHS</b></div>
+      <div class="sumline"><span>Total</span><b>${entry.total} GHS</b></div>
+      ${entry.status === 'voided' ? '<div class="receipt-void">VOIDED – NOT VALID FOR PAYMENT</div>' : ''}
+    </div>`;
+  }
+  function reprintHistoryOrder(){
+    const entry = selectedHistoryOrder();
+    if(!entry) return;
+    const html = historyReceiptHtml(entry);
+    document.getElementById('receiptBody').innerHTML = html;
+    document.getElementById('printArea').innerHTML = html;
+    document.getElementById('modalReceipt').classList.add('open');
+  }
+  function requestVoidReason(){
+    return new Promise(resolve=>{
+      const host = ensureDialogHost();
+      document.getElementById('appDialogTitle').textContent = 'Void order';
+      document.getElementById('appDialogBody').innerHTML = `
+        <p class="dialog-warning">The order remains permanently visible in history. Enter a mandatory reason.</p>
+        <select id="voidReasonPreset" class="dialog-field">
+          <option value="">Select reason…</option><option>Customer cancelled</option><option>Wrong item entered</option>
+          <option>Duplicate order</option><option>Payment failed</option><option>Manager correction</option><option value="custom">Other reason</option>
+        </select>
+        <input id="voidReasonCustom" class="dialog-field hidden" placeholder="Enter reason" maxlength="160">
+        <div id="voidReasonError" class="field-error"></div>
+        <div class="dialog-actions"><button class="x" id="dlgCancel">Cancel</button><button class="x danger-link" id="dlgConfirm">Void Order</button></div>`;
+      host.classList.add('open');
+      const preset = document.getElementById('voidReasonPreset');
+      const custom = document.getElementById('voidReasonCustom');
+      preset.onchange = ()=>{ custom.classList.toggle('hidden', preset.value !== 'custom'); if(preset.value === 'custom') custom.focus(); };
+      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(null); };
+      document.getElementById('dlgConfirm').onclick = ()=>{
+        const reason = (preset.value === 'custom' ? custom.value : preset.value).trim();
+        if(!reason){ document.getElementById('voidReasonError').textContent = 'A void reason is required.'; return; }
+        closeDialog(); resolve(reason);
+      };
+    });
+  }
+  function voidHistoryOrder(id, reason){
+    const cleanReason = String(reason || '').trim();
+    if(!cleanReason) return null;
+    const history = getHistory();
+    const target = history.find(item=>item.id === id);
+    if(!target || target.status === 'voided') return null;
+    target.status = 'voided';
+    target.voidReason = cleanReason;
+    target.voidedAt = Date.now();
+    target.voidedBy = window.BK_TERMINAL_NAME || window.BK_SYNC_FORCE_SLOT || 'POS terminal';
+    saveHistory(history);
+    saveHistoryRemote(target);
+    const state = BK_STATE.getState();
+    const activeSlot = state.slots.find(slot=>slot.orderNo === target.orderNo);
+    if(activeSlot){ activeSlot.voided = true; activeSlot.voidReason = cleanReason; BK_STATE.setState(state); renderSlotsBar(); renderIssue(); }
+    return target;
+  }
+  function voidSelectedHistoryOrder(){
+    const entry = selectedHistoryOrder();
+    if(!entry || entry.status === 'voided') return;
+    requestVoidReason().then(reason=>{
+      if(!reason) return;
+      const target = voidHistoryOrder(entry.id, reason);
+      if(!target) return;
+      openHistoryOrder(target.id);
+      renderHistoryBody();
+    });
+  }
+  function dateInputValue(date){
+    const d = date instanceof Date ? date : new Date(date || Date.now());
+    const pad = n=>String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
+  function dailyReportData(dateValue){
+    const selected = String(dateValue || dateInputValue(new Date()));
+    const orders = getHistory().filter(entry=>dateInputValue(entry.closedAt) === selected);
+    const completed = orders.filter(entry=>entry.status !== 'voided');
+    const voided = orders.filter(entry=>entry.status === 'voided');
+    const sum = (list, field)=>list.reduce((total, entry)=>total + Number(entry[field] || 0), 0);
+    const netSales = sum(completed, 'total');
+    return {
+      date:selected, orders, completed, voided, netSales,
+      cashTotal:sum(completed.filter(entry=>entry.pay === 'cash'), 'total'),
+      momoTotal:sum(completed.filter(entry=>entry.pay === 'momo'), 'total'),
+      discounts:sum(completed, 'discount'),
+      voidValue:sum(voided, 'total'),
+      average:completed.length ? Math.round(netSales / completed.length) : 0
+    };
+  }
+  function dailyReportHtml(report){
+    return `<div class="daily-report">
+      <div class="report-heading"><span>Business date</span><strong>${escapeHtml(report.date)}</strong></div>
+      <div class="report-metrics">
+        <div><small>Net sales</small><strong>${report.netSales} GHS</strong></div>
+        <div><small>Cash</small><strong>${report.cashTotal} GHS</strong></div>
+        <div><small>MoMo</small><strong>${report.momoTotal} GHS</strong></div>
+        <div><small>Completed orders</small><strong>${report.completed.length}</strong></div>
+        <div><small>Discounts</small><strong>${report.discounts} GHS</strong></div>
+        <div><small>Average order</small><strong>${report.average} GHS</strong></div>
+        <div class="void-metric"><small>Voided orders</small><strong>${report.voided.length}</strong></div>
+        <div class="void-metric"><small>Voided value</small><strong>${report.voidValue} GHS</strong></div>
+      </div>
+      <div class="report-orders"><h3>Order audit</h3>${report.orders.length ? report.orders.map(entry=>`
+        <div class="report-order ${entry.status === 'voided' ? 'voided' : ''}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(String(entry.pay).toUpperCase())}${entry.voidReason ? ` · ${escapeHtml(entry.voidReason)}` : ''}</small></span><strong>${entry.total} GHS</strong></div>`).join('') : '<div class="empty-state">No orders for this date.</div>'}</div>
+    </div>`;
+  }
+  function openDailyReport(){
+    const input = document.getElementById('reportDate');
+    if(!input.value) input.value = dateInputValue(new Date());
+    renderDailyReport();
+    document.getElementById('modalDailyReport').classList.add('open');
+    refreshHistoryFromRemote().then(()=>renderDailyReport());
+  }
+  function renderDailyReport(){
+    const input = document.getElementById('reportDate');
+    document.getElementById('dailyReportBody').innerHTML = dailyReportHtml(dailyReportData(input && input.value));
+  }
+  function closeDailyReport(){ document.getElementById('modalDailyReport').classList.remove('open'); }
+  function exportDailyReportCsv(){
+    const report = dailyReportData(document.getElementById('reportDate').value);
+    const rows = [['orderNo','status','payment','issuedAt','subtotal','discount','total','voidReason']];
+    report.orders.forEach(entry=>rows.push([entry.orderNo,entry.status,entry.pay,new Date(entry.closedAt).toISOString(),entry.subtotal,entry.discount,entry.total,entry.voidReason]));
+    rows.push([],['SUMMARY'],['netSales',report.netSales],['cash',report.cashTotal],['momo',report.momoTotal],['discounts',report.discounts],['completedOrders',report.completed.length],['voidedOrders',report.voided.length],['voidedValue',report.voidValue]);
+    const csv = rows.map(row=>row.map(value=>`"${String(value == null ? '' : value).replace(/"/g,'""')}"`).join(',')).join('\n');
+    downloadFile(`bk-daily-report-${report.date}.csv`, csv, 'text/csv');
+  }
+  function printDailyReport(){
+    const report = dailyReportData(document.getElementById('reportDate').value);
+    document.getElementById('printArea').innerHTML = `<h2>BurgerKiss – Daily Sales Report</h2>${dailyReportHtml(report)}`;
+    window.print();
+  }
   function downloadFile(name, content, type){
     const blob = new Blob([content], {type});
     const url = URL.createObjectURL(blob);
@@ -1735,8 +1982,8 @@
   function exportHistoryCsv(){
     const writeCsv = ()=>{
     const hist = getHistory();
-    const rows = [['orderNo','slotName','pay','issued','createdAt','closedAt','subtotal','combos']];
-    hist.forEach(h=> rows.push([h.orderNo,h.slotName,h.pay,h.issued,h.createdAt,h.closedAt,h.subtotal,h.combos]));
+    const rows = [['orderNo','slotName','status','pay','issued','createdAt','closedAt','subtotal','discount','total','packMode','voidReason','voidedAt','voidedBy','combos']];
+    hist.forEach(h=> rows.push([h.orderNo,h.slotName,h.status,h.pay,h.issued,h.createdAt,h.closedAt,h.subtotal,h.discount,h.total,h.packMode,h.voidReason,h.voidedAt,h.voidedBy,h.combos]));
     const csv = rows.map(r=> r.map(v=> `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
     downloadFile(`bk-history-${Date.now()}.csv`, csv, 'text/csv');
     };
@@ -2013,17 +2260,34 @@
   function deleteActiveSlot(){
     const {slots, active} = BK_STATE.getState();
     if(!slots.length) return;
-    confirmDialog('Delete slot', `Delete ${slots[active].name}?`).then(ok=>{
+    const slot = slots[active];
+    const protectedOrder = slot.issued || slot.pay !== 'unpaid';
+    const title = protectedOrder ? 'Void and remove order' : 'Delete draft order';
+    const message = protectedOrder
+      ? `${slot.name} is paid or issued. It cannot be deleted without a permanent void record.`
+      : `Delete unpaid draft ${slot.name}?`;
+    confirmDialog(title, message, {confirmLabel:protectedOrder ? 'Continue to void' : 'Delete draft'}).then(ok=>{
       if(!ok) return;
-      const slot = BK_STATE.getState().slots[BK_STATE.getState().active];
-      if(slot && slot.issued && slot.items.length) pushHistory(slotSnapshot(slot));
-      BK_STATE.deleteActive();
-      renderAll();
+      if(!protectedOrder){ BK_STATE.deleteActive(); renderAll(); return; }
+      requestVoidReason().then(reason=>{
+        if(!reason) return;
+        pushHistory(slotSnapshot(slot));
+        const entry = getHistory().find(item=>item.orderNo === slot.orderNo);
+        if(!entry) return;
+        voidHistoryOrder(entry.id, reason);
+        BK_STATE.deleteActive();
+        renderAll();
+      });
     });
   }
 
   function clearAllWithConfirm(){
-    confirmDialog('Reset all', 'Clear all slots now? This also resets saved state.').then(ok=>{
+    const protectedOpenOrders = BK_STATE.getState().slots.filter(slot=>slot.pay !== 'unpaid' && !slot.issued);
+    if(protectedOpenOrders.length){
+      infoDialog('Reset blocked: one or more paid orders have not been issued. Complete or void those orders individually first.');
+      return;
+    }
+    confirmDialog('Reset all', 'Clear all draft slots? Completed orders remain in history.').then(ok=>{
       if(!ok) return;
       recoverIssuedSlotsToHistory();
       BK_STATE.clearAll();
@@ -2079,7 +2343,9 @@
   window.BK_UI = {
     renderAll, renderOrder, renderMake, renderPay, renderIssue, refreshTotals,
     renderStock,
-    openSummary, closeSummary, openHistory, closeHistory, exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, clearHistoryFilters,
+    openSummary, closeSummary, openHistory, closeHistory, openHistoryOrder, closeHistoryOrder, reprintHistoryOrder, voidSelectedHistoryOrder,
+    exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, clearHistoryFilters,
+    openDailyReport, closeDailyReport, renderDailyReport, exportDailyReportCsv, printDailyReport, dailyReportData, voidHistoryOrder,
     openStockOverview, closeStockOverview,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
