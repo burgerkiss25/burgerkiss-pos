@@ -1,6 +1,7 @@
 // Slots/Discount/Undo + Persistenz
 (function(){
   const SAVE_KEY = 'bk_state_v5';
+  const ORDER_COUNTER_KEY = 'bk_order_counter_v1';
   let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo', issued:false}]
   let active = 0;
   let discountRate = 0;
@@ -30,6 +31,7 @@
       pay: PAY_SET.has(slot && slot.pay) ? slot.pay : 'unpaid',
       issued: !!(slot && slot.issued),
       packMode: (slot && slot.packMode === 'split') ? 'split' : 'shared',
+      packAsked: !!(slot && slot.packAsked),
       orderNo: (slot && typeof slot.orderNo==='string' && slot.orderNo.trim()) ? slot.orderNo.trim() : null,
       createdAt: Number(slot && slot.createdAt) > 0 ? Number(slot.createdAt) : Date.now()
     };
@@ -37,22 +39,109 @@
   function normalizeState(st){
     const rawSlots = Array.isArray(st && st.slots) ? st.slots : [];
     const nextSlots = rawSlots.map((slot, i)=> normalizeSlot(slot, i));
-    if(!nextSlots.length) nextSlots.push({name:'SN1', items:[], pay:'unpaid', packMode:'shared', createdAt: Date.now()});
     const nextActive = clamp(Number(st && st.active) || 0, 0, Math.max(0, nextSlots.length-1));
     const nextDiscount = normalizeDiscount(st && st.discountRate);
     const nextSeq = Math.max(0, Number(st && st.orderSeq) || 0);
     return { slots: nextSlots, active: nextActive, discountRate: nextDiscount, orderSeq: nextSeq };
   }
-  function genOrderNo(seq){
+  function parseOrderSequence(orderNo){
+    const match = String(orderNo || '').match(/(\d+)$/);
+    return match ? Math.max(0, Number(match[1]) || 0) : 0;
+  }
+  function formatOrderNo(seq){
     const d = new Date();
-    const pad = n => String(n).padStart(2,'0');
+    const pad = n => String(n).padStart(2, '0');
     const date = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
-    return `BK-${date}-${String(seq).padStart(4,'0')}`;
+    return `BK-${date}-${String(seq).padStart(8, '0')}`;
   }
-  function nextOrderNo(){
-    orderSeq += 1;
-    return genOrderNo(orderSeq);
+  function localCounter(){
+    try{ return Math.max(0, Number(localStorage.getItem(ORDER_COUNTER_KEY)) || 0); }
+    catch(e){ return 0; }
   }
+  function rememberCounter(seq){
+    orderSeq = Math.max(orderSeq, Number(seq) || 0);
+    try{ localStorage.setItem(ORDER_COUNTER_KEY, String(orderSeq)); }catch(e){}
+  }
+  function knownSequenceFloor(){
+    let floor = Math.max(orderSeq, localCounter());
+    slots.forEach(slot=>{ floor = Math.max(floor, parseOrderSequence(slot && slot.orderNo)); });
+    try{
+      const raw = JSON.parse(localStorage.getItem('bk_order_history_v1') || '[]');
+      if(Array.isArray(raw)) raw.forEach(entry=>{ floor = Math.max(floor, parseOrderSequence(entry && entry.orderNo)); });
+    }catch(e){}
+    return floor;
+  }
+  let remoteAuthPromise = null;
+  function ensureRemoteAuth(){
+    if(!remoteEnabled() || !window.firebase.auth) return Promise.resolve(true);
+    if(remoteAuthPromise) return remoteAuthPromise;
+    try{
+      const app = (window.firebase.apps && firebase.apps.length)
+        ? firebase.app()
+        : firebase.initializeApp(window.FIREBASE_CONFIG);
+      const auth = firebase.auth(app);
+      remoteAuthPromise = auth.currentUser ? Promise.resolve(true) : auth.signInAnonymously().then(function(){ return true; });
+      return remoteAuthPromise.catch(function(error){ remoteAuthPromise = null; throw error; });
+    }catch(error){ return Promise.reject(error); }
+  }
+  function getOrderCounterRef(){
+    try{
+      const app = (window.firebase.apps && firebase.apps.length)
+        ? firebase.app()
+        : firebase.initializeApp(window.FIREBASE_CONFIG);
+      return firebase.database(app).ref((window.BK_ORDER_COUNTER_PATH || '/pos/counters/orderNumber').replace(/\/+$/,''));
+    }catch(e){ return null; }
+  }
+  let orderAllocationQueue = Promise.resolve();
+  let readyPromise = Promise.resolve(false);
+  function allocateOrderNo(){
+    const allocate = function(){
+      const floor = knownSequenceFloor();
+      if(remoteEnabled()){
+        return ensureRemoteAuth().then(function(){
+          const ref = getOrderCounterRef();
+          if(!ref) throw new Error('Order number service is unavailable.');
+          return ref.transaction(function(current){
+            return Math.max(Number(current) || 0, floor) + 1;
+          }, undefined, false);
+        }).then(function(result){
+          if(!result || !result.committed) throw new Error('Order number reservation was not committed.');
+          const seq = Number(result.snapshot.val()) || 0;
+          if(seq <= 0) throw new Error('Invalid order number received.');
+          rememberCounter(seq);
+          return formatOrderNo(seq);
+        });
+      }
+      const seq = floor + 1;
+      rememberCounter(seq);
+      return Promise.resolve(formatOrderNo(seq));
+    };
+    const result = orderAllocationQueue.then(allocate, allocate);
+    orderAllocationQueue = result.catch(function(){});
+    return result;
+  }
+  function repairOrderNumbers(){
+    const preferredOwner = new Map();
+    slots.forEach(function(slot, index){
+      const no = String(slot.orderNo || '').trim();
+      if(!no) return;
+      if(!preferredOwner.has(no) || (slot.issued && !slots[preferredOwner.get(no)].issued)) preferredOwner.set(no, index);
+    });
+    const needsNumber = [];
+    slots.forEach(function(slot, index){
+      const no = String(slot.orderNo || '').trim();
+      if(!no || preferredOwner.get(no) !== index) needsNumber.push(index);
+    });
+    return needsNumber.reduce(function(chain, index){
+      return chain.then(function(){
+        return allocateOrderNo().then(function(orderNo){ slots[index].orderNo = orderNo; });
+      });
+    }, Promise.resolve()).then(function(){
+      if(needsNumber.length) save();
+      return needsNumber.length;
+    });
+  }
+
 
 
   function remoteEnabled(){
@@ -74,21 +163,26 @@
     if(!remoteEnabled()) return;
     if(remoteSaveTimer) clearTimeout(remoteSaveTimer);
     remoteSaveTimer = setTimeout(function(){
-      const ref = getRemoteRef();
-      if(!ref) return;
-      ref.set({ slots, active, discountRate, orderSeq, v:5, ts: Date.now() }).catch(()=>{});
+      ensureRemoteAuth().then(function(){
+        const ref = getRemoteRef();
+        if(!ref) throw new Error('Remote state reference unavailable.');
+        return ref.set({ slots, active, discountRate, orderSeq, v:5, ts: Date.now() });
+      }).catch(function(error){ console.warn('remote state save failed:', error && error.message); });
     }, 250);
   }
   function loadRemoteOnce(){
     if(!remoteEnabled()) return Promise.resolve(false);
-    const ref = getRemoteRef();
-    if(!ref) return Promise.resolve(false);
-    return ref.get().then(function(snap){
+    return ensureRemoteAuth().then(function(){
+      const ref = getRemoteRef();
+      if(!ref) return null;
+      return ref.get();
+    }).then(function(snap){
+      if(!snap) return false;
       const raw = snap.val();
       if(!raw || !raw.v) return false;
       const n = normalizeState(raw);
       slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq;
-      slots.forEach(s=>{ if(!s.orderNo) s.orderNo = nextOrderNo(); });
+      rememberCounter(knownSequenceFloor());
       try{ localStorage.setItem(SAVE_KEY, JSON.stringify({slots, active, discountRate, orderSeq, v:5})); }catch(e){}
       return true;
     }).catch(()=>false);
@@ -98,20 +192,32 @@
     saveRemoteSoon();
   }
   function load(){
+    let hadLocal = false;
     try{
       const raw = localStorage.getItem(SAVE_KEY);
+      hadLocal = !!raw;
       if(raw){
         const n = normalizeState(JSON.parse(raw));
         slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq;
-        slots.forEach(s=>{ if(!s.orderNo) s.orderNo = nextOrderNo(); });
+        rememberCounter(knownSequenceFloor());
       }
-      loadRemoteOnce().then(function(hasRemote){
-        if(hasRemote && window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
+    }catch(e){
+      console.warn('local state load failed:', e && e.message);
+    }
+    readyPromise = loadRemoteOnce().then(function(hasRemote){
+      return repairOrderNumbers().then(function(changed){
+        if(changed || hasRemote) save();
+        if(window.BK_UI && typeof BK_UI.renderAll === 'function') BK_UI.renderAll();
+        return hasRemote || hadLocal;
       });
-      save();
-      return !!raw;
-    }catch(e){ return false; }
+    }).catch(function(e){
+      console.warn('state initialization failed:', e && e.message);
+      return repairOrderNumbers().then(function(){ return hadLocal; });
+    });
+    return hadLocal;
   }
+  function whenReady(){ return readyPromise; }
+
   function clearAll(){
     slots=[]; active=0; discountRate=0; history.length=0; save(); return true;
   }
@@ -124,12 +230,18 @@
     if(window.BK_STOCK && window.BK_STOCK.KEY) localStorage.removeItem(window.BK_STOCK.KEY);
   }
 
-  function ensureSlot(){ if(!slots.length) addSlot(); }
+  function ensureSlot(){
+    if(slots.length) return Promise.resolve(active);
+    return addSlot();
+  }
   function addSlot(label){
     const idx = slots.length+1;
-    slots.push({name: label || `SN${idx}`, items: [], pay:'unpaid', issued:false, packMode:'shared', orderNo: nextOrderNo(), createdAt: Date.now()});
-    active = slots.length-1;
-    save();
+    return allocateOrderNo().then(function(orderNo){
+      slots.push({name: label || `SN${idx}`, items: [], pay:'unpaid', issued:false, packMode:'shared', packAsked:false, orderNo, createdAt: Date.now()});
+      active = slots.length-1;
+      save();
+      return active;
+    });
   }
   function renameActive(){
     if(!slots.length) return;
@@ -155,8 +267,7 @@
   }
 
   function addItem(id, note){
-    ensureSlot();
-    if(slots[active].issued) return;
+    if(!slots.length || slots[active].issued) return;
     slots[active].items.push({itemId:id, note: (note||'').trim(), done:false});
     history.push({slot:active});
     save();
@@ -206,8 +317,9 @@
     save();
   }
   function setPackMode(i, mode){
-    if(!slots[i]) return;
+    if(!slots[i] || slots[i].issued) return;
     slots[i].packMode = mode === 'split' ? 'split' : 'shared';
+    slots[i].packAsked = true;
     save();
   }
   function toggleDone(i, j, v){
@@ -232,8 +344,9 @@
   function setState(st){
     const n = normalizeState(st || {});
     slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq;
-    slots.forEach(s=>{ if(!s.orderNo) s.orderNo = nextOrderNo(); });
+    rememberCounter(knownSequenceFloor());
     save();
+    repairOrderNumbers().catch(function(e){ console.warn('order number repair failed:', e && e.message); });
   }
 
   // expose
@@ -244,6 +357,6 @@
     addItem, addItemForKey, undo, decItemForKey, removeItemForKey, setPay, setIssued, toggleDone, setDoneForKey,
     setPackMode,
     setDiscount,
-    getState, setState, nextOrderNo
+    getState, setState, whenReady, allocateOrderNo, repairOrderNumbers, formatOrderNo
   };
 })();
