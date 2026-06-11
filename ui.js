@@ -1107,6 +1107,18 @@
     refreshTotals();
   }
 
+  function issueReadiness(slot){
+    const hasItems = Array.isArray(slot.items) && slot.items.length > 0;
+    const kitchenDone = hasItems && slot.items.every(item=>!!item.done);
+    const paid = slot.pay !== 'unpaid';
+    if(slot.issued) return { state:'issued', label:'Order issued', detail:'Handover completed and locked.', action:'Issued', target:'issue', disabled:true };
+    if(!hasItems) return { state:'blocked', label:'Order is empty', detail:'Add at least one product before handover.', action:'Go to Order', target:'order' };
+    if(!paid && !kitchenDone) return { state:'blocked', label:'2 steps remaining', detail:'Payment required · Kitchen not finished', action:'Go to Payment', target:'pay' };
+    if(!paid) return { state:'blocked', label:'Payment required', detail:'Complete payment before handover.', action:'Go to Payment', target:'pay' };
+    if(!kitchenDone) return { state:'waiting', label:'Kitchen not finished', detail:'Complete every kitchen item before handover.', action:'Go to Make', target:'make' };
+    return { state:'ready', label:'Ready for handover', detail:'Paid and all kitchen items are complete.', action:'Start final handover', target:'issue' };
+  }
+
   function renderIssue(){
     const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('issueList');
@@ -1122,17 +1134,25 @@
     }
     slots.forEach((s,i)=>{
       const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
-      const canIssue = s.pay !== 'unpaid' && allDone;
+      const readiness = issueReadiness(s);
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
           <div class="pay-status">
             ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
-            <span>Status: ${s.issued ? 'ISSUED' : 'WAITING'}</span>
-            <button ${(canIssue && !s.issued) ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark as Issued</button>
           </div>
+        </div>
+        <div class="issue-readiness ${readiness.state}">
+          <div><strong>${readiness.label}</strong><small>${readiness.detail}</small></div>
+          <button class="issue-next-action" ${readiness.disabled ? 'disabled' : ''}>${readiness.action}</button>
         </div>`;
+      const actionButton = card.querySelector('.issue-next-action');
+      actionButton.onclick = ()=>{
+        if(readiness.disabled) return;
+        if(readiness.state === 'ready') markIssued(i);
+        else focusSlot(i, readiness.target);
+      };
       card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
       const checklist = document.createElement('div');
       checklist.className = 'issue-checklist';
