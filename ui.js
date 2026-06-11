@@ -617,6 +617,7 @@
         choosePackaging(st.active);
       }
     }
+    renderSlotsBar();
     renderOrder();
     renderMake();
     refreshTotals();
@@ -652,12 +653,25 @@
     buildProducts();
   }
 
+  function slotStatus(slot){
+    const progress = kitchenProgress(slot);
+    const progressText = `${progress.complete}/${progress.total} prepared`;
+    if(slot.issued) return { state:'issued', label:'Issued', detail:'Handover completed', shortDetail:progressText };
+    if(progress.total === 0) return { state:'draft', label:'Draft', detail:'No products added', shortDetail:'Empty' };
+    if(progress.complete === progress.total && slot.pay === 'unpaid') return { state:'payment', label:'Payment due', detail:`Kitchen complete · ${progressText}`, shortDetail:progressText };
+    if(progress.complete === progress.total) return { state:'ready', label:'Ready', detail:`Paid · ${progressText}`, shortDetail:progressText };
+    return { state:'kitchen', label:'Kitchen', detail:progressText, shortDetail:progressText };
+  }
+
   function renderSlotsBar(){
     const {slots, active} = BK_STATE.getState();
     const bar = document.getElementById('slotsBar');
     const activeLabel = document.getElementById('activeSlotLabel');
     const activeSlot = slots[active];
-    if(activeLabel) activeLabel.textContent = activeSlot ? `${activeSlot.name} · #${activeSlot.orderNo || '-'}` : 'No active order';
+    if(activeLabel){
+      const activeStatus = activeSlot ? slotStatus(activeSlot) : null;
+      activeLabel.textContent = activeSlot ? `${activeSlot.name} · #${activeSlot.orderNo || '-'} · ${activeStatus.label}` : 'No active order';
+    }
     if(!bar) return;
     bar.querySelectorAll('.slot-chip').forEach(n=>n.remove());
 
@@ -669,11 +683,13 @@
     ctl.forEach(c=>bar.removeChild(c));
     slots.forEach((s,i)=>{
       const el = document.createElement('button');
-      const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
-      const status = s.issued ? 'issued' : (s.pay==='unpaid' ? 'unpaid' : (allDone ? 'ready' : 'kitchen'));
+      const status = slotStatus(s);
       el.type = 'button';
-      el.className='chip slot-chip status-' + status + (i===active?' active':'');
-      el.innerHTML = `<span class="status-dot"></span>${s.name} · #${s.orderNo || '-'}`;
+      el.className='chip slot-chip status-' + status.state + (i===active?' active':'');
+      el.setAttribute('aria-label', `${s.name}, order ${s.orderNo || 'not assigned'}, ${status.label}, ${status.detail}`);
+      if(i === active) el.setAttribute('aria-current', 'true');
+      el.title = `${status.label} · ${status.detail}`;
+      el.innerHTML = `<span class="status-dot" aria-hidden="true"></span><span class="slot-chip-order"><b>${s.name}</b><small>#${s.orderNo || '-'}</small></span><span class="slot-chip-status">${status.label}</span><span class="slot-chip-progress">${status.shortDetail}</span>`;
       el.onclick = ()=> focusSlot(i, currentWorkflowTab());
       bar.appendChild(el);
     });
@@ -910,6 +926,7 @@
       lines.appendChild(row);
     }
     const refreshOrderViews = ()=>{
+      renderSlotsBar();
       renderOrder();
       renderMake();
       renderIssue();
