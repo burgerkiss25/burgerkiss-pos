@@ -1083,6 +1083,43 @@
     return { state:'in-progress', label:'In progress', complete, total, percent, detail:'Continue preparing the remaining items.' };
   }
 
+  function currentWorkflowTab(){
+    const activeTab = document.querySelector('.workflow-step[aria-current="step"]');
+    const idMap = { tabOrder:'order', tabMake:'make', tabPay:'pay', tabIssue:'issue' };
+    return idMap[activeTab && activeTab.id] || 'order';
+  }
+
+  function makeSlotCardSelectable(card, slotIndex, tab, active){
+    card.classList.add('selectable');
+    card.classList.toggle('active-slot-card', !!active);
+    card.tabIndex = 0;
+    card.setAttribute('role', 'group');
+    card.setAttribute('aria-label', `${active ? 'Active order. ' : ''}Order card; press Enter or Space to select`);
+    if(active) card.setAttribute('aria-current', 'true');
+    const select = event=>{
+      if(event.target.closest('button, input, label, a, select, textarea')) return;
+      focusSlot(slotIndex, tab);
+    };
+    card.addEventListener('click', select);
+    card.addEventListener('keydown', event=>{
+      if(event.target !== card || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      focusSlot(slotIndex, tab);
+    });
+  }
+
+  function kitchenProgress(slot){
+    const entries = groupedCartRows(slot.items || []);
+    const total = entries.length;
+    const complete = entries.filter(entry=>groupedEntryDone(slot, entry)).length;
+    const percent = total ? Math.round((complete / total) * 100) : 0;
+    if(slot.issued) return { state:'complete', label:'Kitchen complete', complete, total, percent:100, detail:'Order already issued.' };
+    if(total === 0) return { state:'empty', label:'No items', complete:0, total:0, percent:0, detail:'Add products before preparation.' };
+    if(complete === total) return { state:'complete', label:'Kitchen complete', complete, total, percent:100, detail:'All items are prepared.' };
+    if(complete === 0) return { state:'not-started', label:'Not started', complete, total, percent, detail:'Preparation has not started.' };
+    return { state:'in-progress', label:'In progress', complete, total, percent, detail:'Continue preparing the remaining items.' };
+  }
+
   function renderMake(){
     const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('makeList');
