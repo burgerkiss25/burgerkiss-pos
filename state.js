@@ -30,6 +30,7 @@
       pay: PAY_SET.has(slot && slot.pay) ? slot.pay : 'unpaid',
       issued: !!(slot && slot.issued),
       packMode: (slot && slot.packMode === 'split') ? 'split' : 'shared',
+      packAsked: !!(slot && slot.packAsked),
       orderNo: (slot && typeof slot.orderNo==='string' && slot.orderNo.trim()) ? slot.orderNo.trim() : null,
       createdAt: Number(slot && slot.createdAt) > 0 ? Number(slot.createdAt) : Date.now()
     };
@@ -37,7 +38,7 @@
   function normalizeState(st){
     const rawSlots = Array.isArray(st && st.slots) ? st.slots : [];
     const nextSlots = rawSlots.map((slot, i)=> normalizeSlot(slot, i));
-    if(!nextSlots.length) nextSlots.push({name:'SN1', items:[], pay:'unpaid', packMode:'shared', createdAt: Date.now()});
+    if(!nextSlots.length) nextSlots.push({name:'SN1', items:[], pay:'unpaid', packMode:'shared', packAsked:false, createdAt: Date.now()});
     const nextActive = clamp(Number(st && st.active) || 0, 0, Math.max(0, nextSlots.length-1));
     const nextDiscount = normalizeDiscount(st && st.discountRate);
     const nextSeq = Math.max(0, Number(st && st.orderSeq) || 0);
@@ -127,7 +128,7 @@
   function ensureSlot(){ if(!slots.length) addSlot(); }
   function addSlot(label){
     const idx = slots.length+1;
-    slots.push({name: label || `SN${idx}`, items: [], pay:'unpaid', issued:false, packMode:'shared', orderNo: nextOrderNo(), createdAt: Date.now()});
+    slots.push({name: label || `SN${idx}`, items: [], pay:'unpaid', issued:false, packMode:'shared', packAsked:false, orderNo: nextOrderNo(), createdAt: Date.now()});
     active = slots.length-1;
     save();
   }
@@ -206,8 +207,9 @@
     save();
   }
   function setPackMode(i, mode){
-    if(!slots[i]) return;
+    if(!slots[i] || slots[i].issued) return;
     slots[i].packMode = mode === 'split' ? 'split' : 'shared';
+    slots[i].packAsked = true;
     save();
   }
   function toggleDone(i, j, v){

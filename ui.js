@@ -4,7 +4,7 @@
   let productQuery = '';
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
-  const CATEGORY_LABELS = { all:'All', menu:'Menu', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
+  const CATEGORY_LABELS = { all:'All', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
   let historyFilterText = '';
   let historyFilterToday = false;
   const QUICK_NOTES = ['No onion', 'Extra onion', 'No lettuce', 'Extra spicy'];
@@ -110,20 +110,59 @@
     document.getElementById('dlgOk').onclick = closeDialog;
   }
 
-  function confirmDialog(title, message){
+  function confirmDialog(title, message, opts){
     return new Promise(resolve=>{
+      const options = opts || {};
+      const cancelLabel = options.cancelLabel || 'Cancel';
+      const confirmLabel = options.confirmLabel || 'Confirm';
       const host = ensureDialogHost();
       document.getElementById('appDialogTitle').textContent = title;
       document.getElementById('appDialogBody').innerHTML = `
         <div style="margin-bottom:10px">${message}</div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="x" id="dlgCancel">Cancel</button>
-          <button class="x" id="dlgConfirm">Confirm</button>
+          <button class="x" id="dlgCancel">${cancelLabel}</button>
+          <button class="x" id="dlgConfirm">${confirmLabel}</button>
         </div>
       `;
       host.classList.add('open');
       document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(false); };
       document.getElementById('dlgConfirm').onclick = ()=>{ closeDialog(); resolve(true); };
+    });
+  }
+
+  function handoverChecklistDialog(title, message){
+    return new Promise(resolve=>{
+      const host = ensureDialogHost();
+      document.getElementById('appDialogTitle').textContent = title;
+      document.getElementById('appDialogBody').innerHTML = `
+        <div class="handover-checklist-dialog">
+          ${message}
+          <div class="handover-check-progress" id="handoverCheckProgress" role="status" aria-live="polite"></div>
+          <div class="handover-check-actions">
+            <button class="x" id="dlgCancel" type="button">Cancel</button>
+            <button class="x modifier-primary" id="dlgConfirm" type="button" disabled>Confirm handover</button>
+          </div>
+        </div>
+      `;
+      host.classList.add('open');
+      const checks = Array.from(host.querySelectorAll('[data-handover-check]'));
+      const confirm = document.getElementById('dlgConfirm');
+      const progress = document.getElementById('handoverCheckProgress');
+      const update = ()=>{
+        const complete = checks.filter(input=>input.checked).length;
+        const total = checks.length;
+        progress.textContent = `${complete} of ${total} required checks confirmed`;
+        progress.classList.toggle('complete', total > 0 && complete === total);
+        confirm.disabled = total === 0 || complete !== total;
+      };
+      checks.forEach(input=>input.addEventListener('change', update));
+      update();
+      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(false); };
+      confirm.onclick = ()=>{
+        if(confirm.disabled) return;
+        closeDialog();
+        resolve(true);
+      };
     });
   }
 
@@ -155,9 +194,8 @@
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
     const query = productQuery.trim().toLowerCase();
     const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
-    const productItems = base.filter(isFrontProduct).filter(it => (currentCat==='menu' || currentCat==='fast') ? false : (currentCat==='all' ? true : it.cat===currentCat));
-    const menuItems = buildStandardMenuCards().filter(it => currentCat === 'all' || currentCat === 'menu');
-    const items = menuItems.concat(productItems)
+    const items = base.filter(isFrontProduct)
+      .filter(it => currentCat === 'all' ? true : it.cat === currentCat)
       .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true);
     if(!items.length){
       const empty = document.createElement('div');
@@ -169,7 +207,7 @@
     }
     items.forEach(it=>{
       const b = document.createElement('button');
-      b.className = 'item' + (it.isStandardMenu ? ' standard-menu-item' : '');
+      b.className = 'item';
       b.type = 'button';
       const img = BK_IMAGES.get(it.imageId || it.id);
       if(img){
@@ -185,9 +223,9 @@
                      ${it.subtitle ? `<small class="item-subtitle">${it.subtitle}</small>` : ''}
                      <div class="item-meta">
                        <div class="price">${itemDisplayPrice(it)} GHS</div>
-                       <span class="badge">${it.isStandardMenu ? 'Menu' : '+1'}</span>
+                       <span class="badge">+1</span>
                      </div>`;
-      b.onclick = ()=> it.isStandardMenu ? addStandardMenuPreset(it) : addProductWithFlow(it);
+      b.onclick = ()=> addProductWithFlow(it);
       grid.appendChild(b);
     });
   }
@@ -366,18 +404,7 @@
   }
 
   function itemDisplayPrice(item){
-    if(item && item.isStandardMenu) return standardMenuPrice(item);
     return BK_PRICES.getPrice(item && item.id);
-  }
-
-  function standardMenuPrice(menu){
-    const base = productById(menu.baseId);
-    if(!base) return 0;
-    const included = BK_DATA.MENU && BK_DATA.MENU.included ? BK_DATA.MENU.included : {fries:0, drink:0};
-    const friesUpgrade = menu.defaultFries ? Math.max(0, BK_PRICES.getPrice(menu.defaultFries) - (Number(included.fries) || 0)) : 0;
-    const drinkUpgrade = menu.defaultDrink ? Math.max(0, BK_PRICES.getPrice(menu.defaultDrink) - (Number(included.drink) || 0)) : 0;
-    const baseMenuPrice = Number(menu.menuPrice) > 0 ? Number(menu.menuPrice) : mealBasePrice(base);
-    return baseMenuPrice + friesUpgrade + drinkUpgrade;
   }
 
   function getStandardMenuPresets(){
@@ -385,21 +412,8 @@
     return FALLBACK_STANDARD_MENUS;
   }
 
-  function buildStandardMenuCards(){
-    return getStandardMenuPresets().map(menu=>{
-      const base = productById(menu.baseId);
-      if(!base || standardMenuPrice(menu) <= 0) return null;
-      const fries = productById(menu.defaultFries);
-      const drink = productById(menu.defaultDrink);
-      return Object.assign({}, menu, {
-        cat: 'menu',
-        isStandardMenu: true,
-        imageId: menu.baseId,
-        baseName: base.name,
-        subtitle: [base.name, fries && fries.name, drink && drink.name].filter(Boolean).join(' + '),
-        searchText: [base.name, fries && fries.name, drink && drink.name, 'standard menu combo'].filter(Boolean).join(' ')
-      });
-    }).filter(Boolean);
+  function standardMenuPresetFor(baseId){
+    return getStandardMenuPresets().find(menu=>menu.baseId === baseId) || {};
   }
 
   function mealBasePrice(product){
@@ -527,7 +541,7 @@
   }
 
   async function addGuidedMenu(product, pendingNote, preset){
-    const menuPreset = preset || {};
+    const menuPreset = preset || standardMenuPresetFor(product.id);
     const defaultFries = menuPreset.defaultFries || 'fries_standard';
     const defaultDrink = menuPreset.defaultDrink || 'd_cola';
     const defaultWingsSauce = Object.prototype.hasOwnProperty.call(menuPreset, 'defaultWingsSauce') ? menuPreset.defaultWingsSauce : 'x_sauce_chicken_wings';
@@ -577,18 +591,7 @@
     return true;
   }
 
-  async function addStandardMenuPreset(menu){
-    const base = productById(menu.baseId);
-    if(!base){
-      infoDialog(`${menu.name} is not available in the current product catalog.`);
-      return;
-    }
-    const added = await addGuidedMenu(base, '', menu);
-    if(!added) return;
-    renderOrder();
-    renderMake();
-    refreshTotals();
-  }
+
 
   async function addProductWithFlow(product){
     const pendingNote = '';
@@ -605,17 +608,13 @@
     if(!added) return;
     const st = BK_STATE.getState();
     const slot = st.slots[st.active];
-    if(slot && !slot._packAsked){
+    if(slot && !slot.packAsked){
       const foodCount = (slot.items || []).filter(it=>{
         const p = productById(it.itemId);
         return p && p.cat !== 'drink' && p.cat !== 'extra' && !String(p.id || '').startsWith('x_sauce_');
       }).length;
       if(foodCount >= 2){
-        slot._packAsked = true;
-        confirmDialog('Packaging preference', 'Pack together in one bag? (Cancel = split bags)').then(together=>{
-          BK_STATE.setPackMode(st.active, together ? 'shared' : 'split');
-          renderOrder();
-        });
+        choosePackaging(st.active);
       }
     }
     renderOrder();
@@ -675,7 +674,7 @@
       el.type = 'button';
       el.className='chip slot-chip status-' + status + (i===active?' active':'');
       el.innerHTML = `<span class="status-dot"></span>${s.name} · #${s.orderNo || '-'}`;
-      el.onclick = ()=>{ BK_STATE.setActive(i); renderOrder(); refreshTotals(); goTab('order'); };
+      el.onclick = ()=> focusSlot(i, currentWorkflowTab());
       bar.appendChild(el);
     });
     ctl.forEach(c=>bar.appendChild(c));
@@ -784,6 +783,20 @@
     return [parent, ...children].join(' · ');
   }
 
+  function splitEntryNoteLines(note){
+    const txt = String(note || '').trim();
+    if(!txt) return [];
+    const addOnMatch = txt.match(/^(.*?)(?:\s*·\s*)?Add-ons:\s*(.+)$/i);
+    if(!addOnMatch) return [txt];
+    const prefix = (addOnMatch[1] || '').trim();
+    const addOnItems = String(addOnMatch[2] || '')
+      .split(',')
+      .map(x=>x.trim())
+      .filter(Boolean)
+      .map(x=>`+ ${x}`);
+    return [prefix, ...addOnItems].filter(Boolean);
+  }
+
   function appendGroupedEntry(host, slot, entry, slotIndex, opts){
     const settings = opts || {};
     const row = document.createElement('div');
@@ -808,11 +821,11 @@
     const title = document.createElement('b');
     title.textContent = `${entry.qty}x ${entry.name}`;
     titleWrap.appendChild(title);
-    if(entry.note){
+    splitEntryNoteLines(entry.note).forEach((line, idx)=>{
       const note = document.createElement('small');
-      note.textContent = entry.note;
+      note.textContent = idx === 0 ? line : `↳ ${line}`;
       titleWrap.appendChild(note);
-    }
+    });
     header.appendChild(titleWrap);
 
     const price = document.createElement('span');
@@ -824,12 +837,62 @@
     (entry.children || []).forEach(child=>{
       const childLine = document.createElement('div');
       childLine.className = 'grouped-meal-child';
-      childLine.textContent = `↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''} · ${child.total} GHS`;
+      const childNote = splitEntryNoteLines(child.note);
+      childLine.textContent = `↳ ${child.qty}x ${child.name}${childNote.length ? ` · ${childNote[0]}` : ''} · ${child.total} GHS`;
       row.appendChild(childLine);
+      childNote.slice(1).forEach(line=>{
+        const extraLine = document.createElement('div');
+        extraLine.className = 'grouped-meal-child';
+        extraLine.textContent = `   ↳ ${line}`;
+        row.appendChild(extraLine);
+      });
     });
 
     host.appendChild(row);
     return row;
+  }
+
+  function packagingLabel(slot){
+    return slot && slot.packMode === 'split' ? 'Pack separately' : 'Pack together';
+  }
+
+  function choosePackaging(slotIndex){
+    const st = BK_STATE.getState();
+    const slot = st.slots[slotIndex];
+    if(!slot || slot.issued) return Promise.resolve(false);
+    BK_STATE.setActive(slotIndex);
+    renderSlotsBar();
+    return confirmDialog('Packaging preference', 'Choose how this order should be packed.', {
+      cancelLabel: 'Pack separately',
+      confirmLabel: 'Pack together'
+    }).then(together=>{
+      const latest = BK_STATE.getState().slots[slotIndex];
+      if(!latest || latest.issued) return false;
+      BK_STATE.setPackMode(slotIndex, together ? 'shared' : 'split');
+      renderOrder();
+      renderMake();
+      renderIssue();
+      refreshTotals();
+      return true;
+    });
+  }
+
+  function packagingControl(slot, slotIndex, compact){
+    const wrap = document.createElement('div');
+    wrap.className = `packaging-control${compact ? ' compact' : ''}`;
+    const label = document.createElement('span');
+    label.className = `packaging-status ${slot.packMode === 'split' ? 'split' : 'shared'}`;
+    label.textContent = packagingLabel(slot);
+    wrap.appendChild(label);
+    if(!slot.issued){
+      const change = document.createElement('button');
+      change.type = 'button';
+      change.className = 'mini packaging-change';
+      change.textContent = 'Change';
+      change.onclick = ()=> choosePackaging(slotIndex);
+      wrap.appendChild(change);
+    }
+    return wrap;
   }
 
   function renderOrder(){
@@ -837,6 +900,7 @@
     const lines = document.getElementById('lines'); lines.innerHTML='';
     if(!slots.length){ setSlotTotals(0,0,0); return; }
     const s = slots[active];
+    lines.appendChild(packagingControl(s, active, false));
 
     const entries = groupedCartRows(s.items);
     if(entries.length===0){
@@ -929,8 +993,45 @@
     ensureFlowActions('orderFlowNav', [{ label:'➡️ Go to Make', onClick:()=> goTab('make') }]);
   }
 
+  function currentWorkflowTab(){
+    const activeTab = document.querySelector('.workflow-step[aria-current="step"]');
+    const idMap = { tabOrder:'order', tabMake:'make', tabPay:'pay', tabIssue:'issue' };
+    return idMap[activeTab && activeTab.id] || 'order';
+  }
+
+  function makeSlotCardSelectable(card, slotIndex, tab, active){
+    card.classList.add('selectable');
+    card.classList.toggle('active-slot-card', !!active);
+    card.tabIndex = 0;
+    card.setAttribute('role', 'group');
+    card.setAttribute('aria-label', `${active ? 'Active order. ' : ''}Order card; press Enter or Space to select`);
+    if(active) card.setAttribute('aria-current', 'true');
+    const select = event=>{
+      if(event.target.closest('button, input, label, a, select, textarea')) return;
+      focusSlot(slotIndex, tab);
+    };
+    card.addEventListener('click', select);
+    card.addEventListener('keydown', event=>{
+      if(event.target !== card || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      focusSlot(slotIndex, tab);
+    });
+  }
+
+  function kitchenProgress(slot){
+    const entries = groupedCartRows(slot.items || []);
+    const total = entries.length;
+    const complete = entries.filter(entry=>groupedEntryDone(slot, entry)).length;
+    const percent = total ? Math.round((complete / total) * 100) : 0;
+    if(slot.issued) return { state:'complete', label:'Kitchen complete', complete, total, percent:100, detail:'Order already issued.' };
+    if(total === 0) return { state:'empty', label:'No items', complete:0, total:0, percent:0, detail:'Add products before preparation.' };
+    if(complete === total) return { state:'complete', label:'Kitchen complete', complete, total, percent:100, detail:'All items are prepared.' };
+    if(complete === 0) return { state:'not-started', label:'Not started', complete, total, percent, detail:'Preparation has not started.' };
+    return { state:'in-progress', label:'In progress', complete, total, percent, detail:'Continue preparing the remaining items.' };
+  }
+
   function renderMake(){
-    const {slots} = BK_STATE.getState();
+    const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('makeList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
     box.querySelectorAll('.empty-state').forEach(n=>n.remove());
@@ -943,13 +1044,23 @@
     }
     slots.forEach((s,i)=>{
       const c = BK_LOGIC.computeSlot(s);
+      const progress = kitchenProgress(s);
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS · Combos: ${c.combos} · In kitchen: ${formatAge(s.createdAt)}</div>
-          <div><button onclick="BK_STATE.setActive(${i}); BK_UI.renderOrder(); BK_UI.refreshTotals();">Focus</button></div>
+          ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
+        </div>
+        <div class="kitchen-progress ${progress.state}">
+          <div class="kitchen-progress-copy"><strong>${progress.label}</strong><span>${progress.complete} of ${progress.total} items prepared</span><small>${progress.detail}</small></div>
+          <div class="kitchen-progress-track" role="progressbar" aria-label="Kitchen progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="width:${progress.percent}%"></span></div>
+          ${progress.state === 'complete' && !s.issued ? `<button class="kitchen-next-action" type="button">${s.pay === 'unpaid' ? 'Continue to Payment' : 'Go to Handover'}</button>` : ''}
         </div>
         <div class="todo grouped-todo" id="todo-${i}"></div>`;
+      const nextAction = card.querySelector('.kitchen-next-action');
+      if(nextAction) nextAction.onclick = ()=> focusSlot(i, s.pay === 'unpaid' ? 'pay' : 'issue');
+      card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
+      makeSlotCardSelectable(card, i, 'make', i === active);
       box.appendChild(card);
       const list = card.querySelector(`#todo-${i}`);
       groupedCartRows(s.items).forEach(entry=>{
@@ -958,8 +1069,10 @@
           onToggle: (picked, done)=>{
             BK_STATE.setActive(i);
             setGroupedEntryDone(picked, done);
+            renderSlotsBar();
             renderMake();
             renderIssue();
+            refreshTotals();
           }
         });
       });
@@ -970,8 +1083,47 @@
     ]);
   }
 
+  function paymentDisplay(slot){
+    if(slot.issued){
+      const method = slot.pay === 'momo' ? 'MoMo' : (slot.pay === 'cash' ? 'Cash' : 'Unknown method');
+      return { state:'locked', label:'Payment locked', detail:`${method} · Order issued` };
+    }
+    if(!Array.isArray(slot.items) || slot.items.length === 0) return { state:'empty', label:'Nothing to pay', detail:'Add products before taking payment' };
+    if(slot.pay === 'cash') return { state:'paid', label:'Paid by Cash', detail:'Payment confirmed' };
+    if(slot.pay === 'momo') return { state:'paid', label:'Paid by MoMo', detail:'Payment confirmed' };
+    return { state:'pending', label:'Payment pending', detail:'Select the payment method after receiving payment' };
+  }
+
+  function requestSlotPayment(slotIndex, method){
+    const st = BK_STATE.getState();
+    const slot = st.slots[slotIndex];
+    if(!slot || slot.issued || !Array.isArray(slot.items) || slot.items.length === 0 || !['unpaid','cash','momo'].includes(method)) return;
+    BK_STATE.setActive(slotIndex);
+    renderSlotsBar();
+    renderPay();
+    refreshTotals();
+    if(slot.pay === method) return;
+    const isUnpaid = method === 'unpaid';
+    const paymentName = method === 'momo' ? 'MoMo' : 'Cash';
+    const title = isUnpaid ? 'Change payment status' : `Confirm ${paymentName} payment`;
+    const message = isUnpaid
+      ? `Mark ${slot.orderNo || slot.name} as unpaid? This will block handover.`
+      : `Confirm that ${centsFreeAmount(BK_LOGIC.computeSlot(slot).subtotal)} GHS was received by ${paymentName} for ${slot.orderNo || slot.name}.`;
+    confirmDialog(title, message, {
+      cancelLabel: 'Cancel',
+      confirmLabel: isUnpaid ? 'Mark as unpaid' : `Confirm ${paymentName} payment`
+    }).then(ok=>{
+      if(ok) setSlotPayment(slotIndex, method);
+    });
+  }
+
+  function centsFreeAmount(value){
+    const amount = Number(value) || 0;
+    return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+  }
+
   function renderPay(){
-    const {slots} = BK_STATE.getState();
+    const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('payList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
     box.querySelectorAll('.empty-state').forEach(n=>n.remove());
@@ -984,17 +1136,23 @@
     }
     slots.forEach((s,i)=>{
       const c = BK_LOGIC.computeSlot(s);
+      const payment = paymentDisplay(s);
+      const paymentDisabled = s.issued || !Array.isArray(s.items) || s.items.length === 0;
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS</div>
-          <div class="pay-status">
-            <span>Status: ${s.pay.toUpperCase()}</span>
-            <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Unpaid</button>
-            <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
-            <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'momo'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid MoMo</button>
+          <div class="pay-status">${i === active ? '<span class="active-order-badge">Active order</span>' : ''}</div>
+        </div>
+        <div class="payment-panel ${payment.state}">
+          <div class="payment-summary"><strong>${payment.label}</strong><small>${payment.detail}</small></div>
+          <div class="payment-methods" role="group" aria-label="Payment method for ${s.name}">
+            <button class="payment-method ${s.pay === 'unpaid' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'unpaid');">Unpaid</button>
+            <button class="payment-method ${s.pay === 'cash' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'cash');">Cash</button>
+            <button class="payment-method ${s.pay === 'momo' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'momo');">MoMo</button>
           </div>
         </div>`;
+      makeSlotCardSelectable(card, i, 'pay', i === active);
       box.appendChild(card);
     });
     ensureFlowActions('payList', [
@@ -1003,8 +1161,31 @@
     ]);
   }
 
+  function setSlotPayment(slotIndex, method){
+    const st = BK_STATE.getState();
+    if(!st.slots[slotIndex] || !['unpaid','cash','momo'].includes(method)) return;
+    BK_STATE.setActive(slotIndex);
+    BK_STATE.setPay(slotIndex, method);
+    renderSlotsBar();
+    renderPay();
+    renderIssue();
+    refreshTotals();
+  }
+
+  function issueReadiness(slot){
+    const hasItems = Array.isArray(slot.items) && slot.items.length > 0;
+    const kitchenDone = hasItems && slot.items.every(item=>!!item.done);
+    const paid = slot.pay !== 'unpaid';
+    if(slot.issued) return { state:'issued', label:'Order issued', detail:'Handover completed and locked.', action:'Issued', target:'issue', disabled:true };
+    if(!hasItems) return { state:'blocked', label:'Order is empty', detail:'Add at least one product before handover.', action:'Go to Order', target:'order' };
+    if(!paid && !kitchenDone) return { state:'blocked', label:'2 steps remaining', detail:'Payment required · Kitchen not finished', action:'Go to Payment', target:'pay' };
+    if(!paid) return { state:'blocked', label:'Payment required', detail:'Complete payment before handover.', action:'Go to Payment', target:'pay' };
+    if(!kitchenDone) return { state:'waiting', label:'Kitchen not finished', detail:'Complete every kitchen item before handover.', action:'Go to Make', target:'make' };
+    return { state:'ready', label:'Ready for handover', detail:'Paid and all kitchen items are complete.', action:'Start final handover', target:'issue' };
+  }
+
   function renderIssue(){
-    const {slots} = BK_STATE.getState();
+    const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('issueList');
     if(!box) return;
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
@@ -1018,16 +1199,26 @@
     }
     slots.forEach((s,i)=>{
       const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
-      const canIssue = s.pay !== 'unpaid' && allDone;
+      const readiness = issueReadiness(s);
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
           <div class="pay-status">
-            <span>Status: ${s.issued ? 'ISSUED' : 'WAITING'}</span>
-            <button ${(canIssue && !s.issued) ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark Issued</button>
+            ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
           </div>
+        </div>
+        <div class="issue-readiness ${readiness.state}">
+          <div><strong>${readiness.label}</strong><small>${readiness.detail}</small></div>
+          <button class="issue-next-action" ${readiness.disabled ? 'disabled' : ''}>${readiness.action}</button>
         </div>`;
+      const actionButton = card.querySelector('.issue-next-action');
+      actionButton.onclick = ()=>{
+        if(readiness.disabled) return;
+        if(readiness.state === 'ready') markIssued(i);
+        else focusSlot(i, readiness.target);
+      };
+      card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
       const checklist = document.createElement('div');
       checklist.className = 'issue-checklist';
       const label = document.createElement('small');
@@ -1043,6 +1234,7 @@
         checklist.appendChild(emptyLine);
       }
       card.appendChild(checklist);
+      makeSlotCardSelectable(card, i, 'issue', i === active);
       box.appendChild(card);
     });
     const activeIssued = BK_STATE.getState().slots[BK_STATE.getState().active]?.issued;
@@ -1088,6 +1280,20 @@
         else tab.removeAttribute('aria-current');
       }
     });
+  }
+
+  function focusSlot(slotIndex, tab){
+    const st = BK_STATE.getState();
+    const slot = st.slots[slotIndex];
+    if(!slot) return;
+    BK_STATE.setActive(slotIndex);
+    renderSlotsBar();
+    renderOrder();
+    renderMake();
+    renderPay();
+    renderIssue();
+    refreshTotals();
+    goTab(slot.issued ? 'issue' : (tab || currentWorkflowTab()));
   }
 
   function clearFlowAction(hostId){
@@ -1137,6 +1343,8 @@
       items: [],
       pay: 'unpaid',
       issued: false,
+      packMode: 'shared',
+      packAsked: false,
       orderNo: BK_STATE.nextOrderNo(),
       createdAt: Date.now()
     };
@@ -1156,6 +1364,8 @@
       items: [],
       pay: 'unpaid',
       issued: false,
+      packMode: 'shared',
+      packAsked: false,
       orderNo: BK_STATE.nextOrderNo(),
       createdAt: Date.now()
     };
@@ -1333,13 +1543,20 @@
     const st = BK_STATE.getState();
     const slot = st.slots[i];
     if(!slot) return;
+    BK_STATE.setActive(i);
+    renderSlotsBar();
+    renderIssue();
+    refreshTotals();
     const lines = groupedCartRows(slot.items || []);
     const checkHtml = lines.length
-      ? lines.map(entry=>`
-        <div class="grouped-meal compact">
-          <div class="grouped-meal-head"><span class="grouped-meal-title"><b>${entry.qty}x ${entry.name}</b>${entry.note ? `<small>${entry.note}</small>` : ''}</span></div>
-          ${(entry.children || []).map(child=>`<div class="grouped-meal-child">↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''}</div>`).join('')}
-        </div>`).join('')
+      ? `<div class="handover-check-section"><div class="handover-check-section-title">Order items</div>${lines.map(entry=>`
+        <label class="handover-check-row grouped-meal compact">
+          <input type="checkbox" data-handover-check />
+          <span class="handover-check-content">
+            <span class="grouped-meal-head"><span class="grouped-meal-title"><b>${entry.qty}x ${entry.name}</b>${splitEntryNoteLines(entry.note).map((note, idx)=>`<small>${idx ? '↳ ' : ''}${note}</small>`).join('')}</span></span>
+            ${(entry.children || []).map(child=>`<span class="grouped-meal-child">↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''}</span>`).join('')}
+          </span>
+        </label>`).join('')}</div>`
       : '<div>No items in this order.</div>';
 
     const usage = window.BK_STOCK && typeof BK_STOCK.getUsageForSlot === 'function'
@@ -1410,20 +1627,21 @@
       .sort((a,b)=> a.name.localeCompare(b.name));
     const packagingRows = handoverPackagingRows();
     const essentialsRows = extraRows.filter(r=> /napkin|serviette|fork|spoon/i.test(String(r.name || r.id || '')));
-    const addonRows = extraRows.filter(r=> !essentialsRows.includes(r));
+    const packagingIds = new Set(packagingRows.map(row=>row.id));
+    const addonRows = extraRows.filter(r=> !essentialsRows.includes(r) && !packagingIds.has(r.id));
     const sectionHtml = (title, rows, tone)=>{
       if(!rows.length) return '';
       return `<div class="handover-extra-section ${tone || ''}">
         <div class="handover-extra-title">${title}</div>
-        ${rows.map(row=>`<div class="handover-extra-row"><span class="left">${prettyName(row.name)} <span class="handover-pill">Required</span></span><b>${row.qty}${row.unit ? ` ${row.unit}` : ''}</b></div>`).join('')}
+        ${rows.map(row=>`<label class="handover-extra-row handover-check-row"><input type="checkbox" data-handover-check /><span class="left">${prettyName(row.name)} <span class="handover-pill">Required</span></span><b>${row.qty}${row.unit ? ` ${row.unit}` : ''}</b></label>`).join('')}
       </div>`;
     };
     const extrasHtml = (packagingRows.length || essentialsRows.length || addonRows.length)
       ? `<div style="margin:8px 0 6px"><b>Handover extras:</b></div>${sectionHtml('Bags', packagingRows, 'tone-bag')}${sectionHtml('Essentials', essentialsRows, 'tone-essential')}${sectionHtml('Add-ons', addonRows, 'tone-addon')}`
       : '';
-    confirmDialog(
+    handoverChecklistDialog(
       `Final handover check – ${slot.orderNo || slot.name}`,
-      `<div style="margin-bottom:8px">Please confirm all items are packed correctly before issuing to customer.</div>${checkHtml}${extrasHtml}`
+      `<div style="margin-bottom:8px">Check every required item before handing this order to the customer.</div><div class="final-packaging-mode"><b>Packaging:</b> ${packagingLabel(slot)}</div>${checkHtml}${extrasHtml}`
     ).then(ok=>{
       if(!ok) return;
       const latestSlot = BK_STATE.getState().slots[i];
@@ -1839,7 +2057,7 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment, requestSlotPayment, choosePackaging
   };
 })();
     function getPackagingRules(){
