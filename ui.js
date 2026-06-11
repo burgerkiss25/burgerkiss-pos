@@ -1341,6 +1341,25 @@
     });
   }
 
+  function createFreshOrderSlot(slotName){
+    return BK_STATE.allocateOrderNo().then(function(orderNo){
+      return {
+        name: slotName,
+        items: [],
+        pay: 'unpaid',
+        issued: false,
+        packMode: 'shared',
+        packAsked: false,
+        orderNo,
+        createdAt: Date.now()
+      };
+    });
+  }
+
+  function showOrderNumberError(error){
+    infoDialog(`A new order number could not be reserved. No order was created. Check the internet connection and try again. (${error && error.message ? error.message : 'Unknown error'})`);
+  }
+
   function startNextOrder(){
     const st = BK_STATE.getState();
     const i = st.active;
@@ -1355,19 +1374,13 @@
       infoDialog('Complete order first: paid, kitchen done, and marked as issued. Use + Slot in header after payment to take a new order while kitchen keeps working.');
       return;
     }
-    st.slots[i] = {
-      name: slot.name,
-      items: [],
-      pay: 'unpaid',
-      issued: false,
-      packMode: 'shared',
-      packAsked: false,
-      orderNo: BK_STATE.nextOrderNo(),
-      createdAt: Date.now()
-    };
-    BK_STATE.setState(st);
-    renderAll();
-    goTab('order');
+    createFreshOrderSlot(slot.name).then(function(nextSlot){
+      if(slot.issued && slot.items.length) pushHistory(slotSnapshot(slot));
+      st.slots[i] = nextSlot;
+      BK_STATE.setState(st);
+      renderAll();
+      goTab('order');
+    }).catch(showOrderNumberError);
   }
 
   function quickStartNext(slotIndex){
@@ -1375,20 +1388,14 @@
     const i = Number.isInteger(slotIndex) ? slotIndex : st.active;
     const slot = st.slots[i];
     if(!slot) return;
-    st.active = i;
-    st.slots[i] = {
-      name: slot.name,
-      items: [],
-      pay: 'unpaid',
-      issued: false,
-      packMode: 'shared',
-      packAsked: false,
-      orderNo: BK_STATE.nextOrderNo(),
-      createdAt: Date.now()
-    };
-    BK_STATE.setState(st);
-    renderAll();
-    goTab('order');
+    createFreshOrderSlot(slot.name).then(function(nextSlot){
+      if(slot.issued && slot.items.length) pushHistory(slotSnapshot(slot));
+      st.active = i;
+      st.slots[i] = nextSlot;
+      BK_STATE.setState(st);
+      renderAll();
+      goTab('order');
+    }).catch(showOrderNumberError);
   }
 
   function addNewOrderSlot(){
@@ -1398,9 +1405,10 @@
       infoDialog('Please confirm payment first, then use + Slot to start the next order.');
       return;
     }
-    BK_STATE.addSlot();
-    renderAll();
-    goTab('order');
+    BK_STATE.addSlot().then(function(){
+      renderAll();
+      goTab('order');
+    }).catch(showOrderNumberError);
   }
 
   function historyRemoteEnabled(){
@@ -1448,11 +1456,16 @@
   }
   function flattenRemoteHistory(raw){
     const out = [];
-    if(!raw || typeof raw !== 'object') return out;
-    Object.values(raw).forEach(day=>{
-      if(!day || typeof day !== 'object') return;
-      Object.values(day).forEach(entry=>{ const clean = sanitizeHistoryEntry(entry); if(clean) out.push(clean); });
-    });
+    function visit(node){
+      if(!node || typeof node !== 'object') return;
+      if(String(node.orderNo || '').trim() && (node.closedAt || node.createdAt)){
+        const clean = sanitizeHistoryEntry(node);
+        if(clean) out.push(clean);
+        return;
+      }
+      Object.values(node).forEach(visit);
+    }
+    visit(raw);
     return out;
   }
   function saveHistoryRemote(entry){
@@ -1463,81 +1476,42 @@
       .then(()=>true)
       .catch(e=>{ console.warn('history remote save failed:', e && e.message); return false; });
   }
-  function loadHistoryRemoteOnce(){
+  function refreshHistoryFromRemote(){
     const database = historyDb();
     if(!database) return Promise.resolve(false);
-    return database.ref(historyRemotePath()).get().then(snap=>{
+    return database.ref(historyRemotePath()).get().then(function(snap){
       const remote = flattenRemoteHistory(snap.val());
-      if(!remote.length) return false;
-      saveHistory(mergeHistory(getHistory(), remote));
-      return true;
-    }).catch(e=>{
-      console.warn('history remote load failed:', e && e.message);
+      const local = getHistory();
+      const remoteIds = new Set(remote.map(entry=>entry.id));
+      const missingRemote = local.filter(entry=>!remoteIds.has(entry.id));
+      saveHistory(mergeHistory(local, remote));
+      if(!missingRemote.length) return remote.length > 0;
+      return Promise.all(missingRemote.map(saveHistoryRemote)).then(()=>true);
+    }).catch(function(e){
+      console.warn('history remote refresh failed:', e && e.message);
       return false;
     });
   }
-  function clearHistoryRemote(){
-    const database = historyDb();
-    if(!database) return Promise.resolve(false);
-    return database.ref(historyRemotePath()).set(null)
-      .then(()=>true)
-      .catch(e=>{ console.warn('history remote clear failed:', e && e.message); return false; });
-  }
+
 
   function getHistory(){
     try{
       const raw = localStorage.getItem(HISTORY_KEY);
       const arr = raw ? JSON.parse(raw) : [];
-      return normalizeHistory(arr);
+      return mergeHistory(Array.isArray(arr) ? arr : [], []);
     }catch(e){ return []; }
   }
-  function saveHistoryRemoteSoon(list){
-    if(!historyRemoteEnabled()) return;
-    if(historyRemoteSaveTimer) clearTimeout(historyRemoteSaveTimer);
-    historyRemoteSaveTimer = setTimeout(function(){
-      const clean = normalizeHistory(list).slice(0, 1000);
-      getHistoryRef().then(function(ref){
-        if(!ref) return;
-        ref.set({entries: clean, ts: Date.now()}).catch(function(e){
-          console.warn('history remote save failed:', e && e.message);
-        });
-      });
-    }, 400);
-  }
-  function saveHistory(list, opts){
-    const clean = normalizeHistory(list).slice(0, 1000);
-    try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(clean)); }catch(e){}
-    if(!opts || opts.remote !== false) saveHistoryRemoteSoon(clean);
-  }
-  function loadHistoryRemoteOnce(force){
-    if(!historyRemoteEnabled()) return Promise.resolve(false);
-    if(!force && historyRemoteLoadedAt && Date.now() - historyRemoteLoadedAt < 5000) return Promise.resolve(false);
-    historyRemoteLoadedAt = Date.now();
-    return getHistoryRef().then(function(ref){
-      if(!ref) return false;
-      return ref.get().then(function(snap){
-        const val = snap.val();
-        if(!val) return false;
-        const hasEntries = Array.isArray(val.entries);
-        const remote = normalizeHistory(hasEntries ? val.entries : val);
-        if(hasEntries && !remote.length){
-          saveHistory([], {remote:false});
-          return true;
-        }
-        if(!remote.length) return false;
-        const merged = mergeHistoryLists(getHistory(), remote);
-        saveHistory(merged, {remote:false});
-        return true;
-      });
-    }).catch(function(e){
-      console.warn('history remote load failed:', e && e.message);
-      return false;
-    });
+  function saveHistory(list){
+    const clean = mergeHistory(Array.isArray(list) ? list : [], []);
+    try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(clean)); }catch(e){
+      console.warn('history local save failed:', e && e.message);
+    }
+    return clean;
   }
   function slotSnapshot(slot){
     const c = BK_LOGIC.computeSlot(slot);
     return {
-      id: `${slot.orderNo || 'ORD'}-${Date.now()}`,
+      id: String(slot.orderNo || `ORD-${Date.now()}`).replace(/[^a-zA-Z0-9_\-]/g, '_'),
       orderNo: slot.orderNo || '-',
       slotName: slot.name || '-',
       pay: slot.pay || 'unpaid',
@@ -1552,10 +1526,26 @@
   function pushHistory(entry){
     const clean = sanitizeHistoryEntry(entry);
     if(!clean) return;
-    const hist = mergeHistory([clean], getHistory());
-    saveHistory(hist);
-    saveHistoryRemote(clean);
+    const current = getHistory();
+    const existing = current.find(saved=> saved.orderNo === clean.orderNo);
+    const archived = existing || clean;
+    if(!existing) saveHistory(mergeHistory([clean], current));
+    saveHistoryRemote(archived).then(function(saved){
+      if(!saved && historyRemoteEnabled()) console.warn('Order history remains local until online sync succeeds:', archived.orderNo);
+    });
   }
+  function recoverIssuedSlotsToHistory(){
+    const existing = new Set(getHistory().map(entry=>entry.orderNo));
+    let recovered = 0;
+    BK_STATE.getState().slots.forEach(function(slot){
+      if(!slot || !slot.issued || !slot.orderNo || !Array.isArray(slot.items) || !slot.items.length || existing.has(slot.orderNo)) return;
+      pushHistory(slotSnapshot(slot));
+      existing.add(slot.orderNo);
+      recovered += 1;
+    });
+    return recovered;
+  }
+
   function markIssued(i){
     const st = BK_STATE.getState();
     const slot = st.slots[i];
@@ -1698,9 +1688,10 @@
     `).join('');
   }
   function openHistory(){
+    recoverIssuedSlotsToHistory();
     renderHistoryBody();
     document.getElementById('modalHistory').classList.add('open');
-    loadHistoryRemoteOnce().then(hasRemote=>{ if(hasRemote) renderHistoryBody(); });
+    refreshHistoryFromRemote().then(hasRemote=>{ if(hasRemote) renderHistoryBody(); });
   }
   function getFilteredHistory(){
     const text = historyFilterText.trim().toLowerCase();
@@ -1721,11 +1712,12 @@
     historyFilterToday = !historyFilterToday;
     openHistory();
   }
-  function clearHistory(){
-    if(!confirm('Clear saved order history?')) return;
-    saveHistory([]);
-    clearHistoryRemote();
-    openHistory();
+  function clearHistoryFilters(){
+    historyFilterText = '';
+    historyFilterToday = false;
+    const search = document.getElementById('hSearch');
+    if(search) search.value = '';
+    renderHistoryBody();
   }
   function closeHistory(){ document.getElementById('modalHistory').classList.remove('open'); }
   function downloadFile(name, content, type){
@@ -1736,7 +1728,7 @@
     URL.revokeObjectURL(url);
   }
   function exportHistoryJson(){
-    loadHistoryRemoteOnce().finally(()=>{
+    refreshHistoryFromRemote().finally(()=>{
       downloadFile(`bk-history-${Date.now()}.json`, JSON.stringify(getHistory(), null, 2), 'application/json');
     });
   }
@@ -1748,7 +1740,7 @@
     const csv = rows.map(r=> r.map(v=> `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
     downloadFile(`bk-history-${Date.now()}.csv`, csv, 'text/csv');
     };
-    loadHistoryRemoteOnce().finally(writeCsv);
+    refreshHistoryFromRemote().finally(writeCsv);
   }
 
   function formatAge(createdAt){
@@ -1884,7 +1876,7 @@
 
   function openSummary(){
     const st = BK_STATE.getState();
-    if(!st.slots.length){ BK_STATE.addSlot(); }
+    if(!st.slots.length){ infoDialog('No active order. Create a new order first.'); return; }
     const {slots, active, discountRate} = BK_STATE.getState();
     const s = slots[active]; const c = BK_LOGIC.computeSlot(s);
     document.getElementById('sumTitle').textContent = `Summary – ${s.name}`;
@@ -2023,6 +2015,8 @@
     if(!slots.length) return;
     confirmDialog('Delete slot', `Delete ${slots[active].name}?`).then(ok=>{
       if(!ok) return;
+      const slot = BK_STATE.getState().slots[BK_STATE.getState().active];
+      if(slot && slot.issued && slot.items.length) pushHistory(slotSnapshot(slot));
       BK_STATE.deleteActive();
       renderAll();
     });
@@ -2031,9 +2025,9 @@
   function clearAllWithConfirm(){
     confirmDialog('Reset all', 'Clear all slots now? This also resets saved state.').then(ok=>{
       if(!ok) return;
+      recoverIssuedSlotsToHistory();
       BK_STATE.clearAll();
-      BK_STATE.addSlot();
-      renderAll();
+      BK_STATE.addSlot().then(renderAll).catch(showOrderNumberError);
     });
   }
 
@@ -2044,6 +2038,28 @@
       location.reload();
     });
   }
+
+  function getPackagingRules(){
+      const fallback = {
+        drinkBagId: 'white_plastic_bag',
+        foodBagSmallId: 'small_paper_bag',
+        foodBagMediumId: 'medium_paper_bag',
+        foodBagLargeId: 'large_paper_bag',
+        mediumFoodMin: 2,
+        largeFoodMin: 4,
+        largeMenuChildMin: 2
+      };
+      try{
+        const parsed = JSON.parse(localStorage.getItem(PACK_RULES_KEY) || '{}');
+        return Object.assign({}, fallback, parsed || {});
+      }catch(e){ return fallback; }
+    }
+  function prettyName(raw){
+      const txt = String(raw || '').trim();
+      if(!txt) return '';
+      if(txt.includes('_')) return txt.split('_').map(x=> x ? x[0].toUpperCase() + x.slice(1) : '').join(' ');
+      return txt;
+    }
 
   function renderAll(){
     bindProductSearch();
@@ -2063,7 +2079,7 @@
   window.BK_UI = {
     renderAll, renderOrder, renderMake, renderPay, renderIssue, refreshTotals,
     renderStock,
-    openSummary, closeSummary, openHistory, closeHistory, exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, clearHistory,
+    openSummary, closeSummary, openHistory, closeHistory, exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, clearHistoryFilters,
     openStockOverview, closeStockOverview,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
@@ -2077,24 +2093,3 @@
     infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment, requestSlotPayment, choosePackaging
   };
 })();
-    function getPackagingRules(){
-      const fallback = {
-        drinkBagId: 'white_plastic_bag',
-        foodBagSmallId: 'small_paper_bag',
-        foodBagMediumId: 'medium_paper_bag',
-        foodBagLargeId: 'large_paper_bag',
-        mediumFoodMin: 2,
-        largeFoodMin: 4,
-        largeMenuChildMin: 2
-      };
-      try{
-        const parsed = JSON.parse(localStorage.getItem(PACK_RULES_KEY) || '{}');
-        return Object.assign({}, fallback, parsed || {});
-      }catch(e){ return fallback; }
-    }
-    function prettyName(raw){
-      const txt = String(raw || '').trim();
-      if(!txt) return '';
-      if(txt.includes('_')) return txt.split('_').map(x=> x ? x[0].toUpperCase() + x.slice(1) : '').join(' ');
-      return txt;
-    }
