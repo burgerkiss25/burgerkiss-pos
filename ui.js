@@ -4,7 +4,7 @@
   let productQuery = '';
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
-  const CATEGORY_LABELS = { all:'All', menu:'Menu', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
+  const CATEGORY_LABELS = { all:'All', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
   let historyFilterText = '';
   let historyFilterToday = false;
   const QUICK_NOTES = ['No onion', 'Extra onion', 'No lettuce', 'Extra spicy'];
@@ -110,15 +110,18 @@
     document.getElementById('dlgOk').onclick = closeDialog;
   }
 
-  function confirmDialog(title, message){
+  function confirmDialog(title, message, opts){
     return new Promise(resolve=>{
+      const options = opts || {};
+      const cancelLabel = options.cancelLabel || 'Cancel';
+      const confirmLabel = options.confirmLabel || 'Confirm';
       const host = ensureDialogHost();
       document.getElementById('appDialogTitle').textContent = title;
       document.getElementById('appDialogBody').innerHTML = `
         <div style="margin-bottom:10px">${message}</div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="x" id="dlgCancel">Cancel</button>
-          <button class="x" id="dlgConfirm">Confirm</button>
+          <button class="x" id="dlgCancel">${cancelLabel}</button>
+          <button class="x" id="dlgConfirm">${confirmLabel}</button>
         </div>
       `;
       host.classList.add('open');
@@ -155,9 +158,8 @@
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
     const query = productQuery.trim().toLowerCase();
     const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
-    const productItems = base.filter(isFrontProduct).filter(it => (currentCat==='menu' || currentCat==='fast') ? false : (currentCat==='all' ? true : it.cat===currentCat));
-    const menuItems = buildStandardMenuCards().filter(it => currentCat === 'all' || currentCat === 'menu');
-    const items = menuItems.concat(productItems)
+    const items = base.filter(isFrontProduct)
+      .filter(it => currentCat === 'all' ? true : it.cat === currentCat)
       .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true);
     if(!items.length){
       const empty = document.createElement('div');
@@ -169,7 +171,7 @@
     }
     items.forEach(it=>{
       const b = document.createElement('button');
-      b.className = 'item' + (it.isStandardMenu ? ' standard-menu-item' : '');
+      b.className = 'item';
       b.type = 'button';
       const img = BK_IMAGES.get(it.imageId || it.id);
       if(img){
@@ -185,9 +187,9 @@
                      ${it.subtitle ? `<small class="item-subtitle">${it.subtitle}</small>` : ''}
                      <div class="item-meta">
                        <div class="price">${itemDisplayPrice(it)} GHS</div>
-                       <span class="badge">${it.isStandardMenu ? 'Menu' : '+1'}</span>
+                       <span class="badge">+1</span>
                      </div>`;
-      b.onclick = ()=> it.isStandardMenu ? addStandardMenuPreset(it) : addProductWithFlow(it);
+      b.onclick = ()=> addProductWithFlow(it);
       grid.appendChild(b);
     });
   }
@@ -366,18 +368,7 @@
   }
 
   function itemDisplayPrice(item){
-    if(item && item.isStandardMenu) return standardMenuPrice(item);
     return BK_PRICES.getPrice(item && item.id);
-  }
-
-  function standardMenuPrice(menu){
-    const base = productById(menu.baseId);
-    if(!base) return 0;
-    const included = BK_DATA.MENU && BK_DATA.MENU.included ? BK_DATA.MENU.included : {fries:0, drink:0};
-    const friesUpgrade = menu.defaultFries ? Math.max(0, BK_PRICES.getPrice(menu.defaultFries) - (Number(included.fries) || 0)) : 0;
-    const drinkUpgrade = menu.defaultDrink ? Math.max(0, BK_PRICES.getPrice(menu.defaultDrink) - (Number(included.drink) || 0)) : 0;
-    const baseMenuPrice = Number(menu.menuPrice) > 0 ? Number(menu.menuPrice) : mealBasePrice(base);
-    return baseMenuPrice + friesUpgrade + drinkUpgrade;
   }
 
   function getStandardMenuPresets(){
@@ -385,21 +376,8 @@
     return FALLBACK_STANDARD_MENUS;
   }
 
-  function buildStandardMenuCards(){
-    return getStandardMenuPresets().map(menu=>{
-      const base = productById(menu.baseId);
-      if(!base || standardMenuPrice(menu) <= 0) return null;
-      const fries = productById(menu.defaultFries);
-      const drink = productById(menu.defaultDrink);
-      return Object.assign({}, menu, {
-        cat: 'menu',
-        isStandardMenu: true,
-        imageId: menu.baseId,
-        baseName: base.name,
-        subtitle: [base.name, fries && fries.name, drink && drink.name].filter(Boolean).join(' + '),
-        searchText: [base.name, fries && fries.name, drink && drink.name, 'standard menu combo'].filter(Boolean).join(' ')
-      });
-    }).filter(Boolean);
+  function standardMenuPresetFor(baseId){
+    return getStandardMenuPresets().find(menu=>menu.baseId === baseId) || {};
   }
 
   function mealBasePrice(product){
@@ -527,7 +505,7 @@
   }
 
   async function addGuidedMenu(product, pendingNote, preset){
-    const menuPreset = preset || {};
+    const menuPreset = preset || standardMenuPresetFor(product.id);
     const defaultFries = menuPreset.defaultFries || 'fries_standard';
     const defaultDrink = menuPreset.defaultDrink || 'd_cola';
     const defaultWingsSauce = Object.prototype.hasOwnProperty.call(menuPreset, 'defaultWingsSauce') ? menuPreset.defaultWingsSauce : 'x_sauce_chicken_wings';
@@ -577,18 +555,7 @@
     return true;
   }
 
-  async function addStandardMenuPreset(menu){
-    const base = productById(menu.baseId);
-    if(!base){
-      infoDialog(`${menu.name} is not available in the current product catalog.`);
-      return;
-    }
-    const added = await addGuidedMenu(base, '', menu);
-    if(!added) return;
-    renderOrder();
-    renderMake();
-    refreshTotals();
-  }
+
 
   async function addProductWithFlow(product){
     const pendingNote = '';
@@ -612,7 +579,10 @@
       }).length;
       if(foodCount >= 2){
         slot._packAsked = true;
-        confirmDialog('Packaging preference', 'Pack together in one bag? (Cancel = split bags)').then(together=>{
+        confirmDialog('Packaging preference', 'Choose how this order should be packed.', {
+          cancelLabel: 'Pack separately',
+          confirmLabel: 'Pack together'
+        }).then(together=>{
           BK_STATE.setPackMode(st.active, together ? 'shared' : 'split');
           renderOrder();
         });
@@ -784,6 +754,20 @@
     return [parent, ...children].join(' · ');
   }
 
+  function splitEntryNoteLines(note){
+    const txt = String(note || '').trim();
+    if(!txt) return [];
+    const addOnMatch = txt.match(/^(.*?)(?:\s*·\s*)?Add-ons:\s*(.+)$/i);
+    if(!addOnMatch) return [txt];
+    const prefix = (addOnMatch[1] || '').trim();
+    const addOnItems = String(addOnMatch[2] || '')
+      .split(',')
+      .map(x=>x.trim())
+      .filter(Boolean)
+      .map(x=>`+ ${x}`);
+    return [prefix, ...addOnItems].filter(Boolean);
+  }
+
   function appendGroupedEntry(host, slot, entry, slotIndex, opts){
     const settings = opts || {};
     const row = document.createElement('div');
@@ -808,11 +792,11 @@
     const title = document.createElement('b');
     title.textContent = `${entry.qty}x ${entry.name}`;
     titleWrap.appendChild(title);
-    if(entry.note){
+    splitEntryNoteLines(entry.note).forEach((line, idx)=>{
       const note = document.createElement('small');
-      note.textContent = entry.note;
+      note.textContent = idx === 0 ? line : `↳ ${line}`;
       titleWrap.appendChild(note);
-    }
+    });
     header.appendChild(titleWrap);
 
     const price = document.createElement('span');
@@ -824,8 +808,15 @@
     (entry.children || []).forEach(child=>{
       const childLine = document.createElement('div');
       childLine.className = 'grouped-meal-child';
-      childLine.textContent = `↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''} · ${child.total} GHS`;
+      const childNote = splitEntryNoteLines(child.note);
+      childLine.textContent = `↳ ${child.qty}x ${child.name}${childNote.length ? ` · ${childNote[0]}` : ''} · ${child.total} GHS`;
       row.appendChild(childLine);
+      childNote.slice(1).forEach(line=>{
+        const extraLine = document.createElement('div');
+        extraLine.className = 'grouped-meal-child';
+        extraLine.textContent = `   ↳ ${line}`;
+        row.appendChild(extraLine);
+      });
     });
 
     host.appendChild(row);
@@ -989,6 +980,7 @@
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS</div>
           <div class="pay-status">
+            <button onclick="BK_UI.focusSlot(${i},'make');">Focus</button>
             <span>Status: ${s.pay.toUpperCase()}</span>
             <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Unpaid</button>
             <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
@@ -1025,7 +1017,8 @@
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
           <div class="pay-status">
             <span>Status: ${s.issued ? 'ISSUED' : 'WAITING'}</span>
-            <button ${(canIssue && !s.issued) ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark Issued</button>
+            <button onclick="BK_UI.focusSlot(${i},'issue');">Focus</button>
+            <button ${(canIssue && !s.issued) ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark as Issued</button>
           </div>
         </div>`;
       const checklist = document.createElement('div');
@@ -1088,6 +1081,15 @@
         else tab.removeAttribute('aria-current');
       }
     });
+  }
+
+  function focusSlot(slotIndex, tab){
+    const st = BK_STATE.getState();
+    if(!st.slots[slotIndex]) return;
+    BK_STATE.setActive(slotIndex);
+    renderSlotsBar();
+    refreshTotals();
+    goTab(tab || 'order');
   }
 
   function clearFlowAction(hostId){
@@ -1839,7 +1841,7 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot
   };
 })();
     function getPackagingRules(){
