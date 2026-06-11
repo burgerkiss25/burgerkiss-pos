@@ -130,6 +130,42 @@
     });
   }
 
+  function handoverChecklistDialog(title, message){
+    return new Promise(resolve=>{
+      const host = ensureDialogHost();
+      document.getElementById('appDialogTitle').textContent = title;
+      document.getElementById('appDialogBody').innerHTML = `
+        <div class="handover-checklist-dialog">
+          ${message}
+          <div class="handover-check-progress" id="handoverCheckProgress" role="status" aria-live="polite"></div>
+          <div class="handover-check-actions">
+            <button class="x" id="dlgCancel" type="button">Cancel</button>
+            <button class="x modifier-primary" id="dlgConfirm" type="button" disabled>Confirm handover</button>
+          </div>
+        </div>
+      `;
+      host.classList.add('open');
+      const checks = Array.from(host.querySelectorAll('[data-handover-check]'));
+      const confirm = document.getElementById('dlgConfirm');
+      const progress = document.getElementById('handoverCheckProgress');
+      const update = ()=>{
+        const complete = checks.filter(input=>input.checked).length;
+        const total = checks.length;
+        progress.textContent = `${complete} of ${total} required checks confirmed`;
+        progress.classList.toggle('complete', total > 0 && complete === total);
+        confirm.disabled = total === 0 || complete !== total;
+      };
+      checks.forEach(input=>input.addEventListener('change', update));
+      update();
+      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(false); };
+      confirm.onclick = ()=>{
+        if(confirm.disabled) return;
+        closeDialog();
+        resolve(true);
+      };
+    });
+  }
+
   function promptDialog(title, initial){
     return new Promise(resolve=>{
       const host = ensureDialogHost();
@@ -1428,11 +1464,14 @@
     refreshTotals();
     const lines = groupedCartRows(slot.items || []);
     const checkHtml = lines.length
-      ? lines.map(entry=>`
-        <div class="grouped-meal compact">
-          <div class="grouped-meal-head"><span class="grouped-meal-title"><b>${entry.qty}x ${entry.name}</b>${entry.note ? `<small>${entry.note}</small>` : ''}</span></div>
-          ${(entry.children || []).map(child=>`<div class="grouped-meal-child">↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''}</div>`).join('')}
-        </div>`).join('')
+      ? `<div class="handover-check-section"><div class="handover-check-section-title">Order items</div>${lines.map(entry=>`
+        <label class="handover-check-row grouped-meal compact">
+          <input type="checkbox" data-handover-check />
+          <span class="handover-check-content">
+            <span class="grouped-meal-head"><span class="grouped-meal-title"><b>${entry.qty}x ${entry.name}</b>${splitEntryNoteLines(entry.note).map((note, idx)=>`<small>${idx ? '↳ ' : ''}${note}</small>`).join('')}</span></span>
+            ${(entry.children || []).map(child=>`<span class="grouped-meal-child">↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''}</span>`).join('')}
+          </span>
+        </label>`).join('')}</div>`
       : '<div>No items in this order.</div>';
 
     const usage = window.BK_STOCK && typeof BK_STOCK.getUsageForSlot === 'function'
@@ -1503,20 +1542,21 @@
       .sort((a,b)=> a.name.localeCompare(b.name));
     const packagingRows = handoverPackagingRows();
     const essentialsRows = extraRows.filter(r=> /napkin|serviette|fork|spoon/i.test(String(r.name || r.id || '')));
-    const addonRows = extraRows.filter(r=> !essentialsRows.includes(r));
+    const packagingIds = new Set(packagingRows.map(row=>row.id));
+    const addonRows = extraRows.filter(r=> !essentialsRows.includes(r) && !packagingIds.has(r.id));
     const sectionHtml = (title, rows, tone)=>{
       if(!rows.length) return '';
       return `<div class="handover-extra-section ${tone || ''}">
         <div class="handover-extra-title">${title}</div>
-        ${rows.map(row=>`<div class="handover-extra-row"><span class="left">${prettyName(row.name)} <span class="handover-pill">Required</span></span><b>${row.qty}${row.unit ? ` ${row.unit}` : ''}</b></div>`).join('')}
+        ${rows.map(row=>`<label class="handover-extra-row handover-check-row"><input type="checkbox" data-handover-check /><span class="left">${prettyName(row.name)} <span class="handover-pill">Required</span></span><b>${row.qty}${row.unit ? ` ${row.unit}` : ''}</b></label>`).join('')}
       </div>`;
     };
     const extrasHtml = (packagingRows.length || essentialsRows.length || addonRows.length)
       ? `<div style="margin:8px 0 6px"><b>Handover extras:</b></div>${sectionHtml('Bags', packagingRows, 'tone-bag')}${sectionHtml('Essentials', essentialsRows, 'tone-essential')}${sectionHtml('Add-ons', addonRows, 'tone-addon')}`
       : '';
-    confirmDialog(
+    handoverChecklistDialog(
       `Final handover check – ${slot.orderNo || slot.name}`,
-      `<div style="margin-bottom:8px">Please confirm all items are packed correctly before issuing to customer.</div><div class="final-packaging-mode"><b>Packaging:</b> ${packagingLabel(slot)}</div>${checkHtml}${extrasHtml}`
+      `<div style="margin-bottom:8px">Check every required item before handing this order to the customer.</div><div class="final-packaging-mode"><b>Packaging:</b> ${packagingLabel(slot)}</div>${checkHtml}${extrasHtml}`
     ).then(ok=>{
       if(!ok) return;
       const latestSlot = BK_STATE.getState().slots[i];
