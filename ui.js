@@ -1018,6 +1018,18 @@
     });
   }
 
+  function kitchenProgress(slot){
+    const entries = groupedCartRows(slot.items || []);
+    const total = entries.length;
+    const complete = entries.filter(entry=>groupedEntryDone(slot, entry)).length;
+    const percent = total ? Math.round((complete / total) * 100) : 0;
+    if(slot.issued) return { state:'complete', label:'Kitchen complete', complete, total, percent:100, detail:'Order already issued.' };
+    if(total === 0) return { state:'empty', label:'No items', complete:0, total:0, percent:0, detail:'Add products before preparation.' };
+    if(complete === total) return { state:'complete', label:'Kitchen complete', complete, total, percent:100, detail:'All items are prepared.' };
+    if(complete === 0) return { state:'not-started', label:'Not started', complete, total, percent, detail:'Preparation has not started.' };
+    return { state:'in-progress', label:'In progress', complete, total, percent, detail:'Continue preparing the remaining items.' };
+  }
+
   function renderMake(){
     const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('makeList');
@@ -1032,13 +1044,21 @@
     }
     slots.forEach((s,i)=>{
       const c = BK_LOGIC.computeSlot(s);
+      const progress = kitchenProgress(s);
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS · Combos: ${c.combos} · In kitchen: ${formatAge(s.createdAt)}</div>
           ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
         </div>
+        <div class="kitchen-progress ${progress.state}">
+          <div class="kitchen-progress-copy"><strong>${progress.label}</strong><span>${progress.complete} of ${progress.total} items prepared</span><small>${progress.detail}</small></div>
+          <div class="kitchen-progress-track" role="progressbar" aria-label="Kitchen progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="width:${progress.percent}%"></span></div>
+          ${progress.state === 'complete' && !s.issued ? `<button class="kitchen-next-action" type="button">${s.pay === 'unpaid' ? 'Continue to Payment' : 'Go to Handover'}</button>` : ''}
+        </div>
         <div class="todo grouped-todo" id="todo-${i}"></div>`;
+      const nextAction = card.querySelector('.kitchen-next-action');
+      if(nextAction) nextAction.onclick = ()=> focusSlot(i, s.pay === 'unpaid' ? 'pay' : 'issue');
       card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
       makeSlotCardSelectable(card, i, 'make', i === active);
       box.appendChild(card);
@@ -1049,8 +1069,10 @@
           onToggle: (picked, done)=>{
             BK_STATE.setActive(i);
             setGroupedEntryDone(picked, done);
+            renderSlotsBar();
             renderMake();
             renderIssue();
+            refreshTotals();
           }
         });
       });
