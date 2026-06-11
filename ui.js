@@ -645,7 +645,7 @@
       el.type = 'button';
       el.className='chip slot-chip status-' + status + (i===active?' active':'');
       el.innerHTML = `<span class="status-dot"></span>${s.name} · #${s.orderNo || '-'}`;
-      el.onclick = ()=>{ BK_STATE.setActive(i); renderOrder(); refreshTotals(); goTab('order'); };
+      el.onclick = ()=> focusSlot(i, currentWorkflowTab());
       bar.appendChild(el);
     });
     ctl.forEach(c=>bar.appendChild(c));
@@ -920,8 +920,33 @@
     ensureFlowActions('orderFlowNav', [{ label:'➡️ Go to Make', onClick:()=> goTab('make') }]);
   }
 
+  function currentWorkflowTab(){
+    const activeTab = document.querySelector('.workflow-step[aria-current="step"]');
+    const idMap = { tabOrder:'order', tabMake:'make', tabPay:'pay', tabIssue:'issue' };
+    return idMap[activeTab && activeTab.id] || 'order';
+  }
+
+  function makeSlotCardSelectable(card, slotIndex, tab, active){
+    card.classList.add('selectable');
+    card.classList.toggle('active-slot-card', !!active);
+    card.tabIndex = 0;
+    card.setAttribute('role', 'group');
+    card.setAttribute('aria-label', `${active ? 'Active order. ' : ''}Order card; press Enter or Space to select`);
+    if(active) card.setAttribute('aria-current', 'true');
+    const select = event=>{
+      if(event.target.closest('button, input, label, a, select, textarea')) return;
+      focusSlot(slotIndex, tab);
+    };
+    card.addEventListener('click', select);
+    card.addEventListener('keydown', event=>{
+      if(event.target !== card || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      focusSlot(slotIndex, tab);
+    });
+  }
+
   function renderMake(){
-    const {slots} = BK_STATE.getState();
+    const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('makeList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
     box.querySelectorAll('.empty-state').forEach(n=>n.remove());
@@ -938,9 +963,10 @@
       card.innerHTML = `
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS · Combos: ${c.combos} · In kitchen: ${formatAge(s.createdAt)}</div>
-          <div><button onclick="BK_STATE.setActive(${i}); BK_UI.renderOrder(); BK_UI.refreshTotals();">Focus</button></div>
+          ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
         </div>
         <div class="todo grouped-todo" id="todo-${i}"></div>`;
+      makeSlotCardSelectable(card, i, 'make', i === active);
       box.appendChild(card);
       const list = card.querySelector(`#todo-${i}`);
       groupedCartRows(s.items).forEach(entry=>{
@@ -962,7 +988,7 @@
   }
 
   function renderPay(){
-    const {slots} = BK_STATE.getState();
+    const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('payList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
     box.querySelectorAll('.empty-state').forEach(n=>n.remove());
@@ -980,13 +1006,14 @@
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS</div>
           <div class="pay-status">
-            <button onclick="BK_UI.focusSlot(${i},'make');">Focus</button>
+            ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
             <span>Status: ${s.pay.toUpperCase()}</span>
-            <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Unpaid</button>
-            <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
-            <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'momo'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid MoMo</button>
+            <button ${s.issued ? 'disabled' : ''} onclick="BK_UI.setSlotPayment(${i},'unpaid');">Unpaid</button>
+            <button ${s.issued ? 'disabled' : ''} onclick="BK_UI.setSlotPayment(${i},'cash');">Paid Cash</button>
+            <button ${s.issued ? 'disabled' : ''} onclick="BK_UI.setSlotPayment(${i},'momo');">Paid MoMo</button>
           </div>
         </div>`;
+      makeSlotCardSelectable(card, i, 'pay', i === active);
       box.appendChild(card);
     });
     ensureFlowActions('payList', [
@@ -995,8 +1022,19 @@
     ]);
   }
 
+  function setSlotPayment(slotIndex, method){
+    const st = BK_STATE.getState();
+    if(!st.slots[slotIndex] || !['unpaid','cash','momo'].includes(method)) return;
+    BK_STATE.setActive(slotIndex);
+    BK_STATE.setPay(slotIndex, method);
+    renderSlotsBar();
+    renderPay();
+    renderIssue();
+    refreshTotals();
+  }
+
   function renderIssue(){
-    const {slots} = BK_STATE.getState();
+    const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('issueList');
     if(!box) return;
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
@@ -1016,8 +1054,8 @@
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
           <div class="pay-status">
+            ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
             <span>Status: ${s.issued ? 'ISSUED' : 'WAITING'}</span>
-            <button onclick="BK_UI.focusSlot(${i},'issue');">Focus</button>
             <button ${(canIssue && !s.issued) ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark as Issued</button>
           </div>
         </div>`;
@@ -1036,6 +1074,7 @@
         checklist.appendChild(emptyLine);
       }
       card.appendChild(checklist);
+      makeSlotCardSelectable(card, i, 'issue', i === active);
       box.appendChild(card);
     });
     const activeIssued = BK_STATE.getState().slots[BK_STATE.getState().active]?.issued;
@@ -1085,11 +1124,16 @@
 
   function focusSlot(slotIndex, tab){
     const st = BK_STATE.getState();
-    if(!st.slots[slotIndex]) return;
+    const slot = st.slots[slotIndex];
+    if(!slot) return;
     BK_STATE.setActive(slotIndex);
     renderSlotsBar();
+    renderOrder();
+    renderMake();
+    renderPay();
+    renderIssue();
     refreshTotals();
-    goTab(tab || 'order');
+    goTab(slot.issued ? 'issue' : (tab || currentWorkflowTab()));
   }
 
   function clearFlowAction(hostId){
@@ -1335,6 +1379,10 @@
     const st = BK_STATE.getState();
     const slot = st.slots[i];
     if(!slot) return;
+    BK_STATE.setActive(i);
+    renderSlotsBar();
+    renderIssue();
+    refreshTotals();
     const lines = groupedCartRows(slot.items || []);
     const checkHtml = lines.length
       ? lines.map(entry=>`
@@ -1841,7 +1889,7 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment
   };
 })();
     function getPackagingRules(){
