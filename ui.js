@@ -572,20 +572,13 @@
     if(!added) return;
     const st = BK_STATE.getState();
     const slot = st.slots[st.active];
-    if(slot && !slot._packAsked){
+    if(slot && !slot.packAsked){
       const foodCount = (slot.items || []).filter(it=>{
         const p = productById(it.itemId);
         return p && p.cat !== 'drink' && p.cat !== 'extra' && !String(p.id || '').startsWith('x_sauce_');
       }).length;
       if(foodCount >= 2){
-        slot._packAsked = true;
-        confirmDialog('Packaging preference', 'Choose how this order should be packed.', {
-          cancelLabel: 'Pack separately',
-          confirmLabel: 'Pack together'
-        }).then(together=>{
-          BK_STATE.setPackMode(st.active, together ? 'shared' : 'split');
-          renderOrder();
-        });
+        choosePackaging(st.active);
       }
     }
     renderOrder();
@@ -823,11 +816,55 @@
     return row;
   }
 
+  function packagingLabel(slot){
+    return slot && slot.packMode === 'split' ? 'Pack separately' : 'Pack together';
+  }
+
+  function choosePackaging(slotIndex){
+    const st = BK_STATE.getState();
+    const slot = st.slots[slotIndex];
+    if(!slot || slot.issued) return Promise.resolve(false);
+    BK_STATE.setActive(slotIndex);
+    renderSlotsBar();
+    return confirmDialog('Packaging preference', 'Choose how this order should be packed.', {
+      cancelLabel: 'Pack separately',
+      confirmLabel: 'Pack together'
+    }).then(together=>{
+      const latest = BK_STATE.getState().slots[slotIndex];
+      if(!latest || latest.issued) return false;
+      BK_STATE.setPackMode(slotIndex, together ? 'shared' : 'split');
+      renderOrder();
+      renderMake();
+      renderIssue();
+      refreshTotals();
+      return true;
+    });
+  }
+
+  function packagingControl(slot, slotIndex, compact){
+    const wrap = document.createElement('div');
+    wrap.className = `packaging-control${compact ? ' compact' : ''}`;
+    const label = document.createElement('span');
+    label.className = `packaging-status ${slot.packMode === 'split' ? 'split' : 'shared'}`;
+    label.textContent = packagingLabel(slot);
+    wrap.appendChild(label);
+    if(!slot.issued){
+      const change = document.createElement('button');
+      change.type = 'button';
+      change.className = 'mini packaging-change';
+      change.textContent = 'Change';
+      change.onclick = ()=> choosePackaging(slotIndex);
+      wrap.appendChild(change);
+    }
+    return wrap;
+  }
+
   function renderOrder(){
     const {slots, active} = BK_STATE.getState();
     const lines = document.getElementById('lines'); lines.innerHTML='';
     if(!slots.length){ setSlotTotals(0,0,0); return; }
     const s = slots[active];
+    lines.appendChild(packagingControl(s, active, false));
 
     const entries = groupedCartRows(s.items);
     if(entries.length===0){
@@ -966,6 +1003,7 @@
           ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
         </div>
         <div class="todo grouped-todo" id="todo-${i}"></div>`;
+      card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
       makeSlotCardSelectable(card, i, 'make', i === active);
       box.appendChild(card);
       const list = card.querySelector(`#todo-${i}`);
@@ -1059,6 +1097,7 @@
             <button ${(canIssue && !s.issued) ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark as Issued</button>
           </div>
         </div>`;
+      card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
       const checklist = document.createElement('div');
       checklist.className = 'issue-checklist';
       const label = document.createElement('small');
@@ -1183,6 +1222,8 @@
       items: [],
       pay: 'unpaid',
       issued: false,
+      packMode: 'shared',
+      packAsked: false,
       orderNo: BK_STATE.nextOrderNo(),
       createdAt: Date.now()
     };
@@ -1202,6 +1243,8 @@
       items: [],
       pay: 'unpaid',
       issued: false,
+      packMode: 'shared',
+      packAsked: false,
       orderNo: BK_STATE.nextOrderNo(),
       createdAt: Date.now()
     };
@@ -1473,7 +1516,7 @@
       : '';
     confirmDialog(
       `Final handover check – ${slot.orderNo || slot.name}`,
-      `<div style="margin-bottom:8px">Please confirm all items are packed correctly before issuing to customer.</div>${checkHtml}${extrasHtml}`
+      `<div style="margin-bottom:8px">Please confirm all items are packed correctly before issuing to customer.</div><div class="final-packaging-mode"><b>Packaging:</b> ${packagingLabel(slot)}</div>${checkHtml}${extrasHtml}`
     ).then(ok=>{
       if(!ok) return;
       const latestSlot = BK_STATE.getState().slots[i];
@@ -1889,7 +1932,7 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment, choosePackaging
   };
 })();
     function getPackagingRules(){
