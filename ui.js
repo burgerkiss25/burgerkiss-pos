@@ -1083,6 +1083,45 @@
     ]);
   }
 
+  function paymentDisplay(slot){
+    if(slot.issued){
+      const method = slot.pay === 'momo' ? 'MoMo' : (slot.pay === 'cash' ? 'Cash' : 'Unknown method');
+      return { state:'locked', label:'Payment locked', detail:`${method} · Order issued` };
+    }
+    if(!Array.isArray(slot.items) || slot.items.length === 0) return { state:'empty', label:'Nothing to pay', detail:'Add products before taking payment' };
+    if(slot.pay === 'cash') return { state:'paid', label:'Paid by Cash', detail:'Payment confirmed' };
+    if(slot.pay === 'momo') return { state:'paid', label:'Paid by MoMo', detail:'Payment confirmed' };
+    return { state:'pending', label:'Payment pending', detail:'Select the payment method after receiving payment' };
+  }
+
+  function requestSlotPayment(slotIndex, method){
+    const st = BK_STATE.getState();
+    const slot = st.slots[slotIndex];
+    if(!slot || slot.issued || !Array.isArray(slot.items) || slot.items.length === 0 || !['unpaid','cash','momo'].includes(method)) return;
+    BK_STATE.setActive(slotIndex);
+    renderSlotsBar();
+    renderPay();
+    refreshTotals();
+    if(slot.pay === method) return;
+    const isUnpaid = method === 'unpaid';
+    const paymentName = method === 'momo' ? 'MoMo' : 'Cash';
+    const title = isUnpaid ? 'Change payment status' : `Confirm ${paymentName} payment`;
+    const message = isUnpaid
+      ? `Mark ${slot.orderNo || slot.name} as unpaid? This will block handover.`
+      : `Confirm that ${centsFreeAmount(BK_LOGIC.computeSlot(slot).subtotal)} GHS was received by ${paymentName} for ${slot.orderNo || slot.name}.`;
+    confirmDialog(title, message, {
+      cancelLabel: 'Cancel',
+      confirmLabel: isUnpaid ? 'Mark as unpaid' : `Confirm ${paymentName} payment`
+    }).then(ok=>{
+      if(ok) setSlotPayment(slotIndex, method);
+    });
+  }
+
+  function centsFreeAmount(value){
+    const amount = Number(value) || 0;
+    return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+  }
+
   function renderPay(){
     const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('payList');
@@ -1097,16 +1136,20 @@
     }
     slots.forEach((s,i)=>{
       const c = BK_LOGIC.computeSlot(s);
+      const payment = paymentDisplay(s);
+      const paymentDisabled = s.issued || !Array.isArray(s.items) || s.items.length === 0;
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS</div>
-          <div class="pay-status">
-            ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
-            <span>Status: ${s.pay.toUpperCase()}</span>
-            <button ${s.issued ? 'disabled' : ''} onclick="BK_UI.setSlotPayment(${i},'unpaid');">Unpaid</button>
-            <button ${s.issued ? 'disabled' : ''} onclick="BK_UI.setSlotPayment(${i},'cash');">Paid Cash</button>
-            <button ${s.issued ? 'disabled' : ''} onclick="BK_UI.setSlotPayment(${i},'momo');">Paid MoMo</button>
+          <div class="pay-status">${i === active ? '<span class="active-order-badge">Active order</span>' : ''}</div>
+        </div>
+        <div class="payment-panel ${payment.state}">
+          <div class="payment-summary"><strong>${payment.label}</strong><small>${payment.detail}</small></div>
+          <div class="payment-methods" role="group" aria-label="Payment method for ${s.name}">
+            <button class="payment-method ${s.pay === 'unpaid' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'unpaid');">Unpaid</button>
+            <button class="payment-method ${s.pay === 'cash' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'cash');">Cash</button>
+            <button class="payment-method ${s.pay === 'momo' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'momo');">MoMo</button>
           </div>
         </div>`;
       makeSlotCardSelectable(card, i, 'pay', i === active);
@@ -2014,7 +2057,7 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment, choosePackaging
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment, requestSlotPayment, choosePackaging
   };
 })();
     function getPackagingRules(){
