@@ -128,21 +128,6 @@
   document.getElementById('gPaid').onclick    = ()=> BK_UI.groupMarkPaid();
 
 
-  // Inline workflow navigation buttons
-  const navBindings = [
-    ['btnOrderToMake', 'make'],
-    ['btnMakeToOrder', 'order'],
-    ['btnMakeToPay', 'pay'],
-    ['btnPayToMake', 'make'],
-    ['btnPayToIssue', 'issue'],
-    ['btnIssueToMake', 'make'],
-    ['btnIssueToPay', 'pay']
-  ];
-  navBindings.forEach(([id, tab])=>{
-    const el = document.getElementById(id);
-    if(el) el.onclick = ()=> BK_UI.goTab(tab);
-  });
-
   // Category tabs
   document.querySelectorAll('.catbar .tab[data-cat]').forEach(btn=>{
     btn.onclick = () => BK_UI.setCategory(btn.dataset.cat);

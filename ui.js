@@ -376,11 +376,11 @@
     });
   }
 
-  function addQuantities(picks, note){
+  function addQuantities(picks, note, meta){
     (picks || []).forEach(pick=>{
       const qty = Math.max(0, Number(pick.qty) || 0);
       if(!pick.value) return;
-      for(let i=0; i<qty; i++) BK_STATE.addItem(pick.value, note || '');
+      for(let i=0; i<qty; i++) BK_STATE.addItem(pick.value, note || '', meta);
     });
   }
 
@@ -472,21 +472,21 @@
     ];
   }
 
-  function addBurgerExtras(product, picked){
+  function addBurgerExtras(product, picked, meta){
     const burgerSummary = describeQuantities([...(picked.burgerExtras || []), ...(picked.eggExtras || [])]);
     const itemNote = joinNotes(picked.itemNote, burgerSummary ? `Add-ons: ${burgerSummary}` : '');
-    BK_STATE.addItem(product.id, itemNote);
+    BK_STATE.addItem(product.id, itemNote, meta);
     const addonNote = modifierLinkNote('for', product.name, picked.itemNote);
-    addQuantities(picked.burgerExtras, addonNote);
-    addQuantities(picked.eggExtras, addonNote);
+    addQuantities(picked.burgerExtras, addonNote, meta && Object.assign({}, meta, {menuRole:'addon'}));
+    addQuantities(picked.eggExtras, addonNote, meta && Object.assign({}, meta, {menuRole:'addon'}));
   }
 
-  function addWingsExtras(product, picked){
+  function addWingsExtras(product, picked, meta){
     const extraSummary = describeQuantities(picked.extraSauce);
     const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
-    BK_STATE.addItem(product.id, itemNote);
-    if(picked.wingsSauce) BK_STATE.addItem(picked.wingsSauce, modifierLinkNote('included', product.name, picked.itemNote));
-    addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
+    BK_STATE.addItem(product.id, itemNote, meta);
+    if(picked.wingsSauce) BK_STATE.addItem(picked.wingsSauce, modifierLinkNote('included', product.name, picked.itemNote), meta && Object.assign({}, meta, {menuRole:'sauce'}));
+    addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote), meta && Object.assign({}, meta, {menuRole:'sauce'}));
   }
 
   function openMealModeDialog(product){
@@ -567,7 +567,7 @@
       }));
     const sections = [
       { title:'Menu fries', name:'menuFries', type:'radio', help:'Standard fries are included; large fries add the upgrade difference.', options:friesOptions },
-      { title:'Menu fries sauce', name:'menuFriesSauce', type:'radio', help:'Choose one sauce cup to hand over with menu fries.', options:sauceOptions() },
+      { title:'Menu fries sauce', name:'menuFriesSauce', type:'radio', help:'Choose one sauce cup to hand over with menu fries. Ketchup is selected unless the customer asks for another sauce or no sauce.', options:sauceOptions().map(option=>Object.assign({}, option, {checked:option.value === 'x_sauce_ketchup'})) },
       { title:'Menu drink', name:'menuDrink', type:'radio', help:'Choose the drink for this menu.', options:drinkOptions }
     ];
     if(isBurgerBase(product)) sections.push(...burgerExtraSections(product));
@@ -586,15 +586,18 @@
     });
     if(!picked) return false;
 
-    if(isBurgerBase(product)) addBurgerExtras(product, picked);
-    else if(isWingsBase(product)) addWingsExtras(product, picked);
-    else BK_STATE.addItem(product.id, picked.itemNote || pendingNote);
+    const menuGroupId = `menu-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+    const menuName = menuPreset.name || `${product.name} Menu`;
+    const baseMeta = {menuGroupId, menuName, menuRole:'main', menuNoSauce:!picked.menuFriesSauce && !picked.wingsSauce};
+    if(isBurgerBase(product)) addBurgerExtras(product, picked, baseMeta);
+    else if(isWingsBase(product)) addWingsExtras(product, picked, baseMeta);
+    else BK_STATE.addItem(product.id, picked.itemNote || pendingNote, baseMeta);
 
     const menuNote = modifierLinkNote('menu', product.name, picked.itemNote);
-    if(picked.menuFries) BK_STATE.addItem(picked.menuFries, menuNote);
-    if(picked.menuFriesSauce) BK_STATE.addItem(picked.menuFriesSauce, menuNote);
-    if(picked.menuDrink) BK_STATE.addItem(picked.menuDrink, menuNote);
-    if(!isWingsBase(product)) addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
+    if(picked.menuFries) BK_STATE.addItem(picked.menuFries, menuNote, {menuGroupId, menuName, menuRole:'fries'});
+    if(picked.menuFriesSauce) BK_STATE.addItem(picked.menuFriesSauce, menuNote, {menuGroupId, menuName, menuRole:'sauce'});
+    if(picked.menuDrink) BK_STATE.addItem(picked.menuDrink, menuNote, {menuGroupId, menuName, menuRole:'drink'});
+    if(!isWingsBase(product)) addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote), {menuGroupId, menuName, menuRole:'sauce'});
     return true;
   }
 
@@ -736,8 +739,8 @@
   }
 
 
-  function linkedGroupKey(productName, note){
-    return `${String(productName || '').trim()}|${baseCustomerNote(note)}`;
+  function linkedGroupKey(productName, note, menuGroupId){
+    return `${String(productName || '').trim()}|${baseCustomerNote(note)}|${menuGroupId || ''}`;
   }
 
   function groupedCartRows(items){
@@ -762,7 +765,7 @@
       }
 
       const group = Object.assign({}, line, { children: [] });
-      const groupKey = linkedGroupKey(line.name, line.note);
+      const groupKey = linkedGroupKey(line.name, line.note, line.menuGroupId);
       groups.push(group);
       parentByKey.set(groupKey, group);
       const nameKey = String(line.name || '').trim().toLowerCase();
@@ -772,7 +775,7 @@
 
     linkedChildren.forEach(child=>{
       const linked = child.linked;
-      const exactParent = parentByKey.get(linkedGroupKey(linked.productName, linked.itemNote));
+      const exactParent = parentByKey.get(linkedGroupKey(linked.productName, linked.itemNote, child.menuGroupId));
       const fallbackParents = parentsByName.get(String(linked.productName || '').trim().toLowerCase()) || [];
       const parent = exactParent || fallbackParents[fallbackParents.length - 1];
       if(parent) parent.children.push(child);
@@ -789,9 +792,9 @@
   function groupedEntryDone(slot, entry){
     const keys = [entry.key, ...(entry.children || []).map(child=>child.key)];
     return keys.every(key=>{
-      const [id, note=''] = BK_LOGIC.parseItemKey(key);
+      const [id, note='', menuGroupId=''] = BK_LOGIC.parseItemKey(key);
       return slot.items
-        .filter(it=> it.itemId===id && (it.note||'')===note)
+        .filter(it=> it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId))
         .every(it=>!!it.done);
     });
   }
@@ -877,7 +880,7 @@
   }
 
   function packagingLabel(slot){
-    return slot && slot.packMode === 'split' ? 'Pack separately' : 'Pack together';
+    return slot && slot.packMode === 'split' ? 'Single items packed separately' : 'Eligible single items packed together';
   }
 
   function choosePackaging(slotIndex){
@@ -886,7 +889,7 @@
     if(!slot || slot.issued) return Promise.resolve(false);
     BK_STATE.setActive(slotIndex);
     renderSlotsBar();
-    return confirmDialog('Packaging preference', 'Choose how this order should be packed.', {
+    return confirmDialog('Packaging preference', 'Choose how eligible single food items should be packed. Every menu always uses its own large paper bag. Cold drinks always use plastic bags.', {
       cancelLabel: 'Pack separately',
       confirmLabel: 'Pack together'
     }).then(together=>{
@@ -1015,7 +1018,35 @@
 
     const c = BK_LOGIC.computeSlot(s);
     setSlotTotals(c.subtotal, 0, c.subtotal);
-    ensureFlowActions('orderFlowNav', [{ label:'➡️ Go to Make', onClick:()=> goTab('make') }]);
+    const orderNext = workflowNextState('order', s);
+    renderWorkflowNext('orderFlowNav', Object.assign({}, orderNext, {onClick:()=>goTab(orderNext.target)}));
+  }
+
+  function workflowNextState(stage, slot){
+    const hasItems = !!(slot && Array.isArray(slot.items) && slot.items.length);
+    if(stage === 'order') return hasItems
+      ? {state:'ready', title:'Order ready for kitchen', detail:'Products and packaging can now be sent to preparation.', label:'Continue to Kitchen', target:'make', disabled:false}
+      : {state:'blocked', title:'Order not ready', detail:'Add at least one product to continue.', label:'Continue to Kitchen', target:'make', disabled:true};
+    if(stage === 'make'){
+      const done = hasItems && slot.items.every(item=>!!item.done);
+      return done
+        ? {state:'ready', title:'Kitchen complete', detail:'All items are prepared.', label:slot.pay === 'unpaid' ? 'Continue to Payment' : 'Continue to Handover', target:slot.pay === 'unpaid' ? 'pay' : 'issue', disabled:false}
+        : {state:'blocked', title:'Kitchen preparation required', detail:'Mark every item as prepared to continue.', label:'Continue to Payment', target:'pay', disabled:true};
+    }
+    if(stage === 'pay') return hasItems && slot.pay !== 'unpaid'
+      ? {state:'ready', title:'Payment complete', detail:'Payment is confirmed. Continue with the same order to handover.', label:'Continue to Handover', target:'issue', disabled:false}
+      : {state:'blocked', title:'Payment required', detail:'Confirm Cash or MoMo payment to continue.', label:'Continue to Handover', target:'issue', disabled:true};
+    return {state:'blocked', title:'Step incomplete', detail:'Complete this step to continue.', label:'Continue', target:'order', disabled:true};
+  }
+
+  function renderWorkflowNext(hostId, options){
+    const host = document.getElementById(hostId);
+    if(!host) return;
+    const opts = options || {};
+    host.className = `workflow-next ${opts.state || 'blocked'}`;
+    host.innerHTML = `<div class="workflow-next-copy"><strong>${escapeHtml(opts.title || '')}</strong><small>${escapeHtml(opts.detail || '')}</small></div><button type="button" class="workflow-next-button" ${opts.disabled ? 'disabled' : ''}>${escapeHtml(opts.label || 'Continue')}</button>`;
+    const button = host.querySelector('.workflow-next-button');
+    button.onclick = ()=>{ if(!button.disabled && typeof opts.onClick === 'function') opts.onClick(); };
   }
 
   function currentWorkflowTab(){
@@ -1070,6 +1101,7 @@
     slots.forEach((s,i)=>{
       const c = BK_LOGIC.computeSlot(s);
       const progress = kitchenProgress(s);
+      const makeNext = workflowNextState('make', s);
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
         <div class="slot-head">
@@ -1079,11 +1111,11 @@
         <div class="kitchen-progress ${progress.state}">
           <div class="kitchen-progress-copy"><strong>${progress.label}</strong><span>${progress.complete} of ${progress.total} items prepared</span><small>${progress.detail}</small></div>
           <div class="kitchen-progress-track" role="progressbar" aria-label="Kitchen progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="width:${progress.percent}%"></span></div>
-          ${progress.state === 'complete' && !s.issued ? `<button class="kitchen-next-action" type="button">${s.pay === 'unpaid' ? 'Continue to Payment' : 'Go to Handover'}</button>` : ''}
+          ${progress.state === 'complete' && !s.issued ? `<button class="workflow-next-button kitchen-next-action" type="button">${makeNext.label}</button>` : ''}
         </div>
         <div class="todo grouped-todo" id="todo-${i}"></div>`;
       const nextAction = card.querySelector('.kitchen-next-action');
-      if(nextAction) nextAction.onclick = ()=> focusSlot(i, s.pay === 'unpaid' ? 'pay' : 'issue');
+      if(nextAction) nextAction.onclick = ()=> focusSlot(i, makeNext.target);
       card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
       makeSlotCardSelectable(card, i, 'make', i === active);
       box.appendChild(card);
@@ -1103,8 +1135,7 @@
       });
     });
     ensureFlowActions('makeList', [
-      { label:'⬅️ Back to Order', onClick:()=> goTab('order') },
-      { label:'➡️ Go to Payment', onClick:()=> goTab('pay') }
+      { label:'⬅️ Back to Order', onClick:()=> goTab('order') }
     ]);
   }
 
@@ -1162,6 +1193,7 @@
     slots.forEach((s,i)=>{
       const c = BK_LOGIC.computeSlot(s);
       const payment = paymentDisplay(s);
+      const payNext = workflowNextState('pay', s);
       const paymentDisabled = s.issued || !Array.isArray(s.items) || s.items.length === 0;
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
@@ -1176,13 +1208,18 @@
             <button class="payment-method ${s.pay === 'cash' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'cash');">Cash</button>
             <button class="payment-method ${s.pay === 'momo' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'momo');">MoMo</button>
           </div>
+        </div>
+        <div class="workflow-next ${payNext.state}">
+          <div class="workflow-next-copy"><strong>${payNext.title}</strong><small>${payNext.detail}</small></div>
+          <button type="button" class="workflow-next-button payment-next-action" ${payNext.disabled ? 'disabled' : ''}>${payNext.label}</button>
         </div>`;
+      const paymentNext = card.querySelector('.payment-next-action');
+      paymentNext.onclick = ()=>{ if(!paymentNext.disabled) focusSlot(i, payNext.target); };
       makeSlotCardSelectable(card, i, 'pay', i === active);
       box.appendChild(card);
     });
     ensureFlowActions('payList', [
-      { label:'⬅️ Back to Make', onClick:()=> goTab('make') },
-      { label:'➡️ Go to Issue / Handover', onClick:()=> goTab('issue') }
+      { label:'⬅️ Back to Make', onClick:()=> goTab('make') }
     ]);
   }
 
@@ -1207,7 +1244,7 @@
     if(!paid && !kitchenDone) return { state:'blocked', label:'2 steps remaining', detail:'Payment required · Kitchen not finished', action:'Go to Payment', target:'pay' };
     if(!paid) return { state:'blocked', label:'Payment required', detail:'Complete payment before handover.', action:'Go to Payment', target:'pay' };
     if(!kitchenDone) return { state:'waiting', label:'Kitchen not finished', detail:'Complete every kitchen item before handover.', action:'Go to Make', target:'make' };
-    return { state:'ready', label:'Ready for handover', detail:'Paid and all kitchen items are complete.', action:'Start final handover', target:'issue' };
+    return { state:'ready', label:'Ready for handover', detail:'Paid and all kitchen items are complete.', action:'Start Final Handover', target:'issue' };
   }
 
   function renderIssue(){
@@ -1234,9 +1271,9 @@
             ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
           </div>
         </div>
-        <div class="issue-readiness ${readiness.state}">
-          <div><strong>${readiness.label}</strong><small>${readiness.detail}</small></div>
-          <button class="issue-next-action" ${readiness.disabled ? 'disabled' : ''}>${readiness.action}</button>
+        <div class="workflow-next issue-readiness ${readiness.state}">
+          <div class="workflow-next-copy"><strong>${readiness.label}</strong><small>${readiness.detail}</small></div>
+          <button class="workflow-next-button issue-next-action" ${readiness.disabled ? 'disabled' : ''}>${readiness.action}</button>
         </div>`;
       const actionButton = card.querySelector('.issue-next-action');
       actionButton.onclick = ()=>{
@@ -1605,101 +1642,11 @@
     renderSlotsBar();
     renderIssue();
     refreshTotals();
-    const lines = groupedCartRows(slot.items || []);
-    const checkHtml = lines.length
-      ? `<div class="handover-check-section"><div class="handover-check-section-title">Order items</div>${lines.map(entry=>`
-        <label class="handover-check-row grouped-meal compact">
-          <input type="checkbox" data-handover-check />
-          <span class="handover-check-content">
-            <span class="grouped-meal-head"><span class="grouped-meal-title"><b>${entry.qty}x ${entry.name}</b>${splitEntryNoteLines(entry.note).map((note, idx)=>`<small>${idx ? '↳ ' : ''}${note}</small>`).join('')}</span></span>
-            ${(entry.children || []).map(child=>`<span class="grouped-meal-child">↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''}</span>`).join('')}
-          </span>
-        </label>`).join('')}</div>`
-      : '<div>No items in this order.</div>';
-
-    const usage = window.BK_STOCK && typeof BK_STOCK.getUsageForSlot === 'function'
-      ? BK_STOCK.getUsageForSlot(slot)
-      : {};
-    const slotItems = Array.isArray(slot.items) ? slot.items : [];
-    const productByItemId = id => (BK_DATA.BASE || []).find(p=> p.id === id) || null;
-    const isDrinkItem = it=>{
-      const p = productByItemId(it.itemId);
-      return !!(p && p.cat === 'drink');
-    };
-    const isFoodItem = it=>{
-      const p = productByItemId(it.itemId);
-      if(!p) return false;
-      return p.cat !== 'drink' && p.cat !== 'extra' && !String(p.id || '').startsWith('x_sauce_');
-    };
-    const isMenuLinkedChild = it=>{
-      const linked = parseLinkedModifierNote(it && it.note);
-      return !!(linked && linked.prefix === 'menu');
-    };
-    const menuChildCount = slotItems.filter(isMenuLinkedChild).length;
-    const drinkCount = slotItems.filter(isDrinkItem).length;
-    const foodCount = slotItems.filter(isFoodItem).length;
-    const packRules = getPackagingRules();
-    const slotPackMode = slot && slot.packMode === 'split' ? 'split' : 'shared';
-
-    function handoverPackagingRows(){
-      const rows = [];
-      const nameFor = id=> {
-        const def = ingredientDefs[id];
-        return def && def.name ? def.name : prettyName(id);
-      };
-      if(drinkCount > 0){
-        rows.push({ id:packRules.drinkBagId, name:`${nameFor(packRules.drinkBagId)} (drinks only)`, qty: 1, unit:'pcs' });
-      }
-      if(foodCount <= 0) return rows;
-      if(slotPackMode === 'split'){
-        rows.push({ id:packRules.foodBagSmallId, name:nameFor(packRules.foodBagSmallId), qty: foodCount, unit:'pcs' });
-      }else if(menuChildCount >= Number(packRules.largeMenuChildMin) || foodCount >= Number(packRules.largeFoodMin)){
-        rows.push({ id:packRules.foodBagLargeId, name:nameFor(packRules.foodBagLargeId), qty: 1, unit:'pcs' });
-      }else if(foodCount >= Number(packRules.mediumFoodMin)){
-        rows.push({ id:packRules.foodBagMediumId, name:nameFor(packRules.foodBagMediumId), qty: 1, unit:'pcs' });
-      }else{
-        rows.push({ id:packRules.foodBagSmallId, name:nameFor(packRules.foodBagSmallId), qty: 1, unit:'pcs' });
-      }
-      return rows;
-    }
-    const ingredientDefs = window.BK_STOCK && typeof BK_STOCK.getIngredients === 'function'
-      ? BK_STOCK.getIngredients()
-      : {};
-    const extraRows = Object.entries(usage)
-      .map(([id, qty])=>{
-        const def = ingredientDefs[id];
-        if(!def || Number(qty) <= 0) return null;
-        const cat = String(def.category || '').toLowerCase();
-        const name = String(def.name || '').toLowerCase();
-        const isNapkin = id === 'napkin' || name.includes('napkin') || name.includes('serviette');
-        const isCutlery = cat === 'cutlery' || name.includes('fork') || name.includes('spoon');
-        const isDrinkPackaging = id === 'white_plastic_bag';
-        const isCustomerPackaging = ['small_bag','medium_paper_bag','small_paper_bag','large_paper_bag','sauce_cup','standard_fries_cup','large_fries_cup'].includes(id);
-        const isChecklistExtra = isNapkin || isCutlery || isDrinkPackaging || isCustomerPackaging;
-        const isKitchenOnly = id === 'aluminium_foil';
-        if(isKitchenOnly) return null;
-        if(!isChecklistExtra) return null;
-        return { id, name: def.name || id, qty: Number(qty), unit: def.unit || '' };
-      })
-      .filter(Boolean)
-      .sort((a,b)=> a.name.localeCompare(b.name));
-    const packagingRows = handoverPackagingRows();
-    const essentialsRows = extraRows.filter(r=> /napkin|serviette|fork|spoon/i.test(String(r.name || r.id || '')));
-    const packagingIds = new Set(packagingRows.map(row=>row.id));
-    const addonRows = extraRows.filter(r=> !essentialsRows.includes(r) && !packagingIds.has(r.id));
-    const sectionHtml = (title, rows, tone)=>{
-      if(!rows.length) return '';
-      return `<div class="handover-extra-section ${tone || ''}">
-        <div class="handover-extra-title">${title}</div>
-        ${rows.map(row=>`<label class="handover-extra-row handover-check-row"><input type="checkbox" data-handover-check /><span class="left">${prettyName(row.name)} <span class="handover-pill">Required</span></span><b>${row.qty}${row.unit ? ` ${row.unit}` : ''}</b></label>`).join('')}
-      </div>`;
-    };
-    const extrasHtml = (packagingRows.length || essentialsRows.length || addonRows.length)
-      ? `<div style="margin:8px 0 6px"><b>Handover extras:</b></div>${sectionHtml('Bags', packagingRows, 'tone-bag')}${sectionHtml('Essentials', essentialsRows, 'tone-essential')}${sectionHtml('Add-ons', addonRows, 'tone-addon')}`
-      : '';
+    const handoverPlan = buildHandoverPlan(slot);
+    const checklistHtml = handoverPlanHtml(handoverPlan);
     handoverChecklistDialog(
       `Final handover check – ${slot.orderNo || slot.name}`,
-      `<div style="margin-bottom:8px">Check every required item before handing this order to the customer.</div><div class="final-packaging-mode"><b>Packaging:</b> ${packagingLabel(slot)}</div>${checkHtml}${extrasHtml}`
+      `<div style="margin-bottom:8px">Read from top to bottom. Every menu has its own food bag; cold drinks always use plastic bags.</div><div class="final-packaging-mode"><b>Customer preference:</b> ${packagingLabel(slot)} · <b>Menu rule:</b> every menu stays separate</div>${checklistHtml}`
     ).then(ok=>{
       if(!ok) return;
       const latestSlot = BK_STATE.getState().slots[i];
@@ -2318,7 +2265,9 @@
         foodBagLargeId: 'large_paper_bag',
         mediumFoodMin: 2,
         largeFoodMin: 4,
-        largeMenuChildMin: 2
+        largeMenuChildMin: 2,
+        drinksPerPlasticBag: 2,
+        singleFoodUnitsPerLargeBag: 3
       };
       try{
         const parsed = JSON.parse(localStorage.getItem(PACK_RULES_KEY) || '{}');

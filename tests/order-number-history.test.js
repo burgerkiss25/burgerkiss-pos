@@ -5,6 +5,7 @@ const vm = require('vm');
 
 const root = path.resolve(__dirname, '..');
 const stateCode = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
+const logicCode = fs.readFileSync(path.join(root, 'logic.js'), 'utf8');
 const uiCode = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
 
 function createStorage(seed = {}) {
@@ -165,6 +166,10 @@ function testIssuedOrderHistoryRecovery() {
   await testAtomicRemoteSequence();
   await testDuplicateRepair();
   testIssuedOrderHistoryRecovery();
+  testInlineWorkflowProgression();
+  testMenuGroupsRemainSeparate();
+  testMenuHandoverPackagingPlan();
+  await testMenuMetadataPersistence();
   console.log('Order number and history regression tests passed.');
 })().catch(error => {
   console.error(error);
