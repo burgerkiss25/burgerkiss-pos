@@ -1301,7 +1301,8 @@
       box.appendChild(card);
     });
     ensureFlowActions('issueList', [
-      { label:'⬅️ Back to Payment', onClick:()=> goTab('pay') }
+      { label:'⬅️ Back to Payment', onClick:()=> goTab('pay') },
+      { label:'➡️ Go to Order', onClick:()=> goTab('order') }
     ]);
   }
 
@@ -1631,134 +1632,6 @@
     state.active = preservedActive >= 0 ? preservedActive : Math.min(state.active, Math.max(0, state.slots.length - 1));
     BK_STATE.setState(state);
     return completed.length;
-  }
-
-  function handoverProduct(itemId){
-    return (BK_DATA.BASE || []).find(product=>product.id === itemId) || {id:itemId, name:prettyName(itemId), cat:''};
-  }
-  function handoverLine(item, qty){
-    const product = handoverProduct(item.itemId);
-    return {id:item.itemId, name:product.name || prettyName(item.itemId), qty:Number(qty) || 1, note:item.note || '', cat:product.cat || '', role:item.menuRole || ''};
-  }
-  function buildHandoverPlan(slot){
-    const sourceItems = Array.isArray(slot && slot.items) ? slot.items : [];
-    const menuGroups = new Map();
-    const ungrouped = [];
-    sourceItems.forEach(item=>{
-      if(item && item.menuGroupId){
-        if(!menuGroups.has(item.menuGroupId)) menuGroups.set(item.menuGroupId, []);
-        menuGroups.get(item.menuGroupId).push(item);
-      }else{
-        ungrouped.push(item);
-      }
-    });
-
-    const menus = [];
-    menuGroups.forEach((items, groupId)=>{
-      const mains = items.filter(item=>item.menuRole === 'main');
-      const count = Math.max(1, mains.length);
-      const blocks = Array.from({length:count}, (_, index)=>({
-        groupId:`${groupId}-${index+1}`,
-        name:(mains[index] && mains[index].menuName) || (items[0] && items[0].menuName) || 'Menu',
-        items:[], noSauce:!!(mains[index] && mains[index].menuNoSauce), wings:false
-      }));
-      const roleOffsets = {};
-      items.forEach(item=>{
-        if(item.menuRole === 'addon') return;
-        let targetIndex;
-        if(item.menuRole === 'main') targetIndex = Math.max(0, mains.indexOf(item));
-        else{
-          const role = item.menuRole || 'item';
-          targetIndex = (roleOffsets[role] || 0) % count;
-          roleOffsets[role] = (roleOffsets[role] || 0) + 1;
-        }
-        const block = blocks[Math.min(targetIndex, blocks.length-1)];
-        const line = handoverLine(item, 1);
-        if(line.cat === 'wings' || /^wings_/i.test(line.id)) block.wings = true;
-        block.items.push(line);
-      });
-      blocks.forEach(block=>menus.push(block));
-    });
-
-    const legacyStandalone = [];
-    groupedCartRows(ungrouped).forEach(entry=>{
-      if(hasMenuChildren(entry)){
-        const menuCount = Math.max(1, Number(entry.qty) || 1);
-        for(let index=0; index<menuCount; index++){
-          const mainProduct = handoverProduct(entry.id);
-          const block = {groupId:`legacy-${menus.length+1}`, name:`${entry.name} Menu`, items:[{id:entry.id,name:entry.name,qty:1,note:entry.note||'',cat:mainProduct.cat||'',role:'main'}], noSauce:false, wings:mainProduct.cat === 'wings'};
-          (entry.children || []).forEach(child=>{
-            const perMenu = Math.max(1, Math.ceil((Number(child.qty)||1) / menuCount));
-            for(let n=0;n<perMenu;n++){
-              const childProduct = handoverProduct(child.id);
-              block.items.push({id:child.id,name:child.name,qty:1,note:child.note||'',cat:childProduct.cat||'',role:childProduct.cat === 'drink' ? 'drink' : (String(child.id).startsWith('x_sauce_') ? 'sauce' : 'item')});
-            }
-          });
-          block.noSauce = !block.items.some(item=>item.role === 'sauce');
-          menus.push(block);
-        }
-      }else{
-        legacyStandalone.push(entry);
-      }
-    });
-
-    const standalone = legacyStandalone.filter(entry=>{
-      const product = handoverProduct(entry.id);
-      return !(product.cat === 'extra' || String(entry.id || '').startsWith('x_'));
-    }).map(entry=>{
-      const product = handoverProduct(entry.id);
-      return Object.assign({}, entry, {cat:product.cat || '', children:(entry.children || []).filter(child=>String(child.id || '').startsWith('x_sauce_'))});
-    });
-
-    const menuDrinkCount = menus.reduce((total, menu)=> total + menu.items.filter(item=>item.cat === 'drink' || item.role === 'drink').reduce((sum,item)=>sum+item.qty,0), 0);
-    const standaloneDrinkCount = standalone.filter(entry=>entry.cat === 'drink').reduce((total,entry)=>total+(Number(entry.qty)||0),0);
-    const standaloneFood = standalone.filter(entry=>entry.cat !== 'drink');
-    const eligiblePaperItems = standaloneFood.filter(entry=>entry.cat !== 'salad' && entry.cat !== 'wings');
-    const eligibleUnits = eligiblePaperItems.reduce((total,entry)=>total+(Number(entry.qty)||0),0);
-    const packaging = [];
-    const rules = getPackagingRules();
-    const drinksPerBag = Math.max(1, Number(rules.drinksPerPlasticBag) || 2);
-    const drinkCount = menuDrinkCount + standaloneDrinkCount;
-    if(drinkCount) packaging.push({name:'Plastic Bag — drinks only', qty:Math.ceil(drinkCount / drinksPerBag), kind:'drink'});
-    const wingsCount = standaloneFood.filter(entry=>entry.cat === 'wings').reduce((total,entry)=>total+(Number(entry.qty)||0),0);
-    const saladCount = standaloneFood.filter(entry=>entry.cat === 'salad').reduce((total,entry)=>total+(Number(entry.qty)||0),0);
-    if(wingsCount) packaging.push({name:'Wings Box', qty:wingsCount, kind:'food'});
-    if(saladCount) packaging.push({name:'Salad Container', qty:saladCount, kind:'food'});
-    if(eligibleUnits){
-      if(slot && slot.packMode === 'split') packaging.push({name:'Small Paper Bag — single food item', qty:eligibleUnits, kind:'food'});
-      else if(eligibleUnits === 1) packaging.push({name:'Small Paper Bag — single food items', qty:1, kind:'food'});
-      else if(eligibleUnits === 2) packaging.push({name:'Medium Paper Bag — single food items', qty:1, kind:'food'});
-      else packaging.push({name:'Large Paper Bag — single food items', qty:Math.ceil(eligibleUnits / Math.max(1, Number(rules.singleFoodUnitsPerLargeBag)||3)), kind:'food'});
-    }
-    return {
-      menus,
-      standalone,
-      packaging,
-      standaloneNapkins:standaloneFood.length ? standaloneFood.reduce((total,entry)=>total+(Number(entry.qty)||0),0) * 2 : 0,
-      drinkCount
-    };
-  }
-
-  function handoverCheckRow(name, detail, qty){
-    return `<label class="handover-check-row"><input type="checkbox" data-handover-check /><span class="handover-check-content"><b>${Number(qty)||1}x ${escapeHtml(name)}</b>${detail ? `<small>${escapeHtml(detail)}</small>` : ''}</span></label>`;
-  }
-  function handoverPlanHtml(plan){
-    const menuHtml = plan.menus.map((menu,index)=>{
-      const productRows = menu.items.map(item=>{
-        const detail = item.cat === 'drink' || item.role === 'drink' ? 'Place in the drinks plastic bag' : splitEntryNoteLines(item.note).join(' · ');
-        return handoverCheckRow(item.name, detail, item.qty);
-      }).join('');
-      const sauceInfo = menu.noSauce ? '<div class="handover-menu-info">No sauce requested</div>' : '';
-      const directPackage = menu.wings ? handoverCheckRow('Wings Box', 'Inside this menu food bag', 1) : '';
-      return `<section class="handover-menu-block"><div class="handover-menu-heading"><strong>MENU ${index+1} — ${escapeHtml(menu.name)}</strong><span>BAG ${index+1}</span></div>${productRows}${sauceInfo}${handoverCheckRow('Napkins', 'For this menu', 2)}${directPackage}${handoverCheckRow('Large Paper Bag', 'This menu only · food only', 1)}</section>`;
-    }).join('');
-    const standaloneHtml = plan.standalone.length ? `<section class="handover-check-section"><div class="handover-check-section-title">Single items</div>${plan.standalone.map(entry=>{
-      const childSauces = (entry.children || []).map(child=>handoverCheckRow(child.name, `For ${entry.name}`, child.qty)).join('');
-      return `${handoverCheckRow(entry.name, splitEntryNoteLines(entry.note).join(' · '), entry.qty)}${childSauces}`;
-    }).join('')}</section>` : '';
-    const essentialsHtml = plan.standaloneNapkins ? `<section class="handover-check-section"><div class="handover-check-section-title">Handover essentials</div>${handoverCheckRow('Napkins', 'For single food items', plan.standaloneNapkins)}</section>` : '';
-    const packagingHtml = plan.packaging.length ? `<section class="handover-check-section"><div class="handover-check-section-title">Additional packaging</div>${plan.packaging.map(row=>handoverCheckRow(row.name, row.kind === 'drink' ? 'Cold drinks never go in paper bags' : '', row.qty)).join('')}</section>` : '';
-    return `${menuHtml}${standaloneHtml}${essentialsHtml}${packagingHtml}` || '<div>No items in this order.</div>';
   }
 
   function markIssued(i){
@@ -2428,7 +2301,7 @@
     renderStock,
     openSummary, closeSummary, openHistory, closeHistory, openHistoryOrder, closeHistoryOrder, reprintHistoryOrder, voidSelectedHistoryOrder,
     exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, clearHistoryFilters,
-    openDailyReport, closeDailyReport, renderDailyReport, exportDailyReportCsv, printDailyReport, dailyReportData, voidHistoryOrder, archiveCompletedSlots, workflowNextState, buildHandoverPlan, handoverPlanHtml,
+    openDailyReport, closeDailyReport, renderDailyReport, exportDailyReportCsv, printDailyReport, dailyReportData, voidHistoryOrder, archiveCompletedSlots,
     openStockOverview, closeStockOverview,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
