@@ -160,6 +160,8 @@
 
 
 
+
+
   function remoteEnabled(){
     return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database);
   }
