@@ -686,7 +686,7 @@
     if(!bar) return;
     bar.querySelectorAll('.slot-chip').forEach(n=>n.remove());
 
-    const controlIds = ['btnAddSlot', 'btnRenameSlot', 'btnDeleteSlot'];
+    const controlIds = ['btnAddSlot', 'btnOnlineOrder', 'btnRenameSlot', 'btnDeleteSlot'];
     const ctl = controlIds
       .map(id => document.getElementById(id))
       .filter(Boolean)

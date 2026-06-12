@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – POS</title>
-  <link rel="stylesheet" href="./style.css?v=42" />
+  <link rel="stylesheet" href="./style.css?v=43" />
 
   <!-- POS-Konfiguration aus externer Datei -->
   <script src="./firebase-config.js?v=2"></script>
@@ -62,6 +62,7 @@
       <div class="toolbar slot-tools" id="slotsBar" aria-label="Order slots">
         <!-- Slot-Verwaltung: wird im Force-Slot-Modus in main.js deaktiviert -->
         <button class="chip primary-chip" id="btnAddSlot" type="button">+ Slot</button>
+        <button class="chip online-order-trigger" id="btnOnlineOrder" type="button">+ Online Order</button>
       </div>
 
       <details class="tool-menu discount-menu">
@@ -277,7 +278,7 @@
   <script src="./stock.js?v=18"></script>
   <script src="./state.js?v=18"></script>
   <script src="./logic.js?v=14"></script>
-  <script src="./ui.js?v=42"></script>
+  <script src="./ui.js?v=43"></script>
   <script src="./main.js?v=19"></script>
 
   <!-- =============== Live-Sync (Variante B, Polling) =============== -->
