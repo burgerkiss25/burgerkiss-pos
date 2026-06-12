@@ -3,7 +3,7 @@
 // Geräte auf demselben Slot (volle Spiegelung).
 
 (function(){
-  if (window.BK_SYNC_ENABLED === false) return;
+  if (window.BK_SYNC_ENABLED === false || window.BK_LEGACY_SLOT_SYNC_ENABLED !== true) return;
   if (!window.FIREBASE_CONFIG) return;
 
   function later(fn, ms){ return setTimeout(fn, ms); }
