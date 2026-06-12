@@ -267,7 +267,10 @@ function testMenuHandoverPackagingPlan() {
   assert.ok(html.includes('MENU 1'));
   assert.ok(html.includes('MENU 2'));
   assert.ok(html.includes('Plastic Bag — drinks only'));
-  assert.ok(!/Paper Cup|Burger Bun|Beef Patty/.test(html));
+  assert.strictEqual((html.match(/data-handover-check/g) || []).length, 3, 'two menus plus one shared packaging card require only three confirmations');
+  assert.ok(!html.includes('menu for Hamburger'));
+  assert.ok(html.includes('1x Ketchup'));
+  assert.ok(!/Extra Ketchup|Sauce Cup|Paper Cup|Burger Bun|Beef Patty/.test(html));
 
   const noSaucePlan = context.BK_UI.buildHandoverPlan({packMode:'shared', items:[
     {itemId:'hamburger', note:'', menuGroupId:'menu-no-sauce', menuName:'Hamburger Menu', menuRole:'main', menuNoSauce:true},
@@ -301,6 +304,26 @@ async function testMenuMetadataPersistence() {
   assert.strictEqual(item.menuNoSauce, true);
 }
 
+async function testOnlineOrderMetadataAndConversion() {
+  const context = runState(createStorage(), {BK_SYNC_ENABLED:false});
+  context.BK_STATE.load();
+  await context.BK_STATE.whenReady();
+  await context.BK_STATE.addSlot('ONLINE', {orderSource:'bolt', externalOrderNo:'BOLT-123', pay:'bolt'});
+  let slot = context.BK_STATE.getState().slots[0];
+  assert.strictEqual(slot.orderSource, 'bolt');
+  assert.strictEqual(slot.externalOrderNo, 'BOLT-123');
+  assert.strictEqual(slot.pay, 'bolt');
+  context.BK_STATE.updateSlot(0, {
+    originalSource:'bolt', originalPay:'bolt', finalChannel:'direct', fulfilment:'burgerkiss-delivery',
+    conversionReason:'Bolt rider did not pick up', refundStatus:'expected-pending', convertedAt:12345, pay:'cash'
+  });
+  slot = context.BK_STATE.getState().slots[0];
+  assert.strictEqual(slot.pay, 'cash');
+  assert.strictEqual(slot.originalSource, 'bolt');
+  assert.strictEqual(slot.refundStatus, 'expected-pending');
+  assert.strictEqual(slot.fulfilment, 'burgerkiss-delivery');
+}
+
 (async () => {
   await testPersistentLocalSequence();
   await testAtomicRemoteSequence();
@@ -310,6 +333,7 @@ async function testMenuMetadataPersistence() {
   testMenuGroupsRemainSeparate();
   testMenuHandoverPackagingPlan();
   await testMenuMetadataPersistence();
+  await testOnlineOrderMetadataAndConversion();
   console.log('Order number and history regression tests passed.');
 })().catch(error => {
   console.error(error);

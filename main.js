@@ -28,7 +28,7 @@
   // Schutz gegen fehlerhafte Merge-Duplikate in index.html
   removeDuplicateIds([
     'tabOrder','tabMake','tabPay','tabIssue',
-    'btnSummary','btnStockOverview','btnHistory','btnDailyReport','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup',
+    'btnSummary','btnStockOverview','btnHistory','btnDailyReport','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup','btnOnlineOrder',
     'btnUndo','btnReset','btnClearDisc','btnClearStorage',
     'btnAddSlot','btnRenameSlot','btnDeleteSlot','activeSlotLabel',
     'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalHistory','modalHistoryDetail','modalDailyReport','modalReceipt','modalStockOverview'
@@ -123,6 +123,7 @@
 
   // Group
   document.getElementById('btnGroup').onclick = ()=> BK_UI.openGroup();
+  document.getElementById('btnOnlineOrder').onclick = ()=> BK_UI.openOnlineOrderDialog();
   document.getElementById('gClose').onclick   = ()=> BK_UI.closeGroup();
   document.getElementById('gMake').onclick    = ()=> BK_UI.groupMakeReceipt();
   document.getElementById('gPaid').onclick    = ()=> BK_UI.groupMarkPaid();

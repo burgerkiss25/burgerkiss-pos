@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – POS</title>
-  <link rel="stylesheet" href="./style.css?v=40" />
+  <link rel="stylesheet" href="./style.css?v=42" />
 
   <!-- POS-Konfiguration aus externer Datei -->
   <script src="./firebase-config.js?v=2"></script>
@@ -46,6 +46,7 @@
           <button class="x" id="btnDailyReport">Daily Report</button>
           <button class="x" id="btnReceipt">Receipt</button>
           <button class="x" id="btnGroup">Group Ticket</button>
+          <button class="x online-order-trigger" id="btnOnlineOrder">+ Online Order</button>
           <button class="x danger-link" id="btnReset">Reset Order</button>
           <button class="x" id="btnClearStorage">Clear Storage</button>
           <a class="x admin-link" href="admin.html">Admin</a>
@@ -169,7 +170,7 @@
       <header>
         <b>Order History</b>
         <div>
-          <input id="hSearch" placeholder="Search order no / slot" style="min-width:220px;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:8px" />
+          <input id="hSearch" placeholder="Search order / platform reference" style="min-width:220px;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:8px" />
           <button class="x" id="hToday">Today</button>
           <button class="x" id="hClear">Clear Filters</button>
           <button class="x" id="hExportJson">Export JSON</button>
@@ -266,7 +267,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
   <!-- ====================== App-Skripte ====================== -->
-  <script src="./data.js?v=12"></script>
+  <script src="./data.js?v=13"></script>
   <script src="./prices.js?v=14"></script>
   <script src="./products.js?v=14"></script>
   <script src="./menus.js?v=2"></script>
@@ -274,10 +275,10 @@
   <script src="./stock_data.js?v=13"></script>
   <script src="./stock_utils.js?v=15"></script>
   <script src="./stock.js?v=18"></script>
-  <script src="./state.js?v=17"></script>
+  <script src="./state.js?v=18"></script>
   <script src="./logic.js?v=14"></script>
-  <script src="./ui.js?v=41"></script>
-  <script src="./main.js?v=18"></script>
+  <script src="./ui.js?v=42"></script>
+  <script src="./main.js?v=19"></script>
 
   <!-- =============== Live-Sync (Variante B, Polling) =============== -->
   <script src="./sync_poll.js?v=13"></script>

@@ -7,7 +7,8 @@
   let discountRate = 0;
   let orderSeq = 0;
   const history = [];
-  const PAY_SET = new Set(['unpaid', 'cash', 'momo']);
+  const PAY_SET = new Set(['unpaid', 'cash', 'momo', 'bolt', 'hubtel', 'chowdeck']);
+  const SOURCE_SET = new Set(['walkin', 'bolt', 'hubtel', 'chowdeck']);
 
   function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
   function normalizeDiscount(v){
@@ -39,7 +40,16 @@
       packMode: (slot && slot.packMode === 'split') ? 'split' : 'shared',
       packAsked: !!(slot && slot.packAsked),
       orderNo: (slot && typeof slot.orderNo==='string' && slot.orderNo.trim()) ? slot.orderNo.trim() : null,
-      createdAt: Number(slot && slot.createdAt) > 0 ? Number(slot.createdAt) : Date.now()
+      createdAt: Number(slot && slot.createdAt) > 0 ? Number(slot.createdAt) : Date.now(),
+      orderSource: SOURCE_SET.has(slot && slot.orderSource) ? slot.orderSource : 'walkin',
+      externalOrderNo: String((slot && slot.externalOrderNo) || '').trim(),
+      originalSource: SOURCE_SET.has(slot && slot.originalSource) ? slot.originalSource : '',
+      originalPay: PAY_SET.has(slot && slot.originalPay) ? slot.originalPay : '',
+      finalChannel: String((slot && slot.finalChannel) || ''),
+      fulfilment: String((slot && slot.fulfilment) || ''),
+      conversionReason: String((slot && slot.conversionReason) || ''),
+      refundStatus: String((slot && slot.refundStatus) || ''),
+      convertedAt: Number(slot && slot.convertedAt) || 0
     };
   }
   function normalizeState(st){
@@ -150,6 +160,7 @@
 
 
 
+
   function remoteEnabled(){
     return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database);
   }
@@ -240,10 +251,13 @@
     if(slots.length) return Promise.resolve(active);
     return addSlot();
   }
-  function addSlot(label){
+  function addSlot(label, meta){
     const idx = slots.length+1;
+    const details = meta && typeof meta === 'object' ? meta : {};
     return allocateOrderNo().then(function(orderNo){
-      slots.push({name: label || `SN${idx}`, items: [], pay:'unpaid', issued:false, voided:false, voidReason:'', packMode:'shared', packAsked:false, orderNo, createdAt: Date.now()});
+      const source = SOURCE_SET.has(details.orderSource) ? details.orderSource : 'walkin';
+      const pay = PAY_SET.has(details.pay) ? details.pay : (source === 'walkin' ? 'unpaid' : source);
+      slots.push({name: label || `SN${idx}`, items: [], pay, issued:false, voided:false, voidReason:'', packMode:'shared', packAsked:false, orderNo, createdAt: Date.now(), orderSource:source, externalOrderNo:String(details.externalOrderNo || '').trim(), originalSource:'', originalPay:'', finalChannel:'', fulfilment:'', conversionReason:'', refundStatus:'', convertedAt:0});
       active = slots.length-1;
       save();
       return active;
@@ -326,6 +340,13 @@
     slots[i].pay = PAY_SET.has(status) ? status : 'unpaid';
     save();
   }
+  function updateSlot(i, changes){
+    if(!slots[i] || !changes || typeof changes !== 'object' || slots[i].issued) return false;
+    const next = Object.assign({}, slots[i], changes);
+    slots[i] = normalizeSlot(next, i);
+    save();
+    return true;
+  }
   function setIssued(i, v){
     if(!slots[i]) return;
     if(slots[i].issued && v===false) return;
@@ -368,7 +389,7 @@
   // expose
   window.BK_STATE = {
     load, save, clearAll, clearStorage,
-    addSlot, renameActive, deleteActive, setActive,
+    addSlot, renameActive, deleteActive, setActive, updateSlot,
     setActiveName,
     addItem, addItemForKey, undo, decItemForKey, removeItemForKey, setPay, setIssued, toggleDone, setDoneForKey,
     setPackMode,

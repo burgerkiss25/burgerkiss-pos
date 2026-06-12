@@ -521,7 +521,7 @@
     if(['fries_standard', 'fries_large', 'fries_family'].includes(product.id)){
       const picked = await openModifierSheet(`${product.name} options`, [
         { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one free sauce for this fries item.', options:sauceOptions() },
-        { title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add several paid sauces.', options:paidSauceOptions() }
+        { title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add several paid extra sauces.', options:paidSauceOptions() }
       ], { note: pendingNote });
       const extraSummary = describeQuantities(picked.extraSauce);
       const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
@@ -538,7 +538,7 @@
           {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'},
           {label:'Chipotle', value:'x_sauce_chipotle'}
         ]},
-        { title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add extra sauce cups.', options:paidSauceOptions() }
+        { title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add paid extra sauces.', options:paidSauceOptions() }
       ], { note: pendingNote });
       addWingsExtras(product, picked);
     }else{
@@ -567,7 +567,7 @@
       }));
     const sections = [
       { title:'Menu fries', name:'menuFries', type:'radio', help:'Standard fries are included; large fries add the upgrade difference.', options:friesOptions },
-      { title:'Menu fries sauce', name:'menuFriesSauce', type:'radio', help:'Choose one sauce cup to hand over with menu fries. Ketchup is selected unless the customer asks for another sauce or no sauce.', options:sauceOptions().map(option=>Object.assign({}, option, {checked:option.value === 'x_sauce_ketchup'})) },
+      { title:'Menu fries sauce', name:'menuFriesSauce', type:'radio', help:'Choose the included menu sauce. Ketchup is selected unless the customer asks for another sauce or no sauce.', options:sauceOptions().map(option=>Object.assign({}, option, {checked:option.value === 'x_sauce_ketchup'})) },
       { title:'Menu drink', name:'menuDrink', type:'radio', help:'Choose the drink for this menu.', options:drinkOptions }
     ];
     if(isBurgerBase(product)) sections.push(...burgerExtraSections(product));
@@ -576,7 +576,7 @@
       {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings', checked: defaultWingsSauce === 'x_sauce_chicken_wings'},
       {label:'Chipotle', value:'x_sauce_chipotle', checked: defaultWingsSauce === 'x_sauce_chipotle'}
     ]});
-    sections.push({ title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add extra sauce cups.', options:paidSauceOptions() });
+    sections.push({ title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add paid extra sauces.', options:paidSauceOptions() });
 
     const picked = await openModifierSheet(menuPreset.name || `${product.name} guided menu`, sections, {
       note: pendingNote,
@@ -595,9 +595,9 @@
 
     const menuNote = modifierLinkNote('menu', product.name, picked.itemNote);
     if(picked.menuFries) BK_STATE.addItem(picked.menuFries, menuNote, {menuGroupId, menuName, menuRole:'fries'});
-    if(picked.menuFriesSauce) BK_STATE.addItem(picked.menuFriesSauce, menuNote, {menuGroupId, menuName, menuRole:'sauce'});
+    if(picked.menuFriesSauce) BK_STATE.addItem(picked.menuFriesSauce, menuNote, {menuGroupId, menuName, menuRole:'included-sauce'});
     if(picked.menuDrink) BK_STATE.addItem(picked.menuDrink, menuNote, {menuGroupId, menuName, menuRole:'drink'});
-    if(!isWingsBase(product)) addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote), {menuGroupId, menuName, menuRole:'sauce'});
+    if(!isWingsBase(product)) addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote), {menuGroupId, menuName, menuRole:'extra-sauce'});
     return true;
   }
 
@@ -681,7 +681,7 @@
     const activeSlot = slots[active];
     if(activeLabel){
       const activeStatus = activeSlot ? slotStatus(activeSlot) : null;
-      activeLabel.textContent = activeSlot ? `${activeSlot.name} · #${activeSlot.orderNo || '-'} · ${activeStatus.label}` : 'No active order';
+      activeLabel.textContent = activeSlot ? `${activeSlot.name} · #${activeSlot.orderNo || '-'} · ${orderChannelText(activeSlot)} · ${activeStatus.label}` : 'No active order';
     }
     if(!bar) return;
     bar.querySelectorAll('.slot-chip').forEach(n=>n.remove());
@@ -700,7 +700,7 @@
       el.setAttribute('aria-label', `${s.name}, order ${s.orderNo || 'not assigned'}, ${status.label}, ${status.detail}`);
       if(i === active) el.setAttribute('aria-current', 'true');
       el.title = `${status.label} · ${status.detail}`;
-      el.innerHTML = `<span class="status-dot" aria-hidden="true"></span><span class="slot-chip-order"><b>${s.name}</b><small>#${s.orderNo || '-'}</small></span><span class="slot-chip-status">${status.label}</span><span class="slot-chip-progress">${status.shortDetail}</span>`;
+      el.innerHTML = `<span class="status-dot" aria-hidden="true"></span><span class="slot-chip-order"><b>${isOnlineOrder(s) ? platformLabel(s.orderSource).toUpperCase() : s.name}</b><small>${isOnlineOrder(s) ? escapeHtml(s.externalOrderNo || s.orderNo || '-') : `#${s.orderNo || '-'}`}</small></span><span class="slot-chip-status">${status.label}</span><span class="slot-chip-progress">${status.shortDetail}</span>`;
       el.onclick = ()=> focusSlot(i, currentWorkflowTab());
       bar.appendChild(el);
     });
@@ -764,7 +764,8 @@
         return;
       }
 
-      const group = Object.assign({}, line, { children: [] });
+      const sourceItem = (items || []).find(item=>item.menuGroupId && item.menuGroupId === line.menuGroupId && item.menuRole === 'main');
+      const group = Object.assign({}, line, { children: [], menuName:sourceItem && sourceItem.menuName ? sourceItem.menuName : '' });
       const groupKey = linkedGroupKey(line.name, line.note, line.menuGroupId);
       groups.push(group);
       parentByKey.set(groupKey, group);
@@ -847,7 +848,7 @@
     const titleWrap = document.createElement('span');
     titleWrap.className = 'grouped-meal-title';
     const title = document.createElement('b');
-    title.textContent = `${entry.qty}x ${entry.name}`;
+    title.textContent = settings.displayTitle || `${entry.qty}x ${entry.name}`;
     titleWrap.appendChild(title);
     splitEntryNoteLines(entry.note).forEach((line, idx)=>{
       const note = document.createElement('small');
@@ -867,8 +868,11 @@
     (entry.children || []).forEach(child=>{
       const childLine = document.createElement('div');
       childLine.className = 'grouped-meal-child';
-      const childNote = splitEntryNoteLines(child.note);
-      childLine.textContent = `↳ ${child.qty}x ${child.name}${childNote.length ? ` · ${childNote[0]}` : ''}${showPrices ? ` · ${child.total} GHS` : ''}`;
+      const linkedKind = child.linked && child.linked.kind;
+      const childRole = linkedKind === 'menu' ? 'included-sauce' : (linkedKind === 'extra' ? 'extra-sauce' : '');
+      const childName = staffFacingItemName({name:child.name, role:childRole});
+      const childNote = linkedKind ? [] : splitEntryNoteLines(child.note);
+      childLine.textContent = `↳ ${child.qty}x ${childName}${childNote.length ? ` · ${childNote[0]}` : ''}${showPrices ? ` · ${child.total} GHS` : ''}`;
       row.appendChild(childLine);
       childNote.slice(1).forEach(line=>{
         const extraLine = document.createElement('div');
@@ -1038,7 +1042,7 @@
     }
     if(stage === 'pay') return hasItems && slot.pay !== 'unpaid'
       ? {state:'ready', title:'Payment complete', detail:'Payment is confirmed. Continue with the same order to handover.', label:'Continue to Handover', target:'issue', disabled:false}
-      : {state:'blocked', title:'Payment required', detail:'Confirm Cash or MoMo payment to continue.', label:'Continue to Handover', target:'issue', disabled:true};
+      : {state:'blocked', title:'Payment required', detail:'Confirm Cash or MoMo payment to continue. Online orders are already paid.', label:'Continue to Handover', target:'issue', disabled:true};
     return {state:'blocked', title:'Step incomplete', detail:'Complete this step to continue.', label:'Continue', target:'order', disabled:true};
   }
 
@@ -1107,7 +1111,7 @@
       const card = document.createElement('div'); card.className='slot-card kitchen-order-card';
       card.innerHTML = `
         <div class="slot-head kitchen-order-head">
-          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · In kitchen: ${formatAge(s.createdAt)}</div>
+          <div><span class="label">${isOnlineOrder(s) ? platformLabel(s.orderSource).toUpperCase() : s.name}</span> · ${isOnlineOrder(s) ? escapeHtml(s.externalOrderNo || '') + ' · ' : ''}#${s.orderNo || '-'} · In kitchen: ${formatAge(s.createdAt)}</div>
           ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
         </div>
         <div class="kitchen-progress ${progress.state}">
@@ -1122,9 +1126,15 @@
       makeSlotCardSelectable(card, i, 'make', i === active);
       box.appendChild(card);
       const list = card.querySelector(`#todo-${i}`);
+      let menuNumber = 0;
+      let singleNumber = 0;
       groupedCartRows(s.items).forEach(entry=>{
+        const displayTitle = entry.menuGroupId
+          ? `MENU ${++menuNumber} — ${entry.menuName || `${entry.name} Menu`}`
+          : `SINGLE ITEM ${++singleNumber} — ${entry.qty}x ${entry.name}`;
         appendGroupedEntry(list, s, entry, i, {
           checkbox: true,
+          displayTitle,
           showPrices: false,
           kitchen: true,
           onToggle: (picked, done)=>{
@@ -1144,13 +1154,11 @@
   }
 
   function paymentDisplay(slot){
-    if(slot.issued){
-      const method = slot.pay === 'momo' ? 'MoMo' : (slot.pay === 'cash' ? 'Cash' : 'Unknown method');
-      return { state:'locked', label:'Payment locked', detail:`${method} · Order issued` };
-    }
+    if(slot.issued) return { state:'locked', label:'Payment locked', detail:`${paymentLabel(slot.pay)} · Order issued` };
     if(!Array.isArray(slot.items) || slot.items.length === 0) return { state:'empty', label:'Nothing to pay', detail:'Add products before taking payment' };
-    if(slot.pay === 'cash') return { state:'paid', label:'Paid by Cash', detail:'Payment confirmed' };
-    if(slot.pay === 'momo') return { state:'paid', label:'Paid by MoMo', detail:'Payment confirmed' };
+    if(isOnlineOrder(slot) && slot.finalChannel !== 'direct') return { state:'paid', label:`Paid via ${platformLabel(slot.orderSource)}`, detail:`Online payment · ${slot.externalOrderNo || 'platform reference missing'}` };
+    if(slot.pay === 'cash') return { state:'paid', label:'Paid by Cash', detail:slot.finalChannel === 'direct' ? 'Converted online order · direct payment' : 'Payment confirmed' };
+    if(slot.pay === 'momo') return { state:'paid', label:'Paid by MoMo', detail:slot.finalChannel === 'direct' ? 'Converted online order · direct payment' : 'Payment confirmed' };
     return { state:'pending', label:'Payment pending', detail:'Select the payment method after receiving payment' };
   }
 
@@ -1208,11 +1216,11 @@
         </div>
         <div class="payment-panel ${payment.state}">
           <div class="payment-summary"><strong>${payment.label}</strong><small>${payment.detail}</small></div>
-          <div class="payment-methods" role="group" aria-label="Payment method for ${s.name}">
+          ${isOnlineOrder(s) && s.finalChannel !== 'direct' ? `<div class="online-paid-lock"><b>${platformLabel(s.orderSource)} payment recorded</b><small>No additional payment step is required.</small></div>` : `<div class="payment-methods" role="group" aria-label="Payment method for ${s.name}">
             <button class="payment-method ${s.pay === 'unpaid' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'unpaid');">Unpaid</button>
             <button class="payment-method ${s.pay === 'cash' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'cash');">Cash</button>
             <button class="payment-method ${s.pay === 'momo' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'momo');">MoMo</button>
-          </div>
+          </div>`}
         </div>
         <div class="workflow-next ${payNext.state}">
           <div class="workflow-next-copy"><strong>${payNext.title}</strong><small>${payNext.detail}</small></div>
@@ -1272,6 +1280,8 @@
     if(!paid && !kitchenDone) return { state:'blocked', label:'2 steps remaining', detail:'Payment required · Kitchen not finished', action:'Go to Payment', target:'pay' };
     if(!paid) return { state:'blocked', label:'Payment required', detail:'Complete payment before handover.', action:'Go to Payment', target:'pay' };
     if(!kitchenDone) return { state:'waiting', label:'Kitchen not finished', detail:'Complete every kitchen item before handover.', action:'Go to Make', target:'make' };
+    if(isOnlineOrder(slot) && slot.finalChannel !== 'direct') return { state:'ready', label:'Ready for pickup', detail:`Prepared and paid via ${platformLabel(slot.orderSource)}.`, action:`Handed to ${platformLabel(slot.orderSource)} Rider`, target:'issue' };
+    if(slot.finalChannel === 'direct') return { state:'ready', label:'Ready for direct delivery', detail:`Collect ${paymentLabel(slot.pay)} · ${slot.fulfilment === 'customer-rider' ? 'Customer-arranged rider' : 'BurgerKiss delivery'}.`, action:slot.fulfilment === 'customer-rider' ? 'Handed to Customer Rider' : 'Handed to BurgerKiss Rider', target:'issue' };
     return { state:'ready', label:'Ready for handover', detail:'Paid and all kitchen items are complete.', action:'Start Final Handover', target:'issue' };
   }
 
@@ -1301,8 +1311,10 @@
         </div>
         <div class="workflow-next issue-readiness ${readiness.state}">
           <div class="workflow-next-copy"><strong>${readiness.label}</strong><small>${readiness.detail}</small></div>
-          <button class="workflow-next-button issue-next-action" ${readiness.disabled ? 'disabled' : ''}>${readiness.action}</button>
+          <div class="issue-action-group"><button class="workflow-next-button issue-next-action" ${readiness.disabled ? 'disabled' : ''}>${readiness.action}</button>${readiness.state === 'ready' && isOnlineOrder(s) && s.finalChannel !== 'direct' ? `<button class="x rider-missed-action" type="button">Rider Did Not Pick Up</button>` : ''}</div>
         </div>`;
+      const riderMissedButton = card.querySelector('.rider-missed-action');
+      if(riderMissedButton) riderMissedButton.onclick = ()=>convertOnlineOrder(i);
       const actionButton = card.querySelector('.issue-next-action');
       actionButton.onclick = ()=>{
         if(readiness.disabled) return;
@@ -1485,6 +1497,93 @@
     }).catch(showOrderNumberError);
   }
 
+  const ONLINE_PLATFORMS = new Set(['bolt','hubtel','chowdeck']);
+  function platformLabel(value){
+    const labels = {walkin:'Walk-in', bolt:'Bolt', hubtel:'Hubtel', chowdeck:'Chowdeck'};
+    return labels[String(value || '').toLowerCase()] || 'Walk-in';
+  }
+  function isOnlineOrder(slot){ return !!(slot && ONLINE_PLATFORMS.has(slot.orderSource)); }
+  function paymentLabel(pay){ return ({unpaid:'Unpaid',cash:'Cash',momo:'MoMo',bolt:'Bolt',hubtel:'Hubtel',chowdeck:'Chowdeck'})[pay] || String(pay || 'Unknown'); }
+  function orderChannelText(slot){
+    if(!slot) return '';
+    if(slot.finalChannel === 'direct') return `${platformLabel(slot.originalSource || slot.orderSource)} → Direct ${paymentLabel(slot.pay)}`;
+    return isOnlineOrder(slot) ? `${platformLabel(slot.orderSource)} · ${slot.externalOrderNo || 'No reference'}` : 'Walk-in';
+  }
+  function onlineOrderExists(platform, reference){
+    const key = `${platform}|${String(reference || '').trim().toLowerCase()}`;
+    const active = BK_STATE.getState().slots.some(slot=>`${slot.orderSource}|${String(slot.externalOrderNo || '').trim().toLowerCase()}` === key);
+    const archived = getHistory().some(entry=>`${entry.orderSource}|${String(entry.externalOrderNo || '').trim().toLowerCase()}` === key);
+    return active || archived;
+  }
+  function openOnlineOrderDialog(){
+    const host = ensureDialogHost();
+    document.getElementById('appDialogTitle').textContent = 'New online order';
+    document.getElementById('appDialogBody').innerHTML = `
+      <p>Enter the order from the delivery platform. It will be marked as paid online and sent directly to the kitchen.</p>
+      <label class="dialog-label">Platform<select id="onlinePlatform" class="dialog-field"><option value="bolt">Bolt</option><option value="hubtel">Hubtel</option><option value="chowdeck">Chowdeck</option></select></label>
+      <label class="dialog-label">Platform order number<input id="onlineReference" class="dialog-field" maxlength="80" placeholder="e.g. BOLT-847263" autocomplete="off"></label>
+      <div id="onlineOrderError" class="field-error"></div>
+      <div class="dialog-actions"><button class="x" id="dlgCancel">Cancel</button><button class="x modifier-primary" id="dlgConfirm">Create Online Order</button></div>`;
+    host.classList.add('open');
+    const reference = document.getElementById('onlineReference');
+    reference.focus();
+    document.getElementById('dlgCancel').onclick = closeDialog;
+    document.getElementById('dlgConfirm').onclick = ()=>{
+      const platform = document.getElementById('onlinePlatform').value;
+      const externalOrderNo = reference.value.trim();
+      const error = document.getElementById('onlineOrderError');
+      if(!externalOrderNo){ error.textContent = 'The platform order number is required.'; return; }
+      if(onlineOrderExists(platform, externalOrderNo)){ error.textContent = `This ${platformLabel(platform)} order already exists.`; return; }
+      const state = BK_STATE.getState();
+      const current = state.slots[state.active];
+      const finish = index=>{
+        BK_STATE.setActive(index);
+        closeDialog();
+        renderAll();
+        goTab('order');
+        infoDialog(`${platformLabel(platform)} order ${externalOrderNo} created. Payment is already recorded; enter the products and continue to Kitchen.`);
+      };
+      if(current && !current.items.length && current.pay === 'unpaid'){
+        BK_STATE.updateSlot(state.active, {orderSource:platform, externalOrderNo, pay:platform});
+        finish(state.active);
+      }else{
+        BK_STATE.addSlot(undefined, {orderSource:platform, externalOrderNo, pay:platform}).then(finish).catch(showOrderNumberError);
+      }
+    };
+  }
+  function convertOnlineOrder(slotIndex){
+    const slot = BK_STATE.getState().slots[slotIndex];
+    if(!slot || !isOnlineOrder(slot) || slot.finalChannel === 'direct') return;
+    const host = ensureDialogHost();
+    const platform = platformLabel(slot.orderSource);
+    document.getElementById('appDialogTitle').textContent = `${platform} rider did not pick up`;
+    document.getElementById('appDialogBody').innerHTML = `
+      <p>The platform refund is expected and may remain pending for several hours. Convert this same prepared order without waiting for platform confirmation.</p>
+      <div class="online-conversion-summary"><b>${escapeHtml(slot.externalOrderNo || slot.orderNo)}</b><span>${BK_LOGIC.computeSlot(slot).subtotal} GHS</span></div>
+      <label class="dialog-label">Delivery<select id="conversionFulfilment" class="dialog-field"><option value="burgerkiss-delivery">BurgerKiss will deliver</option><option value="customer-rider">Customer will send a rider</option></select></label>
+      <label class="dialog-label">Direct payment<select id="conversionPayment" class="dialog-field"><option value="cash">Collect Cash</option><option value="momo">Collect MoMo</option></select></label>
+      <div class="dialog-actions"><button class="x" id="dlgCancel">Keep Waiting</button><button class="x modifier-primary" id="dlgConfirm">Convert to Direct Order</button></div>`;
+    host.classList.add('open');
+    document.getElementById('dlgCancel').onclick = closeDialog;
+    document.getElementById('dlgConfirm').onclick = ()=>{
+      const fulfilment = document.getElementById('conversionFulfilment').value;
+      const pay = document.getElementById('conversionPayment').value;
+      BK_STATE.updateSlot(slotIndex, {
+        originalSource:slot.orderSource,
+        originalPay:slot.pay,
+        finalChannel:'direct',
+        fulfilment,
+        conversionReason:`${platform} rider did not pick up`,
+        refundStatus:'expected-pending',
+        convertedAt:Date.now(),
+        pay
+      });
+      closeDialog();
+      focusSlot(slotIndex, 'issue');
+      renderAll();
+      infoDialog(`Order converted. ${platform} refund is recorded as expected / pending. Collect ${pay === 'cash' ? 'Cash' : 'MoMo'} and hand the order to the selected rider.`);
+    };
+  }
   function historyRemoteEnabled(){
     return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database);
   }
@@ -1514,6 +1613,15 @@
       orderNo,
       slotName: String(entry.slotName || '-'),
       pay: String(entry.pay || 'unpaid'),
+      orderSource: String(entry.orderSource || 'walkin'),
+      externalOrderNo: String(entry.externalOrderNo || ''),
+      originalSource: String(entry.originalSource || ''),
+      originalPay: String(entry.originalPay || ''),
+      finalChannel: String(entry.finalChannel || ''),
+      fulfilment: String(entry.fulfilment || ''),
+      conversionReason: String(entry.conversionReason || ''),
+      refundStatus: String(entry.refundStatus || ''),
+      convertedAt: Number(entry.convertedAt) || 0,
       issued: !!entry.issued,
       createdAt: Number(entry.createdAt) || closedAt,
       closedAt,
@@ -1609,6 +1717,15 @@
       orderNo: slot.orderNo || '-',
       slotName: slot.name || '-',
       pay: slot.pay || 'unpaid',
+      orderSource: slot.orderSource || 'walkin',
+      externalOrderNo: slot.externalOrderNo || '',
+      originalSource: slot.originalSource || '',
+      originalPay: slot.originalPay || '',
+      finalChannel: slot.finalChannel || '',
+      fulfilment: slot.fulfilment || '',
+      conversionReason: slot.conversionReason || '',
+      refundStatus: slot.refundStatus || '',
+      convertedAt: slot.convertedAt || 0,
       issued: !!slot.issued,
       createdAt: slot.createdAt || Date.now(),
       closedAt: Date.now(),
@@ -1767,26 +1884,45 @@
     };
   }
 
-  function handoverCheckRow(name, detail, qty){
-    return `<label class="handover-check-row"><input type="checkbox" data-handover-check /><span class="handover-check-content"><b>${Number(qty)||1}x ${escapeHtml(name)}</b>${detail ? `<small>${escapeHtml(detail)}</small>` : ''}</span></label>`;
+  function staffFacingItemName(item){
+    let name = String((item && item.name) || '').replace(/\s+Sauce Cup$/i, '').replace(/\s+Cup$/i, '').trim();
+    if(item && (item.role === 'included-sauce' || item.role === 'sauce')) name = name.replace(/^Extra\s+/i, '');
+    name = name.replace(/^(Extra\s+)?(Ketchup|Mayonnaise|Chipotle|Dutch Special)\s+Sauce$/i, '$1$2');
+    return name;
+  }
+  function staffFacingNote(note){
+    return splitEntryNoteLines(note).filter(line=>!/^\s*(?:included|extra|menu)?\s*for\s+/i.test(line));
+  }
+  function handoverCard(title, badge, lines){
+    return `<label class="handover-card-check"><input type="checkbox" data-handover-check /><span class="handover-card-body"><span class="handover-menu-heading"><strong>${escapeHtml(title)}</strong>${badge ? `<span>${escapeHtml(badge)}</span>` : ''}</span><span class="handover-card-lines">${lines.join('')}</span></span></label>`;
+  }
+  function handoverCardLine(name, detail, qty){
+    return `<span class="handover-card-line"><b>${Number(qty)||1}x ${escapeHtml(name)}</b>${detail ? `<small>${escapeHtml(detail)}</small>` : ''}</span>`;
   }
   function handoverPlanHtml(plan){
     const menuHtml = plan.menus.map((menu,index)=>{
-      const productRows = menu.items.map(item=>{
-        const detail = item.cat === 'drink' || item.role === 'drink' ? 'Place in the drinks plastic bag' : splitEntryNoteLines(item.note).join(' · ');
-        return handoverCheckRow(item.name, detail, item.qty);
-      }).join('');
-      const sauceInfo = menu.noSauce ? '<div class="handover-menu-info">No sauce requested</div>' : '';
-      const directPackage = menu.wings ? handoverCheckRow('Wings Box', 'Inside this menu food bag', 1) : '';
-      return `<section class="handover-menu-block"><div class="handover-menu-heading"><strong>MENU ${index+1} — ${escapeHtml(menu.name)}</strong><span>BAG ${index+1}</span></div>${productRows}${sauceInfo}${handoverCheckRow('Napkins', 'For this menu', 2)}${directPackage}${handoverCheckRow('Large Paper Bag', 'This menu only · food only', 1)}</section>`;
+      const lines = menu.items.map(item=>{
+        const detail = item.cat === 'drink' || item.role === 'drink'
+          ? 'Drinks plastic bag'
+          : staffFacingNote(item.note).join(' · ');
+        return handoverCardLine(staffFacingItemName(item), detail, item.qty);
+      });
+      if(menu.noSauce) lines.push(handoverCardLine('No sauce requested', '', 1));
+      lines.push(handoverCardLine('Napkins', '', 2));
+      if(menu.wings) lines.push(handoverCardLine('Wings Box', '', 1));
+      lines.push(handoverCardLine('Large Paper Bag', 'Food only · this menu stays separate', 1));
+      return handoverCard(`MENU ${index+1} — ${menu.name}`, `BAG ${index+1}`, lines);
     }).join('');
-    const standaloneHtml = plan.standalone.length ? `<section class="handover-check-section"><div class="handover-check-section-title">Single items</div>${plan.standalone.map(entry=>{
-      const childSauces = (entry.children || []).map(child=>handoverCheckRow(child.name, `For ${entry.name}`, child.qty)).join('');
-      return `${handoverCheckRow(entry.name, splitEntryNoteLines(entry.note).join(' · '), entry.qty)}${childSauces}`;
-    }).join('')}</section>` : '';
-    const essentialsHtml = plan.standaloneNapkins ? `<section class="handover-check-section"><div class="handover-check-section-title">Handover essentials</div>${handoverCheckRow('Napkins', 'For single food items', plan.standaloneNapkins)}</section>` : '';
-    const packagingHtml = plan.packaging.length ? `<section class="handover-check-section"><div class="handover-check-section-title">Additional packaging</div>${plan.packaging.map(row=>handoverCheckRow(row.name, row.kind === 'drink' ? 'Cold drinks never go in paper bags' : '', row.qty)).join('')}</section>` : '';
-    return `${menuHtml}${standaloneHtml}${essentialsHtml}${packagingHtml}` || '<div>No items in this order.</div>';
+    const standaloneHtml = plan.standalone.map((entry,index)=>{
+      const lines = [handoverCardLine(entry.name, staffFacingNote(entry.note).join(' · '), entry.qty)];
+      (entry.children || []).forEach(child=>lines.push(handoverCardLine(staffFacingItemName(child), '', child.qty)));
+      return handoverCard(`SINGLE ITEM ${index+1} — ${entry.name}`, '', lines);
+    }).join('');
+    const essentials = [];
+    if(plan.standaloneNapkins) essentials.push(handoverCardLine('Napkins', 'For single food items', plan.standaloneNapkins));
+    (plan.packaging || []).forEach(row=>essentials.push(handoverCardLine(row.name, row.kind === 'drink' ? 'Cold drinks only' : '', row.qty)));
+    const essentialsHtml = essentials.length ? handoverCard('PACKAGING & ESSENTIALS', '', essentials) : '';
+    return `${menuHtml}${standaloneHtml}${essentialsHtml}` || '<div>No items in this order.</div>';
   }
 
   function markIssued(i){
@@ -1800,7 +1936,7 @@
     const handoverPlan = buildHandoverPlan(slot);
     const checklistHtml = handoverPlanHtml(handoverPlan);
     handoverChecklistDialog(
-      `Final handover check – ${slot.orderNo || slot.name}`,
+      `${isOnlineOrder(slot) ? (slot.finalChannel === 'direct' ? 'Direct delivery check' : `${platformLabel(slot.orderSource)} rider pickup check`) : 'Final handover check'} – ${slot.externalOrderNo || slot.orderNo || slot.name}`,
       `<div style="margin-bottom:8px">Read from top to bottom. Every menu has its own food bag; cold drinks always use plastic bags.</div><div class="final-packaging-mode"><b>Customer preference:</b> ${packagingLabel(slot)} · <b>Menu rule:</b> every menu stays separate</div>${checklistHtml}`
     ).then(ok=>{
       if(!ok) return;
@@ -1853,17 +1989,19 @@
     const totalSales = completed.reduce((a,h)=> a + Number(h.total||h.subtotal||0), 0);
     const cashCount = completed.filter(h=>h.pay==='cash').length;
     const momoCount = completed.filter(h=>h.pay==='momo').length;
+    const onlineCount = completed.filter(h=>ONLINE_PLATFORMS.has(h.orderSource)).length;
+    const convertedCount = completed.filter(h=>h.finalChannel === 'direct').length;
     const voidCount = hist.length - completed.length;
     body.innerHTML = `
       <div class="history-summary">
         <span><b>Orders:</b> ${completed.length}</span><span><b>Cash:</b> ${cashCount}</span>
-        <span><b>MoMo:</b> ${momoCount}</span><span><b>Voided:</b> ${voidCount}</span>
+        <span><b>MoMo:</b> ${momoCount}</span><span><b>Online:</b> ${onlineCount}</span><span><b>Converted:</b> ${convertedCount}</span><span><b>Voided:</b> ${voidCount}</span>
         <span class="history-summary-total"><b>Net sales:</b> ${totalSales} GHS</span>
       </div>
       <div class="history-order-list">
       ${hist.slice(0,200).map(h=>`
         <button type="button" class="history-order-row ${h.status === 'voided' ? 'voided' : ''}" data-history-id="${escapeHtml(h.id)}">
-          <span><strong>${escapeHtml(h.orderNo)}</strong><small>${escapeHtml(h.slotName)} · ${escapeHtml(String(h.pay).toUpperCase())} · ${new Date(h.closedAt).toLocaleString()}</small></span>
+          <span><strong>${escapeHtml(h.orderNo)}</strong><small>${escapeHtml(h.externalOrderNo ? `${platformLabel(h.orderSource)} · ${h.externalOrderNo}` : h.slotName)} · ${escapeHtml(paymentLabel(h.pay))} · ${new Date(h.closedAt).toLocaleString()}</small></span>
           <span><b>${Number(h.total||h.subtotal||0)} GHS</b><small class="history-status">${historyStatusLabel(h)}</small></span>
         </button>`).join('')}
       </div>`;
@@ -1886,6 +2024,8 @@
       if(!text) return true;
       return String(h.orderNo || '').toLowerCase().includes(text)
         || String(h.slotName || '').toLowerCase().includes(text)
+        || String(h.externalOrderNo || '').toLowerCase().includes(text)
+        || String(h.orderSource || '').toLowerCase().includes(text)
         || String(h.voidReason || '').toLowerCase().includes(text);
     });
   }
@@ -1920,7 +2060,10 @@
       <div class="history-detail-meta">
         <div><small>Order number</small><strong>${escapeHtml(entry.orderNo)}</strong></div>
         <div><small>Slot</small><strong>${escapeHtml(entry.slotName)}</strong></div>
-        <div><small>Payment</small><strong>${escapeHtml(String(entry.pay).toUpperCase())}</strong></div>
+        <div><small>Payment</small><strong>${escapeHtml(paymentLabel(entry.pay))}</strong></div>
+        <div><small>Order source</small><strong>${escapeHtml(platformLabel(entry.orderSource))}</strong></div>
+        ${entry.externalOrderNo ? `<div><small>Platform reference</small><strong>${escapeHtml(entry.externalOrderNo)}</strong></div>` : ''}
+        ${entry.finalChannel === 'direct' ? `<div><small>Converted delivery</small><strong>${escapeHtml(entry.fulfilment === 'customer-rider' ? 'Customer-arranged rider' : 'BurgerKiss delivery')}</strong></div><div><small>Platform refund</small><strong>Expected / Pending</strong></div>` : ''}
         <div><small>Packaging</small><strong>${entry.packMode === 'split' ? 'Packed separately' : 'Packed together'}</strong></div>
         <div><small>Created</small><strong>${new Date(entry.createdAt).toLocaleString()}</strong></div>
         <div><small>Issued</small><strong>${new Date(entry.closedAt).toLocaleString()}</strong></div>
@@ -1943,7 +2086,7 @@
       <div><b>BurgerKiss – Receipt</b></div>
       <div>Order: <b>${escapeHtml(entry.orderNo)}</b></div>
       <div>Date: ${new Date(entry.closedAt).toLocaleString()}</div>
-      <div>Payment: ${escapeHtml(String(entry.pay).toUpperCase())}</div>
+      <div>Payment: ${escapeHtml(paymentLabel(entry.pay))}</div>
       <div>Packaging: ${entry.packMode === 'split' ? 'Packed separately' : 'Packed together'}</div>
       <hr>${historyItemsHtml(entry)}
       <div class="sumline"><span>Subtotal</span><b>${entry.subtotal} GHS</b></div>
@@ -2029,6 +2172,10 @@
       date:selected, orders, completed, voided, netSales,
       cashTotal:sum(completed.filter(entry=>entry.pay === 'cash'), 'total'),
       momoTotal:sum(completed.filter(entry=>entry.pay === 'momo'), 'total'),
+      boltTotal:sum(completed.filter(entry=>entry.pay === 'bolt'), 'total'),
+      hubtelTotal:sum(completed.filter(entry=>entry.pay === 'hubtel'), 'total'),
+      chowdeckTotal:sum(completed.filter(entry=>entry.pay === 'chowdeck'), 'total'),
+      convertedOrders:completed.filter(entry=>entry.finalChannel === 'direct').length,
       discounts:sum(completed, 'discount'),
       voidValue:sum(voided, 'total'),
       average:completed.length ? Math.round(netSales / completed.length) : 0
@@ -2041,6 +2188,10 @@
         <div><small>Net sales</small><strong>${report.netSales} GHS</strong></div>
         <div><small>Cash</small><strong>${report.cashTotal} GHS</strong></div>
         <div><small>MoMo</small><strong>${report.momoTotal} GHS</strong></div>
+        <div><small>Bolt</small><strong>${report.boltTotal} GHS</strong></div>
+        <div><small>Hubtel</small><strong>${report.hubtelTotal} GHS</strong></div>
+        <div><small>Chowdeck</small><strong>${report.chowdeckTotal} GHS</strong></div>
+        <div><small>Converted online orders</small><strong>${report.convertedOrders}</strong></div>
         <div><small>Completed orders</small><strong>${report.completed.length}</strong></div>
         <div><small>Discounts</small><strong>${report.discounts} GHS</strong></div>
         <div><small>Average order</small><strong>${report.average} GHS</strong></div>
@@ -2048,7 +2199,7 @@
         <div class="void-metric"><small>Voided value</small><strong>${report.voidValue} GHS</strong></div>
       </div>
       <div class="report-orders"><h3>Order audit</h3>${report.orders.length ? report.orders.map(entry=>`
-        <div class="report-order ${entry.status === 'voided' ? 'voided' : ''}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(String(entry.pay).toUpperCase())}${entry.voidReason ? ` · ${escapeHtml(entry.voidReason)}` : ''}</small></span><strong>${entry.total} GHS</strong></div>`).join('') : '<div class="empty-state">No orders for this date.</div>'}</div>
+        <div class="report-order ${entry.status === 'voided' ? 'voided' : ''}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(paymentLabel(entry.pay))}${entry.voidReason ? ` · ${escapeHtml(entry.voidReason)}` : ''}</small></span><strong>${entry.total} GHS</strong></div>`).join('') : '<div class="empty-state">No orders for this date.</div>'}</div>
     </div>`;
   }
   function openDailyReport(){
@@ -2065,9 +2216,9 @@
   function closeDailyReport(){ document.getElementById('modalDailyReport').classList.remove('open'); }
   function exportDailyReportCsv(){
     const report = dailyReportData(document.getElementById('reportDate').value);
-    const rows = [['orderNo','status','payment','issuedAt','subtotal','discount','total','voidReason']];
-    report.orders.forEach(entry=>rows.push([entry.orderNo,entry.status,entry.pay,new Date(entry.closedAt).toISOString(),entry.subtotal,entry.discount,entry.total,entry.voidReason]));
-    rows.push([],['SUMMARY'],['netSales',report.netSales],['cash',report.cashTotal],['momo',report.momoTotal],['discounts',report.discounts],['completedOrders',report.completed.length],['voidedOrders',report.voided.length],['voidedValue',report.voidValue]);
+    const rows = [['orderNo','status','source','platformReference','payment','fulfilment','refundStatus','issuedAt','subtotal','discount','total','voidReason']];
+    report.orders.forEach(entry=>rows.push([entry.orderNo,entry.status,entry.orderSource,entry.externalOrderNo,entry.pay,entry.fulfilment,entry.refundStatus,new Date(entry.closedAt).toISOString(),entry.subtotal,entry.discount,entry.total,entry.voidReason]));
+    rows.push([],['SUMMARY'],['netSales',report.netSales],['cash',report.cashTotal],['momo',report.momoTotal],['bolt',report.boltTotal],['hubtel',report.hubtelTotal],['chowdeck',report.chowdeckTotal],['convertedOnlineOrders',report.convertedOrders],['discounts',report.discounts],['completedOrders',report.completed.length],['voidedOrders',report.voided.length],['voidedValue',report.voidValue]);
     const csv = rows.map(row=>row.map(value=>`"${String(value == null ? '' : value).replace(/"/g,'""')}"`).join(',')).join('\n');
     downloadFile(`bk-daily-report-${report.date}.csv`, csv, 'text/csv');
   }
@@ -2464,7 +2615,7 @@
     openMenus, closeMenus, addMenuRow, saveMenus, resetMenus,
     openImages, closeImages, saveImages, resetImages,
     openStock, closeStock, saveStock, resetStock,
-    openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
+    openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid, openOnlineOrderDialog, convertOnlineOrder,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
     infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment, requestSlotPayment, continueFromPayment, choosePackaging
