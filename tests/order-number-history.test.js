@@ -187,6 +187,13 @@ function testInlineWorkflowProgression() {
   assert.strictEqual(context.BK_UI.workflowNextState('pay', prepared).disabled, true);
   assert.strictEqual(context.BK_UI.workflowNextState('pay', paid).label, 'Continue to Handover');
   assert.strictEqual(context.BK_UI.workflowNextState('pay', paid).target, 'issue');
+
+  let liveSlot = prepared;
+  context.BK_STATE.getState = () => ({slots:[liveSlot], active:0, discountRate:0});
+  liveSlot = paid;
+  let navigation = null;
+  assert.strictEqual(context.BK_UI.continueFromPayment(0, (slotIndex, target)=>{ navigation = {slotIndex, target}; }), true);
+  assert.deepStrictEqual(navigation, {slotIndex:0, target:'issue'});
 }
 
 function testMenuGroupsRemainSeparate() {

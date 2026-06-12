@@ -826,8 +826,9 @@
 
   function appendGroupedEntry(host, slot, entry, slotIndex, opts){
     const settings = opts || {};
+    const showPrices = settings.showPrices !== false;
     const row = document.createElement('div');
-    row.className = settings.compact ? 'grouped-meal compact' : 'grouped-meal';
+    row.className = `${settings.compact ? 'grouped-meal compact' : 'grouped-meal'}${settings.kitchen ? ' kitchen-entry' : ''}`;
 
     const header = document.createElement('div');
     header.className = 'grouped-meal-head';
@@ -855,17 +856,19 @@
     });
     header.appendChild(titleWrap);
 
-    const price = document.createElement('span');
-    price.className = 'grouped-meal-price';
-    price.textContent = `${groupedEntryTotal(entry)} GHS`;
-    header.appendChild(price);
+    if(showPrices){
+      const price = document.createElement('span');
+      price.className = 'grouped-meal-price';
+      price.textContent = `${groupedEntryTotal(entry)} GHS`;
+      header.appendChild(price);
+    }
     row.appendChild(header);
 
     (entry.children || []).forEach(child=>{
       const childLine = document.createElement('div');
       childLine.className = 'grouped-meal-child';
       const childNote = splitEntryNoteLines(child.note);
-      childLine.textContent = `↳ ${child.qty}x ${child.name}${childNote.length ? ` · ${childNote[0]}` : ''} · ${child.total} GHS`;
+      childLine.textContent = `↳ ${child.qty}x ${child.name}${childNote.length ? ` · ${childNote[0]}` : ''}${showPrices ? ` · ${child.total} GHS` : ''}`;
       row.appendChild(childLine);
       childNote.slice(1).forEach(line=>{
         const extraLine = document.createElement('div');
@@ -1099,13 +1102,12 @@
       return;
     }
     slots.forEach((s,i)=>{
-      const c = BK_LOGIC.computeSlot(s);
       const progress = kitchenProgress(s);
       const makeNext = workflowNextState('make', s);
-      const card = document.createElement('div'); card.className='slot-card';
+      const card = document.createElement('div'); card.className='slot-card kitchen-order-card';
       card.innerHTML = `
-        <div class="slot-head">
-          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS · Combos: ${c.combos} · In kitchen: ${formatAge(s.createdAt)}</div>
+        <div class="slot-head kitchen-order-head">
+          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · In kitchen: ${formatAge(s.createdAt)}</div>
           ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
         </div>
         <div class="kitchen-progress ${progress.state}">
@@ -1123,6 +1125,8 @@
       groupedCartRows(s.items).forEach(entry=>{
         appendGroupedEntry(list, s, entry, i, {
           checkbox: true,
+          showPrices: false,
+          kitchen: true,
           onToggle: (picked, done)=>{
             BK_STATE.setActive(i);
             setGroupedEntryDone(picked, done);
@@ -1196,6 +1200,7 @@
       const payNext = workflowNextState('pay', s);
       const paymentDisabled = s.issued || !Array.isArray(s.items) || s.items.length === 0;
       const card = document.createElement('div'); card.className='slot-card';
+      card.dataset.paymentSlot = String(i);
       card.innerHTML = `
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS</div>
@@ -1214,7 +1219,7 @@
           <button type="button" class="workflow-next-button payment-next-action" ${payNext.disabled ? 'disabled' : ''}>${payNext.label}</button>
         </div>`;
       const paymentNext = card.querySelector('.payment-next-action');
-      paymentNext.onclick = ()=>{ if(!paymentNext.disabled) focusSlot(i, payNext.target); };
+      paymentNext.onclick = ()=> continueFromPayment(i);
       makeSlotCardSelectable(card, i, 'pay', i === active);
       box.appendChild(card);
     });
@@ -1223,15 +1228,38 @@
     ]);
   }
 
+  function continueFromPayment(slotIndex, navigate){
+    const latest = BK_STATE.getState().slots[slotIndex];
+    const next = workflowNextState('pay', latest);
+    if(next.disabled){
+      infoDialog(next.detail);
+      return false;
+    }
+    const move = typeof navigate === 'function' ? navigate : focusSlot;
+    move(slotIndex, next.target);
+    return true;
+  }
+
+  function focusPaymentNextAction(slotIndex){
+    setTimeout(()=>{
+      const button = document.querySelector(`[data-payment-slot="${slotIndex}"] .payment-next-action`);
+      if(!button || button.disabled) return;
+      if(typeof button.scrollIntoView === 'function') button.scrollIntoView({block:'nearest', behavior:'smooth'});
+      if(typeof button.focus === 'function') button.focus();
+    }, 0);
+  }
+
   function setSlotPayment(slotIndex, method){
     const st = BK_STATE.getState();
-    if(!st.slots[slotIndex] || !['unpaid','cash','momo'].includes(method)) return;
+    if(!st.slots[slotIndex] || !['unpaid','cash','momo'].includes(method)) return false;
     BK_STATE.setActive(slotIndex);
     BK_STATE.setPay(slotIndex, method);
     renderSlotsBar();
     renderPay();
     renderIssue();
     refreshTotals();
+    if(method !== 'unpaid') focusPaymentNextAction(slotIndex);
+    return true;
   }
 
   function issueReadiness(slot){
@@ -2439,6 +2467,6 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment, requestSlotPayment, choosePackaging
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment, requestSlotPayment, continueFromPayment, choosePackaging
   };
 })();
