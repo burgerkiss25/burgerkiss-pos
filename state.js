@@ -20,7 +20,11 @@
     return {
       itemId: it.itemId,
       note: typeof it.note==='string' ? it.note : '',
-      done: !!it.done
+      done: !!it.done,
+      menuGroupId: typeof it.menuGroupId === 'string' ? it.menuGroupId : '',
+      menuName: typeof it.menuName === 'string' ? it.menuName : '',
+      menuRole: typeof it.menuRole === 'string' ? it.menuRole : '',
+      menuNoSauce: !!it.menuNoSauce
     };
   }
   function normalizeSlot(slot, idx){
@@ -268,9 +272,18 @@
     save();
   }
 
-  function addItem(id, note){
+  function addItem(id, note, meta){
     if(!slots.length || slots[active].issued) return;
-    slots[active].items.push({itemId:id, note: (note||'').trim(), done:false});
+    const details = meta && typeof meta === 'object' ? meta : {};
+    slots[active].items.push({
+      itemId:id,
+      note: (note||'').trim(),
+      done:false,
+      menuGroupId: typeof details.menuGroupId === 'string' ? details.menuGroupId : '',
+      menuName: typeof details.menuName === 'string' ? details.menuName : '',
+      menuRole: typeof details.menuRole === 'string' ? details.menuRole : '',
+      menuNoSauce: !!details.menuNoSauce
+    });
     history.push({slot:active});
     save();
   }
@@ -283,28 +296,29 @@
     try{
       const arr = JSON.parse(key);
       if(Array.isArray(arr) && typeof arr[0]==='string'){
-        return [arr[0], typeof arr[1]==='string' ? arr[1] : ''];
+        return [arr[0], typeof arr[1]==='string' ? arr[1] : '', typeof arr[2]==='string' ? arr[2] : ''];
       }
     }catch(e){}
     const legacy = String(key || '').split('|');
-    return [legacy[0] || '', legacy[1] || ''];
+    return [legacy[0] || '', legacy[1] || '', ''];
   }
   function addItemForKey(key){
     const s = slots[active]; if(!s || s.issued) return;
-    const [id, note=''] = parseItemKey(key);
+    const [id, note='', menuGroupId=''] = parseItemKey(key);
     if(!id) return;
-    addItem(id, note);
+    const source = s.items.find(it=>it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId));
+    addItem(id, note, source || {});
   }
   function decItemForKey(key){
     const s = slots[active]; if(!s || s.issued) return;
-    const [id, note=''] = parseItemKey(key);
-    const idx = s.items.findIndex(it => it.itemId===id && (it.note||'')===note);
+    const [id, note='', menuGroupId=''] = parseItemKey(key);
+    const idx = s.items.findIndex(it => it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId));
     if(idx>-1){ s.items.splice(idx,1); save(); }
   }
   function removeItemForKey(key){
     const s = slots[active]; if(!s || s.issued) return;
-    const [id, note=''] = parseItemKey(key);
-    const next = s.items.filter(it => !(it.itemId===id && (it.note||'')===note));
+    const [id, note='', menuGroupId=''] = parseItemKey(key);
+    const next = s.items.filter(it => !(it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId)));
     if(next.length !== s.items.length){ s.items = next; save(); }
   }
   function setPay(i,status){
@@ -331,10 +345,10 @@
   }
   function setDoneForKey(key, v){
     const s = slots[active]; if(!s || s.issued) return;
-    const [id, note=''] = parseItemKey(key);
+    const [id, note='', menuGroupId=''] = parseItemKey(key);
     let changed = false;
     s.items.forEach(it=>{
-      if(it.itemId===id && (it.note||'')===note){ it.done = !!v; changed = true; }
+      if(it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId)){ it.done = !!v; changed = true; }
     });
     if(changed) save();
   }

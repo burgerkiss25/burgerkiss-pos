@@ -5,6 +5,7 @@ const vm = require('vm');
 
 const root = path.resolve(__dirname, '..');
 const stateCode = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
+const logicCode = fs.readFileSync(path.join(root, 'logic.js'), 'utf8');
 const uiCode = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
 
 function createStorage(seed = {}) {
@@ -188,12 +189,113 @@ function testInlineWorkflowProgression() {
   assert.strictEqual(context.BK_UI.workflowNextState('pay', paid).target, 'issue');
 }
 
+function testMenuGroupsRemainSeparate() {
+  const context = {
+    console, Map, Set, Date, Math, Number, String, Array, Object, JSON,
+    BK_DATA: {BASE:[{id:'hamburger', name:'Hamburger'}], MENU:{included:{fries:0, drink:0}, comboDiscount:0}},
+    BK_PRICES: {getPrice: () => 100}
+  };
+  context.window = context;
+  vm.createContext(context);
+  vm.runInContext(logicCode, context);
+  const lines = context.BK_LOGIC.groupedLines([
+    {itemId:'hamburger', note:'', menuGroupId:'menu-a'},
+    {itemId:'hamburger', note:'', menuGroupId:'menu-b'}
+  ]);
+  assert.strictEqual(lines.length, 2);
+  assert.deepStrictEqual(Array.from(lines, line=>line.menuGroupId), ['menu-a', 'menu-b']);
+  assert.notStrictEqual(lines[0].key, lines[1].key);
+}
+
+function testMenuHandoverPackagingPlan() {
+  const storage = createStorage();
+  const products = [
+    {id:'hamburger', name:'Hamburger', cat:'burger'},
+    {id:'fries_standard', name:'Fries Standard', cat:'fries'},
+    {id:'d_cola', name:'Cola', cat:'drink'},
+    {id:'d_sprite', name:'Sprite', cat:'drink'},
+    {id:'x_sauce_ketchup', name:'Ketchup Sauce', cat:'sauce'}
+  ];
+  const groupedLines = items => {
+    const map = new Map();
+    items.forEach(item=>{
+      const key = JSON.stringify([item.itemId, item.note || '']);
+      if(!map.has(key)){
+        const product = products.find(entry=>entry.id === item.itemId) || {name:item.itemId};
+        map.set(key, {id:item.itemId, name:product.name, note:item.note || '', qty:0, total:0, key});
+      }
+      map.get(key).qty += 1;
+    });
+    return Array.from(map.values());
+  };
+  const context = {
+    console, Promise, Map, Set, Date, Math, Number, String, Array, Object, JSON,
+    localStorage: storage, document: {getElementById: () => null}, setTimeout, clearTimeout,
+    BK_SYNC_ENABLED: false,
+    BK_STATE: {getState: () => ({slots: [], active: 0, discountRate: 0})},
+    BK_LOGIC: {groupedLines, parseItemKey:key=>JSON.parse(key)},
+    BK_DATA: {BASE: products}
+  };
+  context.window = context;
+  vm.createContext(context);
+  vm.runInContext(uiCode, context);
+
+  const menuItems = (groupId, drinkId) => [
+    {itemId:'hamburger', note:'', menuGroupId:groupId, menuName:'Hamburger Menu', menuRole:'main'},
+    {itemId:'fries_standard', note:'menu for Hamburger', menuGroupId:groupId, menuName:'Hamburger Menu', menuRole:'fries'},
+    {itemId:'x_sauce_ketchup', note:'menu for Hamburger', menuGroupId:groupId, menuName:'Hamburger Menu', menuRole:'sauce'},
+    {itemId:drinkId, note:'menu for Hamburger', menuGroupId:groupId, menuName:'Hamburger Menu', menuRole:'drink'}
+  ];
+  const slot = {packMode:'shared', items:[...menuItems('menu-a','d_cola'), ...menuItems('menu-b','d_sprite')]};
+  const plan = context.BK_UI.buildHandoverPlan(slot);
+  assert.strictEqual(plan.menus.length, 2);
+  assert.strictEqual(plan.menus[0].name, 'Hamburger Menu');
+  assert.strictEqual(plan.menus[1].name, 'Hamburger Menu');
+  assert.strictEqual(plan.menus.every(menu=>menu.items.some(item=>item.role === 'drink')), true);
+  assert.strictEqual(plan.packaging.find(row=>row.kind === 'drink').qty, 1);
+  assert.strictEqual(plan.packaging.some(row=>/Small Paper Bag/.test(row.name)), false);
+  const html = context.BK_UI.handoverPlanHtml(plan);
+  assert.strictEqual((html.match(/Large Paper Bag/g) || []).length, 2);
+  assert.strictEqual((html.match(/2x Napkins/g) || []).length, 2);
+  assert.ok(html.includes('MENU 1'));
+  assert.ok(html.includes('MENU 2'));
+  assert.ok(html.includes('Plastic Bag — drinks only'));
+  assert.ok(!/Paper Cup|Burger Bun|Beef Patty/.test(html));
+
+  const singlePlan = context.BK_UI.buildHandoverPlan({packMode:'shared', items:[
+    {itemId:'hamburger',note:''},{itemId:'hamburger',note:''},{itemId:'fries_standard',note:''}
+  ]});
+  assert.strictEqual(singlePlan.menus.length, 0);
+  assert.strictEqual(singlePlan.packaging.find(row=>/Large Paper Bag/.test(row.name)).qty, 1);
+  const crowdedPlan = context.BK_UI.buildHandoverPlan({packMode:'shared', items:[
+    {itemId:'hamburger',note:''},{itemId:'hamburger',note:''},{itemId:'fries_standard',note:''},{itemId:'fries_standard',note:''}
+  ]});
+  assert.strictEqual(crowdedPlan.packaging.find(row=>/Large Paper Bag/.test(row.name)).qty, 2);
+}
+
+async function testMenuMetadataPersistence() {
+  const saved = {bk_state_v5: JSON.stringify({v:5, active:0, discountRate:0, orderSeq:1, slots:[{
+    name:'SN1', orderNo:'BK-20260612-00000001', items:[{itemId:'hamburger', note:'', menuGroupId:'menu-a', menuName:'Hamburger Menu', menuRole:'main', menuNoSauce:true}]
+  }]})};
+  const context = runState(createStorage(saved), {BK_SYNC_ENABLED:false});
+  context.BK_STATE.load();
+  await context.BK_STATE.whenReady();
+  const item = context.BK_STATE.getState().slots[0].items[0];
+  assert.strictEqual(item.menuGroupId, 'menu-a');
+  assert.strictEqual(item.menuName, 'Hamburger Menu');
+  assert.strictEqual(item.menuRole, 'main');
+  assert.strictEqual(item.menuNoSauce, true);
+}
+
 (async () => {
   await testPersistentLocalSequence();
   await testAtomicRemoteSequence();
   await testDuplicateRepair();
   testIssuedOrderHistoryRecovery();
   testInlineWorkflowProgression();
+  testMenuGroupsRemainSeparate();
+  testMenuHandoverPackagingPlan();
+  await testMenuMetadataPersistence();
   console.log('Order number and history regression tests passed.');
 })().catch(error => {
   console.error(error);
