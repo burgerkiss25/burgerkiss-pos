@@ -1,7 +1,7 @@
 // Preis-/Combo-Logik (pro Slot + global)
 (function(){
-  function makeItemKey(itemId, note){
-    return JSON.stringify([itemId, note || '']);
+  function makeItemKey(itemId, note, menuGroupId){
+    return JSON.stringify([itemId, note || '', menuGroupId || '']);
   }
   function isIncludedSauce(itemId, note){
     return String(note || '').toLowerCase().startsWith('included') && String(itemId || '').startsWith('x_sauce_');
@@ -10,11 +10,11 @@
     try{
       const arr = JSON.parse(key);
       if(Array.isArray(arr) && typeof arr[0]==='string'){
-        return [arr[0], typeof arr[1]==='string' ? arr[1] : ''];
+        return [arr[0], typeof arr[1]==='string' ? arr[1] : '', typeof arr[2]==='string' ? arr[2] : ''];
       }
     }catch(e){}
     const legacy = String(key || '').split('|');
-    return [legacy[0] || '', legacy[1] || ''];
+    return [legacy[0] || '', legacy[1] || '', ''];
   }
 
   function computeSlot(slot){
@@ -90,7 +90,7 @@
   function groupCounts(items){
     const counts={};
     items.forEach(it=>{
-      const key = makeItemKey(it.itemId, it.note || '');
+      const key = makeItemKey(it.itemId, it.note || '', it.menuGroupId || '');
       counts[key]=(counts[key]||0)+1;
     });
     return counts;
@@ -98,10 +98,10 @@
   function groupedLines(items){
     const counts = groupCounts(items);
     return Object.entries(counts).map(([key,qty])=>{
-      const [id, note=''] = parseItemKey(key);
+      const [id, note='', menuGroupId=''] = parseItemKey(key);
       const p = BK_DATA.BASE.find(x=>x.id===id);
       const unit = isIncludedSauce(id, note) ? 0 : BK_PRICES.getPrice(id);
-      return { id, note, qty, name: p ? p.name : id, total: qty*unit, key };
+      return { id, note, menuGroupId, qty, name: p ? p.name : id, total: qty*unit, key };
     });
   }
   function textLines(items){
