@@ -47,6 +47,8 @@ Kopiere nur das Objekt mit den Werten in `window.FIREBASE_CONFIG`.
 4. Optional Pfad/Slot ändern:
    - `window.BK_SYNC_PATH` (Standard: `/pos/live`)
    - `window.BK_SYNC_FORCE_SLOT` (Standard: `SN1`)
+   - `window.BK_ORDER_COUNTER_PATH` (Standard: `/pos/counters/orderNumber`)
+   - `window.BK_LEGACY_SLOT_SYNC_ENABLED` muss für mehrere Bestell-Slots `false` bleiben
 
 Beispiel:
 
@@ -92,6 +94,7 @@ pos/stock/recipes
 pos/stock/inventory
 pos/stock/addons
 pos/history
+pos/counters/orderNumber
 ```
 
 Wenn später Sicherheit aktiviert wird, ersetzen wir diese Entwicklungsregeln durch Rollen-/Auth-Regeln.
@@ -108,6 +111,16 @@ Diese Regeln sind für später, wenn Mitarbeiter Zugriff bekommen und Sicherheit
         "$slot": {
           ".read": "auth != null",
           ".write": "auth != null"
+        }
+      },
+      "history": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      },
+      "counters": {
+        "orderNumber": {
+          ".read": "auth != null",
+          ".write": "auth != null && newData.isNumber() && ((!data.exists() && newData.val() >= 1) || newData.val() > data.val())"
         }
       }
     }
@@ -128,3 +141,4 @@ Diese Regeln sind für später, wenn Mitarbeiter Zugriff bekommen und Sicherheit
 ## Hinweis
 - Die App speichert weiterhin lokal (`localStorage`) als Fallback.
 - Online Sync und State-Persistenz aktivieren sich nur, wenn `window.FIREBASE_CONFIG` gesetzt ist.
+- Mit aktivierter Online-Datenbank reserviert die App jede Bestellnummer atomar unter `pos/counters/orderNumber`. Wenn keine eindeutige Nummer reserviert werden kann, wird aus Sicherheitsgründen keine neue Bestellung angelegt.
