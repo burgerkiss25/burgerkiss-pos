@@ -27,11 +27,11 @@ window.BK_DATA = {
     {id:'x_fried_egg', name:'Fried Egg', price:20, cat:'extra'},
     {id:'x_omelette',  name:'Omelette',  price:30, cat:'extra'},
 
-    {id:'x_sauce_ketchup', name:'Extra Ketchup Sauce Cup', price:5, cat:'sauce', sauce_type:'s_ketchup'},
-    {id:'x_sauce_mayonnaise', name:'Extra Mayonnaise Sauce Cup', price:5, cat:'sauce', sauce_type:'s_mayonnaise'},
-    {id:'x_sauce_chipotle', name:'Extra Chipotle Sauce Cup', price:5, cat:'sauce', sauce_type:'s_chipotle'},
-    {id:'x_sauce_dutch_special', name:'Extra Dutch Special Sauce Cup', price:5, cat:'sauce', sauce_type:'s_dutch_special'},
-    {id:'x_sauce_chicken_wings', name:'Extra Chicken Wings Sauce Cup', price:5, cat:'sauce', sauce_type:'s_chicken_wings'},
+    {id:'x_sauce_ketchup', name:'Extra Ketchup', price:5, cat:'sauce', sauce_type:'s_ketchup'},
+    {id:'x_sauce_mayonnaise', name:'Extra Mayonnaise', price:5, cat:'sauce', sauce_type:'s_mayonnaise'},
+    {id:'x_sauce_chipotle', name:'Extra Chipotle', price:5, cat:'sauce', sauce_type:'s_chipotle'},
+    {id:'x_sauce_dutch_special', name:'Extra Dutch Special', price:5, cat:'sauce', sauce_type:'s_dutch_special'},
+    {id:'x_sauce_chicken_wings', name:'Extra Chicken Wings Sauce', price:5, cat:'sauce', sauce_type:'s_chicken_wings'},
 
     {id:'d_coconut_fresh', name:'Coconut Fresh', price:7, cat:'drink'},
     {id:'d_coconut_water_bottle', name:'Coconut Water Bottle', price:15, cat:'drink'},

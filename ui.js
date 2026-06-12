@@ -4,9 +4,10 @@
   let productQuery = '';
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
-  const CATEGORY_LABELS = { all:'All', menu:'Menu', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
+  const CATEGORY_LABELS = { all:'All', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
   let historyFilterText = '';
   let historyFilterToday = false;
+  let selectedHistoryOrderId = null;
   const QUICK_NOTES = ['No onion', 'Extra onion', 'No lettuce', 'Extra spicy'];
   const PACK_RULES_KEY = 'bk_packaging_rules_v1';
   let stockOverviewFilter = 'all';
@@ -83,6 +84,12 @@
     `).join('');
   }
 
+  function escapeHtml(value){
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+
   function ensureDialogHost(){
     let host = document.getElementById('appDialog');
     if(host) return host;
@@ -110,20 +117,59 @@
     document.getElementById('dlgOk').onclick = closeDialog;
   }
 
-  function confirmDialog(title, message){
+  function confirmDialog(title, message, opts){
     return new Promise(resolve=>{
+      const options = opts || {};
+      const cancelLabel = options.cancelLabel || 'Cancel';
+      const confirmLabel = options.confirmLabel || 'Confirm';
       const host = ensureDialogHost();
       document.getElementById('appDialogTitle').textContent = title;
       document.getElementById('appDialogBody').innerHTML = `
         <div style="margin-bottom:10px">${message}</div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="x" id="dlgCancel">Cancel</button>
-          <button class="x" id="dlgConfirm">Confirm</button>
+          <button class="x" id="dlgCancel">${cancelLabel}</button>
+          <button class="x" id="dlgConfirm">${confirmLabel}</button>
         </div>
       `;
       host.classList.add('open');
       document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(false); };
       document.getElementById('dlgConfirm').onclick = ()=>{ closeDialog(); resolve(true); };
+    });
+  }
+
+  function handoverChecklistDialog(title, message){
+    return new Promise(resolve=>{
+      const host = ensureDialogHost();
+      document.getElementById('appDialogTitle').textContent = title;
+      document.getElementById('appDialogBody').innerHTML = `
+        <div class="handover-checklist-dialog">
+          ${message}
+          <div class="handover-check-progress" id="handoverCheckProgress" role="status" aria-live="polite"></div>
+          <div class="handover-check-actions">
+            <button class="x" id="dlgCancel" type="button">Cancel</button>
+            <button class="x modifier-primary" id="dlgConfirm" type="button" disabled>Confirm handover</button>
+          </div>
+        </div>
+      `;
+      host.classList.add('open');
+      const checks = Array.from(host.querySelectorAll('[data-handover-check]'));
+      const confirm = document.getElementById('dlgConfirm');
+      const progress = document.getElementById('handoverCheckProgress');
+      const update = ()=>{
+        const complete = checks.filter(input=>input.checked).length;
+        const total = checks.length;
+        progress.textContent = `${complete} of ${total} required checks confirmed`;
+        progress.classList.toggle('complete', total > 0 && complete === total);
+        confirm.disabled = total === 0 || complete !== total;
+      };
+      checks.forEach(input=>input.addEventListener('change', update));
+      update();
+      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(false); };
+      confirm.onclick = ()=>{
+        if(confirm.disabled) return;
+        closeDialog();
+        resolve(true);
+      };
     });
   }
 
@@ -155,9 +201,8 @@
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
     const query = productQuery.trim().toLowerCase();
     const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
-    const productItems = base.filter(isFrontProduct).filter(it => (currentCat==='menu' || currentCat==='fast') ? false : (currentCat==='all' ? true : it.cat===currentCat));
-    const menuItems = buildStandardMenuCards().filter(it => currentCat === 'all' || currentCat === 'menu');
-    const items = menuItems.concat(productItems)
+    const items = base.filter(isFrontProduct)
+      .filter(it => currentCat === 'all' ? true : it.cat === currentCat)
       .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true);
     if(!items.length){
       const empty = document.createElement('div');
@@ -169,7 +214,7 @@
     }
     items.forEach(it=>{
       const b = document.createElement('button');
-      b.className = 'item' + (it.isStandardMenu ? ' standard-menu-item' : '');
+      b.className = 'item';
       b.type = 'button';
       const img = BK_IMAGES.get(it.imageId || it.id);
       if(img){
@@ -185,9 +230,9 @@
                      ${it.subtitle ? `<small class="item-subtitle">${it.subtitle}</small>` : ''}
                      <div class="item-meta">
                        <div class="price">${itemDisplayPrice(it)} GHS</div>
-                       <span class="badge">${it.isStandardMenu ? 'Menu' : '+1'}</span>
+                       <span class="badge">+1</span>
                      </div>`;
-      b.onclick = ()=> it.isStandardMenu ? addStandardMenuPreset(it) : addProductWithFlow(it);
+      b.onclick = ()=> addProductWithFlow(it);
       grid.appendChild(b);
     });
   }
@@ -331,11 +376,11 @@
     });
   }
 
-  function addQuantities(picks, note){
+  function addQuantities(picks, note, meta){
     (picks || []).forEach(pick=>{
       const qty = Math.max(0, Number(pick.qty) || 0);
       if(!pick.value) return;
-      for(let i=0; i<qty; i++) BK_STATE.addItem(pick.value, note || '');
+      for(let i=0; i<qty; i++) BK_STATE.addItem(pick.value, note || '', meta);
     });
   }
 
@@ -366,18 +411,7 @@
   }
 
   function itemDisplayPrice(item){
-    if(item && item.isStandardMenu) return standardMenuPrice(item);
     return BK_PRICES.getPrice(item && item.id);
-  }
-
-  function standardMenuPrice(menu){
-    const base = productById(menu.baseId);
-    if(!base) return 0;
-    const included = BK_DATA.MENU && BK_DATA.MENU.included ? BK_DATA.MENU.included : {fries:0, drink:0};
-    const friesUpgrade = menu.defaultFries ? Math.max(0, BK_PRICES.getPrice(menu.defaultFries) - (Number(included.fries) || 0)) : 0;
-    const drinkUpgrade = menu.defaultDrink ? Math.max(0, BK_PRICES.getPrice(menu.defaultDrink) - (Number(included.drink) || 0)) : 0;
-    const baseMenuPrice = Number(menu.menuPrice) > 0 ? Number(menu.menuPrice) : mealBasePrice(base);
-    return baseMenuPrice + friesUpgrade + drinkUpgrade;
   }
 
   function getStandardMenuPresets(){
@@ -385,21 +419,8 @@
     return FALLBACK_STANDARD_MENUS;
   }
 
-  function buildStandardMenuCards(){
-    return getStandardMenuPresets().map(menu=>{
-      const base = productById(menu.baseId);
-      if(!base || standardMenuPrice(menu) <= 0) return null;
-      const fries = productById(menu.defaultFries);
-      const drink = productById(menu.defaultDrink);
-      return Object.assign({}, menu, {
-        cat: 'menu',
-        isStandardMenu: true,
-        imageId: menu.baseId,
-        baseName: base.name,
-        subtitle: [base.name, fries && fries.name, drink && drink.name].filter(Boolean).join(' + '),
-        searchText: [base.name, fries && fries.name, drink && drink.name, 'standard menu combo'].filter(Boolean).join(' ')
-      });
-    }).filter(Boolean);
+  function standardMenuPresetFor(baseId){
+    return getStandardMenuPresets().find(menu=>menu.baseId === baseId) || {};
   }
 
   function mealBasePrice(product){
@@ -451,21 +472,21 @@
     ];
   }
 
-  function addBurgerExtras(product, picked){
+  function addBurgerExtras(product, picked, meta){
     const burgerSummary = describeQuantities([...(picked.burgerExtras || []), ...(picked.eggExtras || [])]);
     const itemNote = joinNotes(picked.itemNote, burgerSummary ? `Add-ons: ${burgerSummary}` : '');
-    BK_STATE.addItem(product.id, itemNote);
+    BK_STATE.addItem(product.id, itemNote, meta);
     const addonNote = modifierLinkNote('for', product.name, picked.itemNote);
-    addQuantities(picked.burgerExtras, addonNote);
-    addQuantities(picked.eggExtras, addonNote);
+    addQuantities(picked.burgerExtras, addonNote, meta && Object.assign({}, meta, {menuRole:'addon'}));
+    addQuantities(picked.eggExtras, addonNote, meta && Object.assign({}, meta, {menuRole:'addon'}));
   }
 
-  function addWingsExtras(product, picked){
+  function addWingsExtras(product, picked, meta){
     const extraSummary = describeQuantities(picked.extraSauce);
     const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
-    BK_STATE.addItem(product.id, itemNote);
-    if(picked.wingsSauce) BK_STATE.addItem(picked.wingsSauce, modifierLinkNote('included', product.name, picked.itemNote));
-    addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
+    BK_STATE.addItem(product.id, itemNote, meta);
+    if(picked.wingsSauce) BK_STATE.addItem(picked.wingsSauce, modifierLinkNote('included', product.name, picked.itemNote), meta && Object.assign({}, meta, {menuRole:'sauce'}));
+    addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote), meta && Object.assign({}, meta, {menuRole:'sauce'}));
   }
 
   function openMealModeDialog(product){
@@ -500,7 +521,7 @@
     if(['fries_standard', 'fries_large', 'fries_family'].includes(product.id)){
       const picked = await openModifierSheet(`${product.name} options`, [
         { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one free sauce for this fries item.', options:sauceOptions() },
-        { title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add several paid sauces.', options:paidSauceOptions() }
+        { title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add several paid extra sauces.', options:paidSauceOptions() }
       ], { note: pendingNote });
       const extraSummary = describeQuantities(picked.extraSauce);
       const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
@@ -517,7 +538,7 @@
           {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'},
           {label:'Chipotle', value:'x_sauce_chipotle'}
         ]},
-        { title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add extra sauce cups.', options:paidSauceOptions() }
+        { title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add paid extra sauces.', options:paidSauceOptions() }
       ], { note: pendingNote });
       addWingsExtras(product, picked);
     }else{
@@ -527,7 +548,7 @@
   }
 
   async function addGuidedMenu(product, pendingNote, preset){
-    const menuPreset = preset || {};
+    const menuPreset = preset || standardMenuPresetFor(product.id);
     const defaultFries = menuPreset.defaultFries || 'fries_standard';
     const defaultDrink = menuPreset.defaultDrink || 'd_cola';
     const defaultWingsSauce = Object.prototype.hasOwnProperty.call(menuPreset, 'defaultWingsSauce') ? menuPreset.defaultWingsSauce : 'x_sauce_chicken_wings';
@@ -546,7 +567,7 @@
       }));
     const sections = [
       { title:'Menu fries', name:'menuFries', type:'radio', help:'Standard fries are included; large fries add the upgrade difference.', options:friesOptions },
-      { title:'Menu fries sauce', name:'menuFriesSauce', type:'radio', help:'Choose one sauce cup to hand over with menu fries.', options:sauceOptions() },
+      { title:'Menu fries sauce', name:'menuFriesSauce', type:'radio', help:'Choose the included menu sauce. Ketchup is selected unless the customer asks for another sauce or no sauce.', options:sauceOptions().map(option=>Object.assign({}, option, {checked:option.value === 'x_sauce_ketchup'})) },
       { title:'Menu drink', name:'menuDrink', type:'radio', help:'Choose the drink for this menu.', options:drinkOptions }
     ];
     if(isBurgerBase(product)) sections.push(...burgerExtraSections(product));
@@ -555,7 +576,7 @@
       {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings', checked: defaultWingsSauce === 'x_sauce_chicken_wings'},
       {label:'Chipotle', value:'x_sauce_chipotle', checked: defaultWingsSauce === 'x_sauce_chipotle'}
     ]});
-    sections.push({ title:'Paid extra sauce cups (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add extra sauce cups.', options:paidSauceOptions() });
+    sections.push({ title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add paid extra sauces.', options:paidSauceOptions() });
 
     const picked = await openModifierSheet(menuPreset.name || `${product.name} guided menu`, sections, {
       note: pendingNote,
@@ -565,30 +586,22 @@
     });
     if(!picked) return false;
 
-    if(isBurgerBase(product)) addBurgerExtras(product, picked);
-    else if(isWingsBase(product)) addWingsExtras(product, picked);
-    else BK_STATE.addItem(product.id, picked.itemNote || pendingNote);
+    const menuGroupId = `menu-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+    const menuName = menuPreset.name || `${product.name} Menu`;
+    const baseMeta = {menuGroupId, menuName, menuRole:'main', menuNoSauce:!picked.menuFriesSauce && !picked.wingsSauce};
+    if(isBurgerBase(product)) addBurgerExtras(product, picked, baseMeta);
+    else if(isWingsBase(product)) addWingsExtras(product, picked, baseMeta);
+    else BK_STATE.addItem(product.id, picked.itemNote || pendingNote, baseMeta);
 
     const menuNote = modifierLinkNote('menu', product.name, picked.itemNote);
-    if(picked.menuFries) BK_STATE.addItem(picked.menuFries, menuNote);
-    if(picked.menuFriesSauce) BK_STATE.addItem(picked.menuFriesSauce, menuNote);
-    if(picked.menuDrink) BK_STATE.addItem(picked.menuDrink, menuNote);
-    if(!isWingsBase(product)) addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
+    if(picked.menuFries) BK_STATE.addItem(picked.menuFries, menuNote, {menuGroupId, menuName, menuRole:'fries'});
+    if(picked.menuFriesSauce) BK_STATE.addItem(picked.menuFriesSauce, menuNote, {menuGroupId, menuName, menuRole:'included-sauce'});
+    if(picked.menuDrink) BK_STATE.addItem(picked.menuDrink, menuNote, {menuGroupId, menuName, menuRole:'drink'});
+    if(!isWingsBase(product)) addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote), {menuGroupId, menuName, menuRole:'extra-sauce'});
     return true;
   }
 
-  async function addStandardMenuPreset(menu){
-    const base = productById(menu.baseId);
-    if(!base){
-      infoDialog(`${menu.name} is not available in the current product catalog.`);
-      return;
-    }
-    const added = await addGuidedMenu(base, '', menu);
-    if(!added) return;
-    renderOrder();
-    renderMake();
-    refreshTotals();
-  }
+
 
   async function addProductWithFlow(product){
     const pendingNote = '';
@@ -605,19 +618,16 @@
     if(!added) return;
     const st = BK_STATE.getState();
     const slot = st.slots[st.active];
-    if(slot && !slot._packAsked){
+    if(slot && !slot.packAsked){
       const foodCount = (slot.items || []).filter(it=>{
         const p = productById(it.itemId);
         return p && p.cat !== 'drink' && p.cat !== 'extra' && !String(p.id || '').startsWith('x_sauce_');
       }).length;
       if(foodCount >= 2){
-        slot._packAsked = true;
-        confirmDialog('Packaging preference', 'Pack together in one bag? (Cancel = split bags)').then(together=>{
-          BK_STATE.setPackMode(st.active, together ? 'shared' : 'split');
-          renderOrder();
-        });
+        choosePackaging(st.active);
       }
     }
+    renderSlotsBar();
     renderOrder();
     renderMake();
     refreshTotals();
@@ -653,12 +663,26 @@
     buildProducts();
   }
 
+  function slotStatus(slot){
+    const progress = kitchenProgress(slot);
+    const progressText = `${progress.complete}/${progress.total} prepared`;
+    if(slot.voided) return { state:'voided', label:'Voided', detail:'Order cancelled and retained for audit', shortDetail:'Voided' };
+    if(slot.issued) return { state:'issued', label:'Issued', detail:'Handover completed', shortDetail:progressText };
+    if(progress.total === 0) return { state:'draft', label:'Draft', detail:'No products added', shortDetail:'Empty' };
+    if(progress.complete === progress.total && slot.pay === 'unpaid') return { state:'payment', label:'Payment due', detail:`Kitchen complete · ${progressText}`, shortDetail:progressText };
+    if(progress.complete === progress.total) return { state:'ready', label:'Ready', detail:`Paid · ${progressText}`, shortDetail:progressText };
+    return { state:'kitchen', label:'Kitchen', detail:progressText, shortDetail:progressText };
+  }
+
   function renderSlotsBar(){
     const {slots, active} = BK_STATE.getState();
     const bar = document.getElementById('slotsBar');
     const activeLabel = document.getElementById('activeSlotLabel');
     const activeSlot = slots[active];
-    if(activeLabel) activeLabel.textContent = activeSlot ? `${activeSlot.name} · #${activeSlot.orderNo || '-'}` : 'No active order';
+    if(activeLabel){
+      const activeStatus = activeSlot ? slotStatus(activeSlot) : null;
+      activeLabel.textContent = activeSlot ? `${activeSlot.name} · #${activeSlot.orderNo || '-'} · ${orderChannelText(activeSlot)} · ${activeStatus.label}` : 'No active order';
+    }
     if(!bar) return;
     bar.querySelectorAll('.slot-chip').forEach(n=>n.remove());
 
@@ -670,12 +694,14 @@
     ctl.forEach(c=>bar.removeChild(c));
     slots.forEach((s,i)=>{
       const el = document.createElement('button');
-      const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
-      const status = s.issued ? 'issued' : (s.pay==='unpaid' ? 'unpaid' : (allDone ? 'ready' : 'kitchen'));
+      const status = slotStatus(s);
       el.type = 'button';
-      el.className='chip slot-chip status-' + status + (i===active?' active':'');
-      el.innerHTML = `<span class="status-dot"></span>${s.name} · #${s.orderNo || '-'}`;
-      el.onclick = ()=>{ BK_STATE.setActive(i); renderOrder(); refreshTotals(); goTab('order'); };
+      el.className='chip slot-chip status-' + status.state + (i===active?' active':'');
+      el.setAttribute('aria-label', `${s.name}, order ${s.orderNo || 'not assigned'}, ${status.label}, ${status.detail}`);
+      if(i === active) el.setAttribute('aria-current', 'true');
+      el.title = `${status.label} · ${status.detail}`;
+      el.innerHTML = `<span class="status-dot" aria-hidden="true"></span><span class="slot-chip-order"><b>${isOnlineOrder(s) ? platformLabel(s.orderSource).toUpperCase() : s.name}</b><small>${isOnlineOrder(s) ? escapeHtml(s.externalOrderNo || s.orderNo || '-') : `#${s.orderNo || '-'}`}</small></span><span class="slot-chip-status">${status.label}</span><span class="slot-chip-progress">${status.shortDetail}</span>`;
+      el.onclick = ()=> focusSlot(i, currentWorkflowTab());
       bar.appendChild(el);
     });
     ctl.forEach(c=>bar.appendChild(c));
@@ -713,8 +739,8 @@
   }
 
 
-  function linkedGroupKey(productName, note){
-    return `${String(productName || '').trim()}|${baseCustomerNote(note)}`;
+  function linkedGroupKey(productName, note, menuGroupId){
+    return `${String(productName || '').trim()}|${baseCustomerNote(note)}|${menuGroupId || ''}`;
   }
 
   function groupedCartRows(items){
@@ -738,8 +764,9 @@
         return;
       }
 
-      const group = Object.assign({}, line, { children: [] });
-      const groupKey = linkedGroupKey(line.name, line.note);
+      const sourceItem = (items || []).find(item=>item.menuGroupId && item.menuGroupId === line.menuGroupId && item.menuRole === 'main');
+      const group = Object.assign({}, line, { children: [], menuName:sourceItem && sourceItem.menuName ? sourceItem.menuName : '' });
+      const groupKey = linkedGroupKey(line.name, line.note, line.menuGroupId);
       groups.push(group);
       parentByKey.set(groupKey, group);
       const nameKey = String(line.name || '').trim().toLowerCase();
@@ -749,7 +776,7 @@
 
     linkedChildren.forEach(child=>{
       const linked = child.linked;
-      const exactParent = parentByKey.get(linkedGroupKey(linked.productName, linked.itemNote));
+      const exactParent = parentByKey.get(linkedGroupKey(linked.productName, linked.itemNote, child.menuGroupId));
       const fallbackParents = parentsByName.get(String(linked.productName || '').trim().toLowerCase()) || [];
       const parent = exactParent || fallbackParents[fallbackParents.length - 1];
       if(parent) parent.children.push(child);
@@ -766,9 +793,9 @@
   function groupedEntryDone(slot, entry){
     const keys = [entry.key, ...(entry.children || []).map(child=>child.key)];
     return keys.every(key=>{
-      const [id, note=''] = BK_LOGIC.parseItemKey(key);
+      const [id, note='', menuGroupId=''] = BK_LOGIC.parseItemKey(key);
       return slot.items
-        .filter(it=> it.itemId===id && (it.note||'')===note)
+        .filter(it=> it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId))
         .every(it=>!!it.done);
     });
   }
@@ -784,10 +811,25 @@
     return [parent, ...children].join(' · ');
   }
 
+  function splitEntryNoteLines(note){
+    const txt = String(note || '').trim();
+    if(!txt) return [];
+    const addOnMatch = txt.match(/^(.*?)(?:\s*·\s*)?Add-ons:\s*(.+)$/i);
+    if(!addOnMatch) return [txt];
+    const prefix = (addOnMatch[1] || '').trim();
+    const addOnItems = String(addOnMatch[2] || '')
+      .split(',')
+      .map(x=>x.trim())
+      .filter(Boolean)
+      .map(x=>`+ ${x}`);
+    return [prefix, ...addOnItems].filter(Boolean);
+  }
+
   function appendGroupedEntry(host, slot, entry, slotIndex, opts){
     const settings = opts || {};
+    const showPrices = settings.showPrices !== false;
     const row = document.createElement('div');
-    row.className = settings.compact ? 'grouped-meal compact' : 'grouped-meal';
+    row.className = `${settings.compact ? 'grouped-meal compact' : 'grouped-meal'}${settings.kitchen ? ' kitchen-entry' : ''}`;
 
     const header = document.createElement('div');
     header.className = 'grouped-meal-head';
@@ -806,30 +848,85 @@
     const titleWrap = document.createElement('span');
     titleWrap.className = 'grouped-meal-title';
     const title = document.createElement('b');
-    title.textContent = `${entry.qty}x ${entry.name}`;
+    title.textContent = settings.displayTitle || `${entry.qty}x ${entry.name}`;
     titleWrap.appendChild(title);
-    if(entry.note){
+    splitEntryNoteLines(entry.note).forEach((line, idx)=>{
       const note = document.createElement('small');
-      note.textContent = entry.note;
+      note.textContent = idx === 0 ? line : `↳ ${line}`;
       titleWrap.appendChild(note);
-    }
+    });
     header.appendChild(titleWrap);
 
-    const price = document.createElement('span');
-    price.className = 'grouped-meal-price';
-    price.textContent = `${groupedEntryTotal(entry)} GHS`;
-    header.appendChild(price);
+    if(showPrices){
+      const price = document.createElement('span');
+      price.className = 'grouped-meal-price';
+      price.textContent = `${groupedEntryTotal(entry)} GHS`;
+      header.appendChild(price);
+    }
     row.appendChild(header);
 
     (entry.children || []).forEach(child=>{
       const childLine = document.createElement('div');
       childLine.className = 'grouped-meal-child';
-      childLine.textContent = `↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''} · ${child.total} GHS`;
+      const linkedKind = child.linked && child.linked.kind;
+      const childRole = linkedKind === 'menu' ? 'included-sauce' : (linkedKind === 'extra' ? 'extra-sauce' : '');
+      const childName = staffFacingItemName({name:child.name, role:childRole});
+      const childNote = linkedKind ? [] : splitEntryNoteLines(child.note);
+      childLine.textContent = `↳ ${child.qty}x ${childName}${childNote.length ? ` · ${childNote[0]}` : ''}${showPrices ? ` · ${child.total} GHS` : ''}`;
       row.appendChild(childLine);
+      childNote.slice(1).forEach(line=>{
+        const extraLine = document.createElement('div');
+        extraLine.className = 'grouped-meal-child';
+        extraLine.textContent = `   ↳ ${line}`;
+        row.appendChild(extraLine);
+      });
     });
 
     host.appendChild(row);
     return row;
+  }
+
+  function packagingLabel(slot){
+    return slot && slot.packMode === 'split' ? 'Single items packed separately' : 'Eligible single items packed together';
+  }
+
+  function choosePackaging(slotIndex){
+    const st = BK_STATE.getState();
+    const slot = st.slots[slotIndex];
+    if(!slot || slot.issued) return Promise.resolve(false);
+    BK_STATE.setActive(slotIndex);
+    renderSlotsBar();
+    return confirmDialog('Packaging preference', 'Choose how eligible single food items should be packed. Every menu always uses its own large paper bag. Cold drinks always use plastic bags.', {
+      cancelLabel: 'Pack separately',
+      confirmLabel: 'Pack together'
+    }).then(together=>{
+      const latest = BK_STATE.getState().slots[slotIndex];
+      if(!latest || latest.issued) return false;
+      BK_STATE.setPackMode(slotIndex, together ? 'shared' : 'split');
+      renderOrder();
+      renderMake();
+      renderIssue();
+      refreshTotals();
+      return true;
+    });
+  }
+
+  function packagingControl(slot, slotIndex, compact){
+    const wrap = document.createElement('div');
+    wrap.className = `packaging-control${compact ? ' compact' : ''}`;
+    const label = document.createElement('span');
+    label.className = `packaging-status ${slot.packMode === 'split' ? 'split' : 'shared'}`;
+    label.textContent = packagingLabel(slot);
+    wrap.appendChild(label);
+    if(!slot.issued){
+      const change = document.createElement('button');
+      change.type = 'button';
+      change.className = 'mini packaging-change';
+      change.textContent = 'Change';
+      change.onclick = ()=> choosePackaging(slotIndex);
+      wrap.appendChild(change);
+    }
+    return wrap;
   }
 
   function renderOrder(){
@@ -837,6 +934,7 @@
     const lines = document.getElementById('lines'); lines.innerHTML='';
     if(!slots.length){ setSlotTotals(0,0,0); return; }
     const s = slots[active];
+    lines.appendChild(packagingControl(s, active, false));
 
     const entries = groupedCartRows(s.items);
     if(entries.length===0){
@@ -846,6 +944,7 @@
       lines.appendChild(row);
     }
     const refreshOrderViews = ()=>{
+      renderSlotsBar();
       renderOrder();
       renderMake();
       renderIssue();
@@ -926,11 +1025,76 @@
 
     const c = BK_LOGIC.computeSlot(s);
     setSlotTotals(c.subtotal, 0, c.subtotal);
-    ensureFlowActions('orderFlowNav', [{ label:'➡️ Go to Make', onClick:()=> goTab('make') }]);
+    const orderNext = workflowNextState('order', s);
+    renderWorkflowNext('orderFlowNav', Object.assign({}, orderNext, {onClick:()=>goTab(orderNext.target)}));
+  }
+
+  function workflowNextState(stage, slot){
+    const hasItems = !!(slot && Array.isArray(slot.items) && slot.items.length);
+    if(stage === 'order') return hasItems
+      ? {state:'ready', title:'Order ready for kitchen', detail:'Products and packaging can now be sent to preparation.', label:'Continue to Kitchen', target:'make', disabled:false}
+      : {state:'blocked', title:'Order not ready', detail:'Add at least one product to continue.', label:'Continue to Kitchen', target:'make', disabled:true};
+    if(stage === 'make'){
+      const done = hasItems && slot.items.every(item=>!!item.done);
+      return done
+        ? {state:'ready', title:'Kitchen complete', detail:'All items are prepared.', label:slot.pay === 'unpaid' ? 'Continue to Payment' : 'Continue to Handover', target:slot.pay === 'unpaid' ? 'pay' : 'issue', disabled:false}
+        : {state:'blocked', title:'Kitchen preparation required', detail:'Mark every item as prepared to continue.', label:'Continue to Payment', target:'pay', disabled:true};
+    }
+    if(stage === 'pay') return hasItems && slot.pay !== 'unpaid'
+      ? {state:'ready', title:'Payment complete', detail:'Payment is confirmed. Continue with the same order to handover.', label:'Continue to Handover', target:'issue', disabled:false}
+      : {state:'blocked', title:'Payment required', detail:'Confirm Cash or MoMo payment to continue. Online orders are already paid.', label:'Continue to Handover', target:'issue', disabled:true};
+    return {state:'blocked', title:'Step incomplete', detail:'Complete this step to continue.', label:'Continue', target:'order', disabled:true};
+  }
+
+  function renderWorkflowNext(hostId, options){
+    const host = document.getElementById(hostId);
+    if(!host) return;
+    const opts = options || {};
+    host.className = `workflow-next ${opts.state || 'blocked'}`;
+    host.innerHTML = `<div class="workflow-next-copy"><strong>${escapeHtml(opts.title || '')}</strong><small>${escapeHtml(opts.detail || '')}</small></div><button type="button" class="workflow-next-button" ${opts.disabled ? 'disabled' : ''}>${escapeHtml(opts.label || 'Continue')}</button>`;
+    const button = host.querySelector('.workflow-next-button');
+    button.onclick = ()=>{ if(!button.disabled && typeof opts.onClick === 'function') opts.onClick(); };
+  }
+
+  function currentWorkflowTab(){
+    const activeTab = document.querySelector('.workflow-step[aria-current="step"]');
+    const idMap = { tabOrder:'order', tabMake:'make', tabPay:'pay', tabIssue:'issue' };
+    return idMap[activeTab && activeTab.id] || 'order';
+  }
+
+  function makeSlotCardSelectable(card, slotIndex, tab, active){
+    card.classList.add('selectable');
+    card.classList.toggle('active-slot-card', !!active);
+    card.tabIndex = 0;
+    card.setAttribute('role', 'group');
+    card.setAttribute('aria-label', `${active ? 'Active order. ' : ''}Order card; press Enter or Space to select`);
+    if(active) card.setAttribute('aria-current', 'true');
+    const select = event=>{
+      if(event.target.closest('button, input, label, a, select, textarea')) return;
+      focusSlot(slotIndex, tab);
+    };
+    card.addEventListener('click', select);
+    card.addEventListener('keydown', event=>{
+      if(event.target !== card || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      focusSlot(slotIndex, tab);
+    });
+  }
+
+  function kitchenProgress(slot){
+    const entries = groupedCartRows(slot.items || []);
+    const total = entries.length;
+    const complete = entries.filter(entry=>groupedEntryDone(slot, entry)).length;
+    const percent = total ? Math.round((complete / total) * 100) : 0;
+    if(slot.issued) return { state:'complete', label:'Kitchen complete', complete, total, percent:100, detail:'Order already issued.' };
+    if(total === 0) return { state:'empty', label:'No items', complete:0, total:0, percent:0, detail:'Add products before preparation.' };
+    if(complete === total) return { state:'complete', label:'Kitchen complete', complete, total, percent:100, detail:'All items are prepared.' };
+    if(complete === 0) return { state:'not-started', label:'Not started', complete, total, percent, detail:'Preparation has not started.' };
+    return { state:'in-progress', label:'In progress', complete, total, percent, detail:'Continue preparing the remaining items.' };
   }
 
   function renderMake(){
-    const {slots} = BK_STATE.getState();
+    const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('makeList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
     box.querySelectorAll('.empty-state').forEach(n=>n.remove());
@@ -942,36 +1106,92 @@
       return;
     }
     slots.forEach((s,i)=>{
-      const c = BK_LOGIC.computeSlot(s);
-      const card = document.createElement('div'); card.className='slot-card';
+      const progress = kitchenProgress(s);
+      const makeNext = workflowNextState('make', s);
+      const card = document.createElement('div'); card.className='slot-card kitchen-order-card';
       card.innerHTML = `
-        <div class="slot-head">
-          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS · Combos: ${c.combos} · In kitchen: ${formatAge(s.createdAt)}</div>
-          <div><button onclick="BK_STATE.setActive(${i}); BK_UI.renderOrder(); BK_UI.refreshTotals();">Focus</button></div>
+        <div class="slot-head kitchen-order-head">
+          <div><span class="label">${isOnlineOrder(s) ? platformLabel(s.orderSource).toUpperCase() : s.name}</span> · ${isOnlineOrder(s) ? escapeHtml(s.externalOrderNo || '') + ' · ' : ''}#${s.orderNo || '-'} · In kitchen: ${formatAge(s.createdAt)}</div>
+          ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
+        </div>
+        <div class="kitchen-progress ${progress.state}">
+          <div class="kitchen-progress-copy"><strong>${progress.label}</strong><span>${progress.complete} of ${progress.total} items prepared</span><small>${progress.detail}</small></div>
+          <div class="kitchen-progress-track" role="progressbar" aria-label="Kitchen progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="width:${progress.percent}%"></span></div>
+          ${progress.state === 'complete' && !s.issued ? `<button class="workflow-next-button kitchen-next-action" type="button">${makeNext.label}</button>` : ''}
         </div>
         <div class="todo grouped-todo" id="todo-${i}"></div>`;
+      const nextAction = card.querySelector('.kitchen-next-action');
+      if(nextAction) nextAction.onclick = ()=> focusSlot(i, makeNext.target);
+      card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
+      makeSlotCardSelectable(card, i, 'make', i === active);
       box.appendChild(card);
       const list = card.querySelector(`#todo-${i}`);
+      let menuNumber = 0;
+      let singleNumber = 0;
       groupedCartRows(s.items).forEach(entry=>{
+        const displayTitle = entry.menuGroupId
+          ? `MENU ${++menuNumber} — ${entry.menuName || `${entry.name} Menu`}`
+          : `SINGLE ITEM ${++singleNumber} — ${entry.qty}x ${entry.name}`;
         appendGroupedEntry(list, s, entry, i, {
           checkbox: true,
+          displayTitle,
+          showPrices: false,
+          kitchen: true,
           onToggle: (picked, done)=>{
             BK_STATE.setActive(i);
             setGroupedEntryDone(picked, done);
+            renderSlotsBar();
             renderMake();
             renderIssue();
+            refreshTotals();
           }
         });
       });
     });
     ensureFlowActions('makeList', [
-      { label:'⬅️ Back to Order', onClick:()=> goTab('order') },
-      { label:'➡️ Go to Payment', onClick:()=> goTab('pay') }
+      { label:'⬅️ Back to Order', onClick:()=> goTab('order') }
     ]);
   }
 
+  function paymentDisplay(slot){
+    if(slot.issued) return { state:'locked', label:'Payment locked', detail:`${paymentLabel(slot.pay)} · Order issued` };
+    if(!Array.isArray(slot.items) || slot.items.length === 0) return { state:'empty', label:'Nothing to pay', detail:'Add products before taking payment' };
+    if(isOnlineOrder(slot) && slot.finalChannel !== 'direct') return { state:'paid', label:`Paid via ${platformLabel(slot.orderSource)}`, detail:`Online payment · ${slot.externalOrderNo || 'platform reference missing'}` };
+    if(slot.pay === 'cash') return { state:'paid', label:'Paid by Cash', detail:slot.finalChannel === 'direct' ? 'Converted online order · direct payment' : 'Payment confirmed' };
+    if(slot.pay === 'momo') return { state:'paid', label:'Paid by MoMo', detail:slot.finalChannel === 'direct' ? 'Converted online order · direct payment' : 'Payment confirmed' };
+    return { state:'pending', label:'Payment pending', detail:'Select the payment method after receiving payment' };
+  }
+
+  function requestSlotPayment(slotIndex, method){
+    const st = BK_STATE.getState();
+    const slot = st.slots[slotIndex];
+    if(!slot || slot.issued || !Array.isArray(slot.items) || slot.items.length === 0 || !['unpaid','cash','momo'].includes(method)) return;
+    BK_STATE.setActive(slotIndex);
+    renderSlotsBar();
+    renderPay();
+    refreshTotals();
+    if(slot.pay === method) return;
+    const isUnpaid = method === 'unpaid';
+    const paymentName = method === 'momo' ? 'MoMo' : 'Cash';
+    const title = isUnpaid ? 'Change payment status' : `Confirm ${paymentName} payment`;
+    const message = isUnpaid
+      ? `Mark ${slot.orderNo || slot.name} as unpaid? This will block handover.`
+      : `Confirm that ${centsFreeAmount(BK_LOGIC.computeSlot(slot).subtotal)} GHS was received by ${paymentName} for ${slot.orderNo || slot.name}.`;
+    confirmDialog(title, message, {
+      cancelLabel: 'Cancel',
+      confirmLabel: isUnpaid ? 'Mark as unpaid' : `Confirm ${paymentName} payment`
+    }).then(ok=>{
+      if(ok) setSlotPayment(slotIndex, method);
+    });
+  }
+
+  function centsFreeAmount(value){
+    const amount = Number(value) || 0;
+    return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+  }
+
   function renderPay(){
-    const {slots} = BK_STATE.getState();
+    const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('payList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
     box.querySelectorAll('.empty-state').forEach(n=>n.remove());
@@ -984,27 +1204,89 @@
     }
     slots.forEach((s,i)=>{
       const c = BK_LOGIC.computeSlot(s);
+      const payment = paymentDisplay(s);
+      const payNext = workflowNextState('pay', s);
+      const paymentDisabled = s.issued || !Array.isArray(s.items) || s.items.length === 0;
       const card = document.createElement('div'); card.className='slot-card';
+      card.dataset.paymentSlot = String(i);
       card.innerHTML = `
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS</div>
-          <div class="pay-status">
-            <span>Status: ${s.pay.toUpperCase()}</span>
-            <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'unpaid'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Unpaid</button>
-            <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'cash'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid Cash</button>
-            <button ${s.issued ? 'disabled' : ''} onclick="BK_STATE.setPay(${i},'momo'); BK_UI.renderPay(); BK_UI.renderIssue(); BK_UI.refreshTotals();">Paid MoMo</button>
-          </div>
+          <div class="pay-status">${i === active ? '<span class="active-order-badge">Active order</span>' : ''}</div>
+        </div>
+        <div class="payment-panel ${payment.state}">
+          <div class="payment-summary"><strong>${payment.label}</strong><small>${payment.detail}</small></div>
+          ${isOnlineOrder(s) && s.finalChannel !== 'direct' ? `<div class="online-paid-lock"><b>${platformLabel(s.orderSource)} payment recorded</b><small>No additional payment step is required.</small></div>` : `<div class="payment-methods" role="group" aria-label="Payment method for ${s.name}">
+            <button class="payment-method ${s.pay === 'unpaid' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'unpaid');">Unpaid</button>
+            <button class="payment-method ${s.pay === 'cash' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'cash');">Cash</button>
+            <button class="payment-method ${s.pay === 'momo' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'momo');">MoMo</button>
+          </div>`}
+        </div>
+        <div class="workflow-next ${payNext.state}">
+          <div class="workflow-next-copy"><strong>${payNext.title}</strong><small>${payNext.detail}</small></div>
+          <button type="button" class="workflow-next-button payment-next-action" ${payNext.disabled ? 'disabled' : ''}>${payNext.label}</button>
         </div>`;
+      const paymentNext = card.querySelector('.payment-next-action');
+      paymentNext.onclick = ()=> continueFromPayment(i);
+      makeSlotCardSelectable(card, i, 'pay', i === active);
       box.appendChild(card);
     });
     ensureFlowActions('payList', [
-      { label:'⬅️ Back to Make', onClick:()=> goTab('make') },
-      { label:'➡️ Go to Issue / Handover', onClick:()=> goTab('issue') }
+      { label:'⬅️ Back to Make', onClick:()=> goTab('make') }
     ]);
   }
 
+  function continueFromPayment(slotIndex, navigate){
+    const latest = BK_STATE.getState().slots[slotIndex];
+    const next = workflowNextState('pay', latest);
+    if(next.disabled){
+      infoDialog(next.detail);
+      return false;
+    }
+    const move = typeof navigate === 'function' ? navigate : focusSlot;
+    move(slotIndex, next.target);
+    return true;
+  }
+
+  function focusPaymentNextAction(slotIndex){
+    setTimeout(()=>{
+      const button = document.querySelector(`[data-payment-slot="${slotIndex}"] .payment-next-action`);
+      if(!button || button.disabled) return;
+      if(typeof button.scrollIntoView === 'function') button.scrollIntoView({block:'nearest', behavior:'smooth'});
+      if(typeof button.focus === 'function') button.focus();
+    }, 0);
+  }
+
+  function setSlotPayment(slotIndex, method){
+    const st = BK_STATE.getState();
+    if(!st.slots[slotIndex] || !['unpaid','cash','momo'].includes(method)) return false;
+    BK_STATE.setActive(slotIndex);
+    BK_STATE.setPay(slotIndex, method);
+    renderSlotsBar();
+    renderPay();
+    renderIssue();
+    refreshTotals();
+    if(method !== 'unpaid') focusPaymentNextAction(slotIndex);
+    return true;
+  }
+
+  function issueReadiness(slot){
+    const hasItems = Array.isArray(slot.items) && slot.items.length > 0;
+    const kitchenDone = hasItems && slot.items.every(item=>!!item.done);
+    const paid = slot.pay !== 'unpaid';
+    if(slot.voided) return { state:'voided', label:'Order voided', detail:slot.voidReason || 'Retained in history for audit.', action:'Voided', target:'issue', disabled:true };
+    if(slot.issued) return { state:'issued', label:'Order issued', detail:'Handover completed and locked.', action:'Issued', target:'issue', disabled:true };
+    if(!hasItems) return { state:'blocked', label:'Order is empty', detail:'Add at least one product before handover.', action:'Go to Order', target:'order' };
+    if(!paid && !kitchenDone) return { state:'blocked', label:'2 steps remaining', detail:'Payment required · Kitchen not finished', action:'Go to Payment', target:'pay' };
+    if(!paid) return { state:'blocked', label:'Payment required', detail:'Complete payment before handover.', action:'Go to Payment', target:'pay' };
+    if(!kitchenDone) return { state:'waiting', label:'Kitchen not finished', detail:'Complete every kitchen item before handover.', action:'Go to Make', target:'make' };
+    if(isOnlineOrder(slot) && slot.finalChannel !== 'direct') return { state:'ready', label:'Ready for pickup', detail:`Prepared and paid via ${platformLabel(slot.orderSource)}.`, action:`Handed to ${platformLabel(slot.orderSource)} Rider`, target:'issue' };
+    if(slot.finalChannel === 'direct') return { state:'ready', label:'Ready for direct delivery', detail:`Collect ${paymentLabel(slot.pay)} · ${slot.fulfilment === 'customer-rider' ? 'Customer-arranged rider' : 'BurgerKiss delivery'}.`, action:slot.fulfilment === 'customer-rider' ? 'Handed to Customer Rider' : 'Handed to BurgerKiss Rider', target:'issue' };
+    return { state:'ready', label:'Ready for handover', detail:'Paid and all kitchen items are complete.', action:'Start Final Handover', target:'issue' };
+  }
+
   function renderIssue(){
-    const {slots} = BK_STATE.getState();
+    const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('issueList');
     if(!box) return;
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
@@ -1018,16 +1300,28 @@
     }
     slots.forEach((s,i)=>{
       const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
-      const canIssue = s.pay !== 'unpaid' && allDone;
+      const readiness = issueReadiness(s);
       const card = document.createElement('div'); card.className='slot-card';
       card.innerHTML = `
         <div class="slot-head">
           <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
           <div class="pay-status">
-            <span>Status: ${s.issued ? 'ISSUED' : 'WAITING'}</span>
-            <button ${(canIssue && !s.issued) ? '' : 'disabled'} onclick="BK_UI.markIssued(${i});">Mark Issued</button>
+            ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
           </div>
+        </div>
+        <div class="workflow-next issue-readiness ${readiness.state}">
+          <div class="workflow-next-copy"><strong>${readiness.label}</strong><small>${readiness.detail}</small></div>
+          <div class="issue-action-group"><button class="workflow-next-button issue-next-action" ${readiness.disabled ? 'disabled' : ''}>${readiness.action}</button>${readiness.state === 'ready' && isOnlineOrder(s) && s.finalChannel !== 'direct' ? `<button class="x rider-missed-action" type="button">Rider Did Not Pick Up</button>` : ''}</div>
         </div>`;
+      const riderMissedButton = card.querySelector('.rider-missed-action');
+      if(riderMissedButton) riderMissedButton.onclick = ()=>convertOnlineOrder(i);
+      const actionButton = card.querySelector('.issue-next-action');
+      actionButton.onclick = ()=>{
+        if(readiness.disabled) return;
+        if(readiness.state === 'ready') markIssued(i);
+        else focusSlot(i, readiness.target);
+      };
+      card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
       const checklist = document.createElement('div');
       checklist.className = 'issue-checklist';
       const label = document.createElement('small');
@@ -1043,12 +1337,11 @@
         checklist.appendChild(emptyLine);
       }
       card.appendChild(checklist);
+      makeSlotCardSelectable(card, i, 'issue', i === active);
       box.appendChild(card);
     });
-    const activeIssued = BK_STATE.getState().slots[BK_STATE.getState().active]?.issued;
     ensureFlowActions('issueList', [
-      { label:'⬅️ Back to Payment', onClick:()=> goTab('pay'), disabled: !!activeIssued },
-      { label:'🆕 Start Next Order', onClick:()=> startNextOrder() }
+      { label:'⬅️ Back to Payment', onClick:()=> goTab('pay') }
     ]);
   }
 
@@ -1090,6 +1383,20 @@
     });
   }
 
+  function focusSlot(slotIndex, tab){
+    const st = BK_STATE.getState();
+    const slot = st.slots[slotIndex];
+    if(!slot) return;
+    BK_STATE.setActive(slotIndex);
+    renderSlotsBar();
+    renderOrder();
+    renderMake();
+    renderPay();
+    renderIssue();
+    refreshTotals();
+    goTab(slot.issued ? 'issue' : (tab || currentWorkflowTab()));
+  }
+
   function clearFlowAction(hostId){
     const host = document.getElementById(hostId);
     if(!host) return;
@@ -1118,6 +1425,27 @@
     });
   }
 
+  function createFreshOrderSlot(slotName){
+    return BK_STATE.allocateOrderNo().then(function(orderNo){
+      return {
+        name: slotName,
+        items: [],
+        pay: 'unpaid',
+        issued: false,
+        voided: false,
+        voidReason: '',
+        packMode: 'shared',
+        packAsked: false,
+        orderNo,
+        createdAt: Date.now()
+      };
+    });
+  }
+
+  function showOrderNumberError(error){
+    infoDialog(`A new order number could not be reserved. No order was created. Check the internet connection and try again. (${error && error.message ? error.message : 'Unknown error'})`);
+  }
+
   function startNextOrder(){
     const st = BK_STATE.getState();
     const i = st.active;
@@ -1132,17 +1460,13 @@
       infoDialog('Complete order first: paid, kitchen done, and marked as issued. Use + Slot in header after payment to take a new order while kitchen keeps working.');
       return;
     }
-    st.slots[i] = {
-      name: slot.name,
-      items: [],
-      pay: 'unpaid',
-      issued: false,
-      orderNo: BK_STATE.nextOrderNo(),
-      createdAt: Date.now()
-    };
-    BK_STATE.setState(st);
-    renderAll();
-    goTab('order');
+    createFreshOrderSlot(slot.name).then(function(nextSlot){
+      if(slot.issued && slot.items.length) pushHistory(slotSnapshot(slot));
+      st.slots[i] = nextSlot;
+      BK_STATE.setState(st);
+      renderAll();
+      goTab('order');
+    }).catch(showOrderNumberError);
   }
 
   function quickStartNext(slotIndex){
@@ -1150,18 +1474,14 @@
     const i = Number.isInteger(slotIndex) ? slotIndex : st.active;
     const slot = st.slots[i];
     if(!slot) return;
-    st.active = i;
-    st.slots[i] = {
-      name: slot.name,
-      items: [],
-      pay: 'unpaid',
-      issued: false,
-      orderNo: BK_STATE.nextOrderNo(),
-      createdAt: Date.now()
-    };
-    BK_STATE.setState(st);
-    renderAll();
-    goTab('order');
+    createFreshOrderSlot(slot.name).then(function(nextSlot){
+      if(slot.issued && slot.items.length) pushHistory(slotSnapshot(slot));
+      st.active = i;
+      st.slots[i] = nextSlot;
+      BK_STATE.setState(st);
+      renderAll();
+      goTab('order');
+    }).catch(showOrderNumberError);
   }
 
   function addNewOrderSlot(){
@@ -1171,11 +1491,99 @@
       infoDialog('Please confirm payment first, then use + Slot to start the next order.');
       return;
     }
-    BK_STATE.addSlot();
-    renderAll();
-    goTab('order');
+    BK_STATE.addSlot().then(function(){
+      renderAll();
+      goTab('order');
+    }).catch(showOrderNumberError);
   }
 
+  const ONLINE_PLATFORMS = new Set(['bolt','hubtel','chowdeck']);
+  function platformLabel(value){
+    const labels = {walkin:'Walk-in', bolt:'Bolt', hubtel:'Hubtel', chowdeck:'Chowdeck'};
+    return labels[String(value || '').toLowerCase()] || 'Walk-in';
+  }
+  function isOnlineOrder(slot){ return !!(slot && ONLINE_PLATFORMS.has(slot.orderSource)); }
+  function paymentLabel(pay){ return ({unpaid:'Unpaid',cash:'Cash',momo:'MoMo',bolt:'Bolt',hubtel:'Hubtel',chowdeck:'Chowdeck'})[pay] || String(pay || 'Unknown'); }
+  function orderChannelText(slot){
+    if(!slot) return '';
+    if(slot.finalChannel === 'direct') return `${platformLabel(slot.originalSource || slot.orderSource)} → Direct ${paymentLabel(slot.pay)}`;
+    return isOnlineOrder(slot) ? `${platformLabel(slot.orderSource)} · ${slot.externalOrderNo || 'No reference'}` : 'Walk-in';
+  }
+  function onlineOrderExists(platform, reference){
+    const key = `${platform}|${String(reference || '').trim().toLowerCase()}`;
+    const active = BK_STATE.getState().slots.some(slot=>`${slot.orderSource}|${String(slot.externalOrderNo || '').trim().toLowerCase()}` === key);
+    const archived = getHistory().some(entry=>`${entry.orderSource}|${String(entry.externalOrderNo || '').trim().toLowerCase()}` === key);
+    return active || archived;
+  }
+  function openOnlineOrderDialog(){
+    const host = ensureDialogHost();
+    document.getElementById('appDialogTitle').textContent = 'New online order';
+    document.getElementById('appDialogBody').innerHTML = `
+      <p>Enter the order from the delivery platform. It will be marked as paid online and sent directly to the kitchen.</p>
+      <label class="dialog-label">Platform<select id="onlinePlatform" class="dialog-field"><option value="bolt">Bolt</option><option value="hubtel">Hubtel</option><option value="chowdeck">Chowdeck</option></select></label>
+      <label class="dialog-label">Platform order number<input id="onlineReference" class="dialog-field" maxlength="80" placeholder="e.g. BOLT-847263" autocomplete="off"></label>
+      <div id="onlineOrderError" class="field-error"></div>
+      <div class="dialog-actions"><button class="x" id="dlgCancel">Cancel</button><button class="x modifier-primary" id="dlgConfirm">Create Online Order</button></div>`;
+    host.classList.add('open');
+    const reference = document.getElementById('onlineReference');
+    reference.focus();
+    document.getElementById('dlgCancel').onclick = closeDialog;
+    document.getElementById('dlgConfirm').onclick = ()=>{
+      const platform = document.getElementById('onlinePlatform').value;
+      const externalOrderNo = reference.value.trim();
+      const error = document.getElementById('onlineOrderError');
+      if(!externalOrderNo){ error.textContent = 'The platform order number is required.'; return; }
+      if(onlineOrderExists(platform, externalOrderNo)){ error.textContent = `This ${platformLabel(platform)} order already exists.`; return; }
+      const state = BK_STATE.getState();
+      const current = state.slots[state.active];
+      const finish = index=>{
+        BK_STATE.setActive(index);
+        closeDialog();
+        renderAll();
+        goTab('order');
+        infoDialog(`${platformLabel(platform)} order ${externalOrderNo} created. Payment is already recorded; enter the products and continue to Kitchen.`);
+      };
+      if(current && !current.items.length && current.pay === 'unpaid'){
+        BK_STATE.updateSlot(state.active, {orderSource:platform, externalOrderNo, pay:platform});
+        finish(state.active);
+      }else{
+        BK_STATE.addSlot(undefined, {orderSource:platform, externalOrderNo, pay:platform}).then(finish).catch(showOrderNumberError);
+      }
+    };
+  }
+  function convertOnlineOrder(slotIndex){
+    const slot = BK_STATE.getState().slots[slotIndex];
+    if(!slot || !isOnlineOrder(slot) || slot.finalChannel === 'direct') return;
+    const host = ensureDialogHost();
+    const platform = platformLabel(slot.orderSource);
+    document.getElementById('appDialogTitle').textContent = `${platform} rider did not pick up`;
+    document.getElementById('appDialogBody').innerHTML = `
+      <p>The platform refund is expected and may remain pending for several hours. Convert this same prepared order without waiting for platform confirmation.</p>
+      <div class="online-conversion-summary"><b>${escapeHtml(slot.externalOrderNo || slot.orderNo)}</b><span>${BK_LOGIC.computeSlot(slot).subtotal} GHS</span></div>
+      <label class="dialog-label">Delivery<select id="conversionFulfilment" class="dialog-field"><option value="burgerkiss-delivery">BurgerKiss will deliver</option><option value="customer-rider">Customer will send a rider</option></select></label>
+      <label class="dialog-label">Direct payment<select id="conversionPayment" class="dialog-field"><option value="cash">Collect Cash</option><option value="momo">Collect MoMo</option></select></label>
+      <div class="dialog-actions"><button class="x" id="dlgCancel">Keep Waiting</button><button class="x modifier-primary" id="dlgConfirm">Convert to Direct Order</button></div>`;
+    host.classList.add('open');
+    document.getElementById('dlgCancel').onclick = closeDialog;
+    document.getElementById('dlgConfirm').onclick = ()=>{
+      const fulfilment = document.getElementById('conversionFulfilment').value;
+      const pay = document.getElementById('conversionPayment').value;
+      BK_STATE.updateSlot(slotIndex, {
+        originalSource:slot.orderSource,
+        originalPay:slot.pay,
+        finalChannel:'direct',
+        fulfilment,
+        conversionReason:`${platform} rider did not pick up`,
+        refundStatus:'expected-pending',
+        convertedAt:Date.now(),
+        pay
+      });
+      closeDialog();
+      focusSlot(slotIndex, 'issue');
+      renderAll();
+      infoDialog(`Order converted. ${platform} refund is recorded as expected / pending. Collect ${pay === 'cash' ? 'Cash' : 'MoMo'} and hand the order to the selected rider.`);
+    };
+  }
   function historyRemoteEnabled(){
     return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database);
   }
@@ -1205,27 +1613,56 @@
       orderNo,
       slotName: String(entry.slotName || '-'),
       pay: String(entry.pay || 'unpaid'),
+      orderSource: String(entry.orderSource || 'walkin'),
+      externalOrderNo: String(entry.externalOrderNo || ''),
+      originalSource: String(entry.originalSource || ''),
+      originalPay: String(entry.originalPay || ''),
+      finalChannel: String(entry.finalChannel || ''),
+      fulfilment: String(entry.fulfilment || ''),
+      conversionReason: String(entry.conversionReason || ''),
+      refundStatus: String(entry.refundStatus || ''),
+      convertedAt: Number(entry.convertedAt) || 0,
       issued: !!entry.issued,
       createdAt: Number(entry.createdAt) || closedAt,
       closedAt,
       subtotal: Number(entry.subtotal) || 0,
+      discountRate: Math.max(0, Number(entry.discountRate) || 0),
+      discount: Math.max(0, Number(entry.discount) || 0),
+      total: Number.isFinite(Number(entry.total)) ? Number(entry.total) : Math.max(0, (Number(entry.subtotal) || 0) - (Number(entry.discount) || 0)),
       combos: Number(entry.combos) || 0,
-      items: Array.isArray(entry.items) ? entry.items : []
+      packMode: entry.packMode === 'split' ? 'split' : 'shared',
+      status: entry.status === 'voided' ? 'voided' : 'completed',
+      voidReason: String(entry.voidReason || ''),
+      voidedAt: Number(entry.voidedAt) || 0,
+      voidedBy: String(entry.voidedBy || ''),
+      items: Array.isArray(entry.items) ? entry.items : [],
+      rawItems: Array.isArray(entry.rawItems) ? entry.rawItems : []
     };
   }
   function mergeHistory(local, remote){
     const map = new Map();
-    (Array.isArray(local) ? local : []).forEach(h=>{ const clean = sanitizeHistoryEntry(h); if(clean) map.set(clean.id, clean); });
-    (Array.isArray(remote) ? remote : []).forEach(h=>{ const clean = sanitizeHistoryEntry(h); if(clean) map.set(clean.id, clean); });
+    const add = h=>{
+      const clean = sanitizeHistoryEntry(h);
+      if(!clean) return;
+      const saved = map.get(clean.id);
+      if(!saved || (clean.status === 'voided' && saved.status !== 'voided') || Number(clean.voidedAt||clean.closedAt) >= Number(saved.voidedAt||saved.closedAt)) map.set(clean.id, clean);
+    };
+    (Array.isArray(local) ? local : []).forEach(add);
+    (Array.isArray(remote) ? remote : []).forEach(add);
     return Array.from(map.values()).sort((a,b)=> Number(b.closedAt||0) - Number(a.closedAt||0)).slice(0, 1000);
   }
   function flattenRemoteHistory(raw){
     const out = [];
-    if(!raw || typeof raw !== 'object') return out;
-    Object.values(raw).forEach(day=>{
-      if(!day || typeof day !== 'object') return;
-      Object.values(day).forEach(entry=>{ const clean = sanitizeHistoryEntry(entry); if(clean) out.push(clean); });
-    });
+    function visit(node){
+      if(!node || typeof node !== 'object') return;
+      if(String(node.orderNo || '').trim() && (node.closedAt || node.createdAt)){
+        const clean = sanitizeHistoryEntry(node);
+        if(clean) out.push(clean);
+        return;
+      }
+      Object.values(node).forEach(visit);
+    }
+    visit(raw);
     return out;
   }
   function saveHistoryRemote(entry){
@@ -1236,194 +1673,271 @@
       .then(()=>true)
       .catch(e=>{ console.warn('history remote save failed:', e && e.message); return false; });
   }
-  function loadHistoryRemoteOnce(){
+  function refreshHistoryFromRemote(){
     const database = historyDb();
     if(!database) return Promise.resolve(false);
-    return database.ref(historyRemotePath()).get().then(snap=>{
+    return database.ref(historyRemotePath()).get().then(function(snap){
       const remote = flattenRemoteHistory(snap.val());
-      if(!remote.length) return false;
-      saveHistory(mergeHistory(getHistory(), remote));
-      return true;
-    }).catch(e=>{
-      console.warn('history remote load failed:', e && e.message);
+      const local = getHistory();
+      const remoteById = new Map(remote.map(entry=>[entry.id, entry]));
+      const missingRemote = local.filter(entry=>{
+        const saved = remoteById.get(entry.id);
+        return !saved || (entry.status === 'voided' && (saved.status !== 'voided' || Number(saved.voidedAt) < Number(entry.voidedAt)));
+      });
+      saveHistory(mergeHistory(local, remote));
+      if(!missingRemote.length) return remote.length > 0;
+      return Promise.all(missingRemote.map(saveHistoryRemote)).then(()=>true);
+    }).catch(function(e){
+      console.warn('history remote refresh failed:', e && e.message);
       return false;
     });
   }
-  function clearHistoryRemote(){
-    const database = historyDb();
-    if(!database) return Promise.resolve(false);
-    return database.ref(historyRemotePath()).set(null)
-      .then(()=>true)
-      .catch(e=>{ console.warn('history remote clear failed:', e && e.message); return false; });
-  }
+
 
   function getHistory(){
     try{
       const raw = localStorage.getItem(HISTORY_KEY);
       const arr = raw ? JSON.parse(raw) : [];
-      return normalizeHistory(arr);
+      return mergeHistory(Array.isArray(arr) ? arr : [], []);
     }catch(e){ return []; }
   }
-  function saveHistoryRemoteSoon(list){
-    if(!historyRemoteEnabled()) return;
-    if(historyRemoteSaveTimer) clearTimeout(historyRemoteSaveTimer);
-    historyRemoteSaveTimer = setTimeout(function(){
-      const clean = normalizeHistory(list).slice(0, 1000);
-      getHistoryRef().then(function(ref){
-        if(!ref) return;
-        ref.set({entries: clean, ts: Date.now()}).catch(function(e){
-          console.warn('history remote save failed:', e && e.message);
-        });
-      });
-    }, 400);
-  }
-  function saveHistory(list, opts){
-    const clean = normalizeHistory(list).slice(0, 1000);
-    try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(clean)); }catch(e){}
-    if(!opts || opts.remote !== false) saveHistoryRemoteSoon(clean);
-  }
-  function loadHistoryRemoteOnce(force){
-    if(!historyRemoteEnabled()) return Promise.resolve(false);
-    if(!force && historyRemoteLoadedAt && Date.now() - historyRemoteLoadedAt < 5000) return Promise.resolve(false);
-    historyRemoteLoadedAt = Date.now();
-    return getHistoryRef().then(function(ref){
-      if(!ref) return false;
-      return ref.get().then(function(snap){
-        const val = snap.val();
-        if(!val) return false;
-        const hasEntries = Array.isArray(val.entries);
-        const remote = normalizeHistory(hasEntries ? val.entries : val);
-        if(hasEntries && !remote.length){
-          saveHistory([], {remote:false});
-          return true;
-        }
-        if(!remote.length) return false;
-        const merged = mergeHistoryLists(getHistory(), remote);
-        saveHistory(merged, {remote:false});
-        return true;
-      });
-    }).catch(function(e){
-      console.warn('history remote load failed:', e && e.message);
-      return false;
-    });
+  function saveHistory(list){
+    const clean = mergeHistory(Array.isArray(list) ? list : [], []);
+    try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(clean)); }catch(e){
+      console.warn('history local save failed:', e && e.message);
+    }
+    return clean;
   }
   function slotSnapshot(slot){
     const c = BK_LOGIC.computeSlot(slot);
+    const discountRate = Math.max(0, Number(BK_STATE.getState().discountRate) || 0);
+    const discount = Math.round(c.subtotal * discountRate);
     return {
-      id: `${slot.orderNo || 'ORD'}-${Date.now()}`,
+      id: String(slot.orderNo || `ORD-${Date.now()}`).replace(/[^a-zA-Z0-9_\-]/g, '_'),
       orderNo: slot.orderNo || '-',
       slotName: slot.name || '-',
       pay: slot.pay || 'unpaid',
+      orderSource: slot.orderSource || 'walkin',
+      externalOrderNo: slot.externalOrderNo || '',
+      originalSource: slot.originalSource || '',
+      originalPay: slot.originalPay || '',
+      finalChannel: slot.finalChannel || '',
+      fulfilment: slot.fulfilment || '',
+      conversionReason: slot.conversionReason || '',
+      refundStatus: slot.refundStatus || '',
+      convertedAt: slot.convertedAt || 0,
       issued: !!slot.issued,
       createdAt: slot.createdAt || Date.now(),
       closedAt: Date.now(),
       subtotal: c.subtotal,
+      discountRate,
+      discount,
+      total: c.subtotal - discount,
       combos: c.combos,
-      items: BK_LOGIC.groupedLines(slot.items || []).map(x=>({name:x.name, qty:x.qty, note:x.note, total:x.total}))
+      packMode: slot.packMode === 'split' ? 'split' : 'shared',
+      status: 'completed',
+      items: BK_LOGIC.groupedLines(slot.items || []).map(x=>({name:x.name, qty:x.qty, note:x.note, total:x.total})),
+      rawItems: JSON.parse(JSON.stringify(slot.items || []))
     };
   }
   function pushHistory(entry){
     const clean = sanitizeHistoryEntry(entry);
     if(!clean) return;
-    const hist = mergeHistory([clean], getHistory());
-    saveHistory(hist);
-    saveHistoryRemote(clean);
+    const current = getHistory();
+    const existing = current.find(saved=> saved.orderNo === clean.orderNo);
+    const archived = existing || clean;
+    if(!existing) saveHistory(mergeHistory([clean], current));
+    saveHistoryRemote(archived).then(function(saved){
+      if(!saved && historyRemoteEnabled()) console.warn('Order history remains local until online sync succeeds:', archived.orderNo);
+    });
   }
+  function recoverIssuedSlotsToHistory(){
+    const existing = new Set(getHistory().map(entry=>entry.orderNo));
+    let recovered = 0;
+    BK_STATE.getState().slots.forEach(function(slot){
+      if(!slot || !slot.issued || !slot.orderNo || !Array.isArray(slot.items) || !slot.items.length || existing.has(slot.orderNo)) return;
+      pushHistory(slotSnapshot(slot));
+      existing.add(slot.orderNo);
+      recovered += 1;
+    });
+    return recovered;
+  }
+
+  function archiveCompletedSlots(){
+    const state = BK_STATE.getState();
+    const completed = state.slots.filter(slot=>slot && slot.issued);
+    if(!completed.length) return 0;
+    completed.forEach(slot=>{
+      if(Array.isArray(slot.items) && slot.items.length) pushHistory(slotSnapshot(slot));
+    });
+    const activeOrderNo = state.slots[state.active] && state.slots[state.active].orderNo;
+    state.slots = state.slots.filter(slot=>!slot.issued);
+    const preservedActive = state.slots.findIndex(slot=>slot.orderNo === activeOrderNo);
+    state.active = preservedActive >= 0 ? preservedActive : Math.min(state.active, Math.max(0, state.slots.length - 1));
+    BK_STATE.setState(state);
+    return completed.length;
+  }
+
+  function handoverProduct(itemId){
+    return (BK_DATA.BASE || []).find(product=>product.id === itemId) || {id:itemId, name:prettyName(itemId), cat:''};
+  }
+  function handoverLine(item, qty){
+    const product = handoverProduct(item.itemId);
+    return {id:item.itemId, name:product.name || prettyName(item.itemId), qty:Number(qty) || 1, note:item.note || '', cat:product.cat || '', role:item.menuRole || ''};
+  }
+  function buildHandoverPlan(slot){
+    const sourceItems = Array.isArray(slot && slot.items) ? slot.items : [];
+    const menuGroups = new Map();
+    const ungrouped = [];
+    sourceItems.forEach(item=>{
+      if(item && item.menuGroupId){
+        if(!menuGroups.has(item.menuGroupId)) menuGroups.set(item.menuGroupId, []);
+        menuGroups.get(item.menuGroupId).push(item);
+      }else{
+        ungrouped.push(item);
+      }
+    });
+
+    const menus = [];
+    menuGroups.forEach((items, groupId)=>{
+      const mains = items.filter(item=>item.menuRole === 'main');
+      const count = Math.max(1, mains.length);
+      const blocks = Array.from({length:count}, (_, index)=>({
+        groupId:`${groupId}-${index+1}`,
+        name:(mains[index] && mains[index].menuName) || (items[0] && items[0].menuName) || 'Menu',
+        items:[], noSauce:!!(mains[index] && mains[index].menuNoSauce), wings:false
+      }));
+      const roleOffsets = {};
+      items.forEach(item=>{
+        if(item.menuRole === 'addon') return;
+        let targetIndex;
+        if(item.menuRole === 'main') targetIndex = Math.max(0, mains.indexOf(item));
+        else{
+          const role = item.menuRole || 'item';
+          targetIndex = (roleOffsets[role] || 0) % count;
+          roleOffsets[role] = (roleOffsets[role] || 0) + 1;
+        }
+        const block = blocks[Math.min(targetIndex, blocks.length-1)];
+        const line = handoverLine(item, 1);
+        if(line.cat === 'wings' || /^wings_/i.test(line.id)) block.wings = true;
+        block.items.push(line);
+      });
+      blocks.forEach(block=>menus.push(block));
+    });
+
+    const legacyStandalone = [];
+    groupedCartRows(ungrouped).forEach(entry=>{
+      if(hasMenuChildren(entry)){
+        const menuCount = Math.max(1, Number(entry.qty) || 1);
+        for(let index=0; index<menuCount; index++){
+          const mainProduct = handoverProduct(entry.id);
+          const block = {groupId:`legacy-${menus.length+1}`, name:`${entry.name} Menu`, items:[{id:entry.id,name:entry.name,qty:1,note:entry.note||'',cat:mainProduct.cat||'',role:'main'}], noSauce:false, wings:mainProduct.cat === 'wings'};
+          (entry.children || []).forEach(child=>{
+            const perMenu = Math.max(1, Math.ceil((Number(child.qty)||1) / menuCount));
+            for(let n=0;n<perMenu;n++){
+              const childProduct = handoverProduct(child.id);
+              block.items.push({id:child.id,name:child.name,qty:1,note:child.note||'',cat:childProduct.cat||'',role:childProduct.cat === 'drink' ? 'drink' : (String(child.id).startsWith('x_sauce_') ? 'sauce' : 'item')});
+            }
+          });
+          block.noSauce = !block.items.some(item=>item.role === 'sauce');
+          menus.push(block);
+        }
+      }else{
+        legacyStandalone.push(entry);
+      }
+    });
+
+    const standalone = legacyStandalone.filter(entry=>{
+      const product = handoverProduct(entry.id);
+      return !(product.cat === 'extra' || String(entry.id || '').startsWith('x_'));
+    }).map(entry=>{
+      const product = handoverProduct(entry.id);
+      return Object.assign({}, entry, {cat:product.cat || '', children:(entry.children || []).filter(child=>String(child.id || '').startsWith('x_sauce_'))});
+    });
+
+    const menuDrinkCount = menus.reduce((total, menu)=> total + menu.items.filter(item=>item.cat === 'drink' || item.role === 'drink').reduce((sum,item)=>sum+item.qty,0), 0);
+    const standaloneDrinkCount = standalone.filter(entry=>entry.cat === 'drink').reduce((total,entry)=>total+(Number(entry.qty)||0),0);
+    const standaloneFood = standalone.filter(entry=>entry.cat !== 'drink');
+    const eligiblePaperItems = standaloneFood.filter(entry=>entry.cat !== 'salad' && entry.cat !== 'wings');
+    const eligibleUnits = eligiblePaperItems.reduce((total,entry)=>total+(Number(entry.qty)||0),0);
+    const packaging = [];
+    const rules = getPackagingRules();
+    const drinksPerBag = Math.max(1, Number(rules.drinksPerPlasticBag) || 2);
+    const drinkCount = menuDrinkCount + standaloneDrinkCount;
+    if(drinkCount) packaging.push({name:'Plastic Bag — drinks only', qty:Math.ceil(drinkCount / drinksPerBag), kind:'drink'});
+    const wingsCount = standaloneFood.filter(entry=>entry.cat === 'wings').reduce((total,entry)=>total+(Number(entry.qty)||0),0);
+    const saladCount = standaloneFood.filter(entry=>entry.cat === 'salad').reduce((total,entry)=>total+(Number(entry.qty)||0),0);
+    if(wingsCount) packaging.push({name:'Wings Box', qty:wingsCount, kind:'food'});
+    if(saladCount) packaging.push({name:'Salad Container', qty:saladCount, kind:'food'});
+    if(eligibleUnits){
+      if(slot && slot.packMode === 'split') packaging.push({name:'Small Paper Bag — single food item', qty:eligibleUnits, kind:'food'});
+      else if(eligibleUnits === 1) packaging.push({name:'Small Paper Bag — single food items', qty:1, kind:'food'});
+      else if(eligibleUnits === 2) packaging.push({name:'Medium Paper Bag — single food items', qty:1, kind:'food'});
+      else packaging.push({name:'Large Paper Bag — single food items', qty:Math.ceil(eligibleUnits / Math.max(1, Number(rules.singleFoodUnitsPerLargeBag)||3)), kind:'food'});
+    }
+    return {
+      menus,
+      standalone,
+      packaging,
+      standaloneNapkins:standaloneFood.length ? standaloneFood.reduce((total,entry)=>total+(Number(entry.qty)||0),0) * 2 : 0,
+      drinkCount
+    };
+  }
+
+  function staffFacingItemName(item){
+    let name = String((item && item.name) || '').replace(/\s+Sauce Cup$/i, '').replace(/\s+Cup$/i, '').trim();
+    if(item && (item.role === 'included-sauce' || item.role === 'sauce')) name = name.replace(/^Extra\s+/i, '');
+    name = name.replace(/^(Extra\s+)?(Ketchup|Mayonnaise|Chipotle|Dutch Special)\s+Sauce$/i, '$1$2');
+    return name;
+  }
+  function staffFacingNote(note){
+    return splitEntryNoteLines(note).filter(line=>!/^\s*(?:included|extra|menu)?\s*for\s+/i.test(line));
+  }
+  function handoverCard(title, badge, lines){
+    return `<label class="handover-card-check"><input type="checkbox" data-handover-check /><span class="handover-card-body"><span class="handover-menu-heading"><strong>${escapeHtml(title)}</strong>${badge ? `<span>${escapeHtml(badge)}</span>` : ''}</span><span class="handover-card-lines">${lines.join('')}</span></span></label>`;
+  }
+  function handoverCardLine(name, detail, qty){
+    return `<span class="handover-card-line"><b>${Number(qty)||1}x ${escapeHtml(name)}</b>${detail ? `<small>${escapeHtml(detail)}</small>` : ''}</span>`;
+  }
+  function handoverPlanHtml(plan){
+    const menuHtml = plan.menus.map((menu,index)=>{
+      const lines = menu.items.map(item=>{
+        const detail = item.cat === 'drink' || item.role === 'drink'
+          ? 'Drinks plastic bag'
+          : staffFacingNote(item.note).join(' · ');
+        return handoverCardLine(staffFacingItemName(item), detail, item.qty);
+      });
+      if(menu.noSauce) lines.push(handoverCardLine('No sauce requested', '', 1));
+      lines.push(handoverCardLine('Napkins', '', 2));
+      if(menu.wings) lines.push(handoverCardLine('Wings Box', '', 1));
+      lines.push(handoverCardLine('Large Paper Bag', 'Food only · this menu stays separate', 1));
+      return handoverCard(`MENU ${index+1} — ${menu.name}`, `BAG ${index+1}`, lines);
+    }).join('');
+    const standaloneHtml = plan.standalone.map((entry,index)=>{
+      const lines = [handoverCardLine(entry.name, staffFacingNote(entry.note).join(' · '), entry.qty)];
+      (entry.children || []).forEach(child=>lines.push(handoverCardLine(staffFacingItemName(child), '', child.qty)));
+      return handoverCard(`SINGLE ITEM ${index+1} — ${entry.name}`, '', lines);
+    }).join('');
+    const essentials = [];
+    if(plan.standaloneNapkins) essentials.push(handoverCardLine('Napkins', 'For single food items', plan.standaloneNapkins));
+    (plan.packaging || []).forEach(row=>essentials.push(handoverCardLine(row.name, row.kind === 'drink' ? 'Cold drinks only' : '', row.qty)));
+    const essentialsHtml = essentials.length ? handoverCard('PACKAGING & ESSENTIALS', '', essentials) : '';
+    return `${menuHtml}${standaloneHtml}${essentialsHtml}` || '<div>No items in this order.</div>';
+  }
+
   function markIssued(i){
     const st = BK_STATE.getState();
     const slot = st.slots[i];
     if(!slot) return;
-    const lines = groupedCartRows(slot.items || []);
-    const checkHtml = lines.length
-      ? lines.map(entry=>`
-        <div class="grouped-meal compact">
-          <div class="grouped-meal-head"><span class="grouped-meal-title"><b>${entry.qty}x ${entry.name}</b>${entry.note ? `<small>${entry.note}</small>` : ''}</span></div>
-          ${(entry.children || []).map(child=>`<div class="grouped-meal-child">↳ ${child.qty}x ${child.name}${child.note ? ` · ${child.note}` : ''}</div>`).join('')}
-        </div>`).join('')
-      : '<div>No items in this order.</div>';
-
-    const usage = window.BK_STOCK && typeof BK_STOCK.getUsageForSlot === 'function'
-      ? BK_STOCK.getUsageForSlot(slot)
-      : {};
-    const slotItems = Array.isArray(slot.items) ? slot.items : [];
-    const productByItemId = id => (BK_DATA.BASE || []).find(p=> p.id === id) || null;
-    const isDrinkItem = it=>{
-      const p = productByItemId(it.itemId);
-      return !!(p && p.cat === 'drink');
-    };
-    const isFoodItem = it=>{
-      const p = productByItemId(it.itemId);
-      if(!p) return false;
-      return p.cat !== 'drink' && p.cat !== 'extra' && !String(p.id || '').startsWith('x_sauce_');
-    };
-    const isMenuLinkedChild = it=>{
-      const linked = parseLinkedModifierNote(it && it.note);
-      return !!(linked && linked.prefix === 'menu');
-    };
-    const menuChildCount = slotItems.filter(isMenuLinkedChild).length;
-    const drinkCount = slotItems.filter(isDrinkItem).length;
-    const foodCount = slotItems.filter(isFoodItem).length;
-    const packRules = getPackagingRules();
-    const slotPackMode = slot && slot.packMode === 'split' ? 'split' : 'shared';
-
-    function handoverPackagingRows(){
-      const rows = [];
-      const nameFor = id=> {
-        const def = ingredientDefs[id];
-        return def && def.name ? def.name : prettyName(id);
-      };
-      if(drinkCount > 0){
-        rows.push({ id:packRules.drinkBagId, name:`${nameFor(packRules.drinkBagId)} (drinks only)`, qty: 1, unit:'pcs' });
-      }
-      if(foodCount <= 0) return rows;
-      if(slotPackMode === 'split'){
-        rows.push({ id:packRules.foodBagSmallId, name:nameFor(packRules.foodBagSmallId), qty: foodCount, unit:'pcs' });
-      }else if(menuChildCount >= Number(packRules.largeMenuChildMin) || foodCount >= Number(packRules.largeFoodMin)){
-        rows.push({ id:packRules.foodBagLargeId, name:nameFor(packRules.foodBagLargeId), qty: 1, unit:'pcs' });
-      }else if(foodCount >= Number(packRules.mediumFoodMin)){
-        rows.push({ id:packRules.foodBagMediumId, name:nameFor(packRules.foodBagMediumId), qty: 1, unit:'pcs' });
-      }else{
-        rows.push({ id:packRules.foodBagSmallId, name:nameFor(packRules.foodBagSmallId), qty: 1, unit:'pcs' });
-      }
-      return rows;
-    }
-    const ingredientDefs = window.BK_STOCK && typeof BK_STOCK.getIngredients === 'function'
-      ? BK_STOCK.getIngredients()
-      : {};
-    const extraRows = Object.entries(usage)
-      .map(([id, qty])=>{
-        const def = ingredientDefs[id];
-        if(!def || Number(qty) <= 0) return null;
-        const cat = String(def.category || '').toLowerCase();
-        const name = String(def.name || '').toLowerCase();
-        const isNapkin = id === 'napkin' || name.includes('napkin') || name.includes('serviette');
-        const isCutlery = cat === 'cutlery' || name.includes('fork') || name.includes('spoon');
-        const isDrinkPackaging = id === 'white_plastic_bag';
-        const isCustomerPackaging = ['small_bag','medium_paper_bag','small_paper_bag','large_paper_bag','sauce_cup','standard_fries_cup','large_fries_cup'].includes(id);
-        const isChecklistExtra = isNapkin || isCutlery || isDrinkPackaging || isCustomerPackaging;
-        const isKitchenOnly = id === 'aluminium_foil';
-        if(isKitchenOnly) return null;
-        if(!isChecklistExtra) return null;
-        return { id, name: def.name || id, qty: Number(qty), unit: def.unit || '' };
-      })
-      .filter(Boolean)
-      .sort((a,b)=> a.name.localeCompare(b.name));
-    const packagingRows = handoverPackagingRows();
-    const essentialsRows = extraRows.filter(r=> /napkin|serviette|fork|spoon/i.test(String(r.name || r.id || '')));
-    const addonRows = extraRows.filter(r=> !essentialsRows.includes(r));
-    const sectionHtml = (title, rows, tone)=>{
-      if(!rows.length) return '';
-      return `<div class="handover-extra-section ${tone || ''}">
-        <div class="handover-extra-title">${title}</div>
-        ${rows.map(row=>`<div class="handover-extra-row"><span class="left">${prettyName(row.name)} <span class="handover-pill">Required</span></span><b>${row.qty}${row.unit ? ` ${row.unit}` : ''}</b></div>`).join('')}
-      </div>`;
-    };
-    const extrasHtml = (packagingRows.length || essentialsRows.length || addonRows.length)
-      ? `<div style="margin:8px 0 6px"><b>Handover extras:</b></div>${sectionHtml('Bags', packagingRows, 'tone-bag')}${sectionHtml('Essentials', essentialsRows, 'tone-essential')}${sectionHtml('Add-ons', addonRows, 'tone-addon')}`
-      : '';
-    confirmDialog(
-      `Final handover check – ${slot.orderNo || slot.name}`,
-      `<div style="margin-bottom:8px">Please confirm all items are packed correctly before issuing to customer.</div>${checkHtml}${extrasHtml}`
+    BK_STATE.setActive(i);
+    renderSlotsBar();
+    renderIssue();
+    refreshTotals();
+    const handoverPlan = buildHandoverPlan(slot);
+    const checklistHtml = handoverPlanHtml(handoverPlan);
+    handoverChecklistDialog(
+      `${isOnlineOrder(slot) ? (slot.finalChannel === 'direct' ? 'Direct delivery check' : `${platformLabel(slot.orderSource)} rider pickup check`) : 'Final handover check'} – ${slot.externalOrderNo || slot.orderNo || slot.name}`,
+      `<div style="margin-bottom:8px">Read from top to bottom. Every menu has its own food bag; cold drinks always use plastic bags.</div><div class="final-packaging-mode"><b>Customer preference:</b> ${packagingLabel(slot)} · <b>Menu rule:</b> every menu stays separate</div>${checklistHtml}`
     ).then(ok=>{
       if(!ok) return;
       const latestSlot = BK_STATE.getState().slots[i];
@@ -1431,15 +1945,39 @@
       const stockResult = window.BK_STOCK && typeof BK_STOCK.consumeSlot === 'function'
         ? BK_STOCK.consumeSlot(latestSlot)
         : null;
-      BK_STATE.setIssued(i, true);
       pushHistory(slotSnapshot({...latestSlot, issued:true}));
-      renderIssue();
-      renderStock();
-      const suffix = stockResult && stockResult.message ? ` ${stockResult.message}` : '';
-      infoDialog(`Order marked as issued.${suffix}`);
+      const nextState = BK_STATE.getState();
+      nextState.slots.splice(i, 1);
+      nextState.active = Math.min(i, Math.max(0, nextState.slots.length - 1));
+      BK_STATE.setState(nextState);
+      const finish = ()=>{
+        renderAll();
+        renderStock();
+        const suffix = stockResult && stockResult.message ? ` ${stockResult.message}` : '';
+        infoDialog(`Order completed and archived. It is now available only in History.${suffix}`);
+      };
+      if(nextState.slots.length){
+        finish();
+      }else{
+        BK_STATE.addSlot().then(function(){ finish(); goTab('order'); }).catch(showOrderNumberError);
+      }
     });
   }
 
+  function historyStatusLabel(entry){
+    return entry.status === 'voided' ? 'VOIDED' : 'COMPLETED';
+  }
+  function historyItemsHtml(entry){
+    const items = Array.isArray(entry.items) ? entry.items : [];
+    if(!items.length) return '<div class="empty-state">No saved item details.</div>';
+    return `<div class="history-item-list">${items.map(item=>{
+      const notes = splitEntryNoteLines(item.note);
+      return `<div class="history-item">
+        <div class="history-item-main"><strong>${Number(item.qty)||1}x ${escapeHtml(item.name)}</strong><b>${Number(item.total)||0} GHS</b></div>
+        ${notes.map(note=>`<div class="history-item-extra">+ ${escapeHtml(String(note).replace(/^\+\s*/, ''))}</div>`).join('')}
+      </div>`;
+    }).join('')}</div>`;
+  }
   function renderHistoryBody(){
     const body = document.getElementById('historyBody');
     const hist = getFilteredHistory();
@@ -1447,25 +1985,35 @@
       body.innerHTML = '<div class="empty-state">No completed orders in history yet.</div>';
       return;
     }
-    const totalSales = hist.reduce((a,h)=> a + Number(h.subtotal||0), 0);
-    const cashCount = hist.filter(h=>h.pay==='cash').length;
-    const momoCount = hist.filter(h=>h.pay==='momo').length;
+    const completed = hist.filter(h=>h.status !== 'voided');
+    const totalSales = completed.reduce((a,h)=> a + Number(h.total||h.subtotal||0), 0);
+    const cashCount = completed.filter(h=>h.pay==='cash').length;
+    const momoCount = completed.filter(h=>h.pay==='momo').length;
+    const onlineCount = completed.filter(h=>ONLINE_PLATFORMS.has(h.orderSource)).length;
+    const convertedCount = completed.filter(h=>h.finalChannel === 'direct').length;
+    const voidCount = hist.length - completed.length;
     body.innerHTML = `
-      <div class="row" style="border-top:none;padding:8px 0 14px">
-        <span><b>Orders:</b> ${hist.length} · <b>Cash:</b> ${cashCount} · <b>MoMo:</b> ${momoCount}</span>
-        <span><b>Sales:</b> ${totalSales} GHS</span>
+      <div class="history-summary">
+        <span><b>Orders:</b> ${completed.length}</span><span><b>Cash:</b> ${cashCount}</span>
+        <span><b>MoMo:</b> ${momoCount}</span><span><b>Online:</b> ${onlineCount}</span><span><b>Converted:</b> ${convertedCount}</span><span><b>Voided:</b> ${voidCount}</span>
+        <span class="history-summary-total"><b>Net sales:</b> ${totalSales} GHS</span>
       </div>
-    ` + hist.slice(0,100).map(h=>`
-      <div class="row" style="border-top:1px dashed #2a2f39;padding:8px 0">
-        <span><b>${h.orderNo}</b> · ${h.slotName} · ${h.pay.toUpperCase()} · ${new Date(h.closedAt).toLocaleString()}</span>
-        <span>${h.subtotal} GHS</span>
-      </div>
-    `).join('');
+      <div class="history-order-list">
+      ${hist.slice(0,200).map(h=>`
+        <button type="button" class="history-order-row ${h.status === 'voided' ? 'voided' : ''}" data-history-id="${escapeHtml(h.id)}">
+          <span><strong>${escapeHtml(h.orderNo)}</strong><small>${escapeHtml(h.externalOrderNo ? `${platformLabel(h.orderSource)} · ${h.externalOrderNo}` : h.slotName)} · ${escapeHtml(paymentLabel(h.pay))} · ${new Date(h.closedAt).toLocaleString()}</small></span>
+          <span><b>${Number(h.total||h.subtotal||0)} GHS</b><small class="history-status">${historyStatusLabel(h)}</small></span>
+        </button>`).join('')}
+      </div>`;
+    body.querySelectorAll('[data-history-id]').forEach(button=>{
+      button.onclick = ()=> openHistoryOrder(button.dataset.historyId);
+    });
   }
   function openHistory(){
+    recoverIssuedSlotsToHistory();
     renderHistoryBody();
     document.getElementById('modalHistory').classList.add('open');
-    loadHistoryRemoteOnce().then(hasRemote=>{ if(hasRemote) renderHistoryBody(); });
+    refreshHistoryFromRemote().then(hasRemote=>{ if(hasRemote) renderHistoryBody(); });
   }
   function getFilteredHistory(){
     const text = historyFilterText.trim().toLowerCase();
@@ -1475,7 +2023,10 @@
       if(historyFilterToday && Number(h.closedAt || 0) < today.getTime()) return false;
       if(!text) return true;
       return String(h.orderNo || '').toLowerCase().includes(text)
-        || String(h.slotName || '').toLowerCase().includes(text);
+        || String(h.slotName || '').toLowerCase().includes(text)
+        || String(h.externalOrderNo || '').toLowerCase().includes(text)
+        || String(h.orderSource || '').toLowerCase().includes(text)
+        || String(h.voidReason || '').toLowerCase().includes(text);
     });
   }
   function filterHistoryText(v){
@@ -1486,13 +2037,196 @@
     historyFilterToday = !historyFilterToday;
     openHistory();
   }
-  function clearHistory(){
-    if(!confirm('Clear saved order history?')) return;
-    saveHistory([]);
-    clearHistoryRemote();
-    openHistory();
+  function clearHistoryFilters(){
+    historyFilterText = '';
+    historyFilterToday = false;
+    const search = document.getElementById('hSearch');
+    if(search) search.value = '';
+    renderHistoryBody();
   }
   function closeHistory(){ document.getElementById('modalHistory').classList.remove('open'); }
+  function selectedHistoryOrder(){
+    return getHistory().find(entry=>entry.id === selectedHistoryOrderId) || null;
+  }
+  function openHistoryOrder(id){
+    const entry = getHistory().find(item=>item.id === id);
+    if(!entry) return;
+    selectedHistoryOrderId = entry.id;
+    document.getElementById('historyDetailTitle').textContent = `Order ${entry.orderNo}`;
+    const voided = entry.status === 'voided';
+    document.getElementById('hdVoid').disabled = voided;
+    document.getElementById('hdVoid').textContent = voided ? 'Order Voided' : 'Void Order';
+    document.getElementById('historyDetailBody').innerHTML = `
+      <div class="history-detail-meta">
+        <div><small>Order number</small><strong>${escapeHtml(entry.orderNo)}</strong></div>
+        <div><small>Slot</small><strong>${escapeHtml(entry.slotName)}</strong></div>
+        <div><small>Payment</small><strong>${escapeHtml(paymentLabel(entry.pay))}</strong></div>
+        <div><small>Order source</small><strong>${escapeHtml(platformLabel(entry.orderSource))}</strong></div>
+        ${entry.externalOrderNo ? `<div><small>Platform reference</small><strong>${escapeHtml(entry.externalOrderNo)}</strong></div>` : ''}
+        ${entry.finalChannel === 'direct' ? `<div><small>Converted delivery</small><strong>${escapeHtml(entry.fulfilment === 'customer-rider' ? 'Customer-arranged rider' : 'BurgerKiss delivery')}</strong></div><div><small>Platform refund</small><strong>Expected / Pending</strong></div>` : ''}
+        <div><small>Packaging</small><strong>${entry.packMode === 'split' ? 'Packed separately' : 'Packed together'}</strong></div>
+        <div><small>Created</small><strong>${new Date(entry.createdAt).toLocaleString()}</strong></div>
+        <div><small>Issued</small><strong>${new Date(entry.closedAt).toLocaleString()}</strong></div>
+      </div>
+      ${voided ? `<div class="void-notice"><strong>VOIDED ORDER</strong><span>${escapeHtml(entry.voidReason)}</span><small>${new Date(entry.voidedAt).toLocaleString()} · ${escapeHtml(entry.voidedBy || 'POS terminal')}</small></div>` : ''}
+      ${historyItemsHtml(entry)}
+      <div class="history-totals">
+        <div><span>Subtotal</span><b>${entry.subtotal} GHS</b></div>
+        <div><span>Discount (${Math.round((entry.discountRate||0)*100)}%)</span><b>-${entry.discount||0} GHS</b></div>
+        <div class="total"><span>${voided ? 'Original total' : 'Total'}</span><b>${entry.total} GHS</b></div>
+      </div>`;
+    document.getElementById('modalHistoryDetail').classList.add('open');
+  }
+  function closeHistoryOrder(){
+    document.getElementById('modalHistoryDetail').classList.remove('open');
+    selectedHistoryOrderId = null;
+  }
+  function historyReceiptHtml(entry){
+    return `<div class="receipt-archive">
+      <div><b>BurgerKiss – Receipt</b></div>
+      <div>Order: <b>${escapeHtml(entry.orderNo)}</b></div>
+      <div>Date: ${new Date(entry.closedAt).toLocaleString()}</div>
+      <div>Payment: ${escapeHtml(paymentLabel(entry.pay))}</div>
+      <div>Packaging: ${entry.packMode === 'split' ? 'Packed separately' : 'Packed together'}</div>
+      <hr>${historyItemsHtml(entry)}
+      <div class="sumline"><span>Subtotal</span><b>${entry.subtotal} GHS</b></div>
+      <div class="sumline"><span>Discount</span><b>-${entry.discount||0} GHS</b></div>
+      <div class="sumline"><span>Total</span><b>${entry.total} GHS</b></div>
+      ${entry.status === 'voided' ? '<div class="receipt-void">VOIDED – NOT VALID FOR PAYMENT</div>' : ''}
+    </div>`;
+  }
+  function reprintHistoryOrder(){
+    const entry = selectedHistoryOrder();
+    if(!entry) return;
+    const html = historyReceiptHtml(entry);
+    document.getElementById('receiptBody').innerHTML = html;
+    document.getElementById('printArea').innerHTML = html;
+    document.getElementById('modalReceipt').classList.add('open');
+  }
+  function requestVoidReason(){
+    return new Promise(resolve=>{
+      const host = ensureDialogHost();
+      document.getElementById('appDialogTitle').textContent = 'Void order';
+      document.getElementById('appDialogBody').innerHTML = `
+        <p class="dialog-warning">The order remains permanently visible in history. Enter a mandatory reason.</p>
+        <select id="voidReasonPreset" class="dialog-field">
+          <option value="">Select reason…</option><option>Customer cancelled</option><option>Wrong item entered</option>
+          <option>Duplicate order</option><option>Payment failed</option><option>Manager correction</option><option value="custom">Other reason</option>
+        </select>
+        <input id="voidReasonCustom" class="dialog-field hidden" placeholder="Enter reason" maxlength="160">
+        <div id="voidReasonError" class="field-error"></div>
+        <div class="dialog-actions"><button class="x" id="dlgCancel">Cancel</button><button class="x danger-link" id="dlgConfirm">Void Order</button></div>`;
+      host.classList.add('open');
+      const preset = document.getElementById('voidReasonPreset');
+      const custom = document.getElementById('voidReasonCustom');
+      preset.onchange = ()=>{ custom.classList.toggle('hidden', preset.value !== 'custom'); if(preset.value === 'custom') custom.focus(); };
+      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(null); };
+      document.getElementById('dlgConfirm').onclick = ()=>{
+        const reason = (preset.value === 'custom' ? custom.value : preset.value).trim();
+        if(!reason){ document.getElementById('voidReasonError').textContent = 'A void reason is required.'; return; }
+        closeDialog(); resolve(reason);
+      };
+    });
+  }
+  function voidHistoryOrder(id, reason){
+    const cleanReason = String(reason || '').trim();
+    if(!cleanReason) return null;
+    const history = getHistory();
+    const target = history.find(item=>item.id === id);
+    if(!target || target.status === 'voided') return null;
+    target.status = 'voided';
+    target.voidReason = cleanReason;
+    target.voidedAt = Date.now();
+    target.voidedBy = window.BK_TERMINAL_NAME || window.BK_SYNC_FORCE_SLOT || 'POS terminal';
+    saveHistory(history);
+    saveHistoryRemote(target);
+    const state = BK_STATE.getState();
+    const activeSlot = state.slots.find(slot=>slot.orderNo === target.orderNo);
+    if(activeSlot){ activeSlot.voided = true; activeSlot.voidReason = cleanReason; BK_STATE.setState(state); renderSlotsBar(); renderIssue(); }
+    return target;
+  }
+  function voidSelectedHistoryOrder(){
+    const entry = selectedHistoryOrder();
+    if(!entry || entry.status === 'voided') return;
+    requestVoidReason().then(reason=>{
+      if(!reason) return;
+      const target = voidHistoryOrder(entry.id, reason);
+      if(!target) return;
+      openHistoryOrder(target.id);
+      renderHistoryBody();
+    });
+  }
+  function dateInputValue(date){
+    const d = date instanceof Date ? date : new Date(date || Date.now());
+    const pad = n=>String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
+  function dailyReportData(dateValue){
+    const selected = String(dateValue || dateInputValue(new Date()));
+    const orders = getHistory().filter(entry=>dateInputValue(entry.closedAt) === selected);
+    const completed = orders.filter(entry=>entry.status !== 'voided');
+    const voided = orders.filter(entry=>entry.status === 'voided');
+    const sum = (list, field)=>list.reduce((total, entry)=>total + Number(entry[field] || 0), 0);
+    const netSales = sum(completed, 'total');
+    return {
+      date:selected, orders, completed, voided, netSales,
+      cashTotal:sum(completed.filter(entry=>entry.pay === 'cash'), 'total'),
+      momoTotal:sum(completed.filter(entry=>entry.pay === 'momo'), 'total'),
+      boltTotal:sum(completed.filter(entry=>entry.pay === 'bolt'), 'total'),
+      hubtelTotal:sum(completed.filter(entry=>entry.pay === 'hubtel'), 'total'),
+      chowdeckTotal:sum(completed.filter(entry=>entry.pay === 'chowdeck'), 'total'),
+      convertedOrders:completed.filter(entry=>entry.finalChannel === 'direct').length,
+      discounts:sum(completed, 'discount'),
+      voidValue:sum(voided, 'total'),
+      average:completed.length ? Math.round(netSales / completed.length) : 0
+    };
+  }
+  function dailyReportHtml(report){
+    return `<div class="daily-report">
+      <div class="report-heading"><span>Business date</span><strong>${escapeHtml(report.date)}</strong></div>
+      <div class="report-metrics">
+        <div><small>Net sales</small><strong>${report.netSales} GHS</strong></div>
+        <div><small>Cash</small><strong>${report.cashTotal} GHS</strong></div>
+        <div><small>MoMo</small><strong>${report.momoTotal} GHS</strong></div>
+        <div><small>Bolt</small><strong>${report.boltTotal} GHS</strong></div>
+        <div><small>Hubtel</small><strong>${report.hubtelTotal} GHS</strong></div>
+        <div><small>Chowdeck</small><strong>${report.chowdeckTotal} GHS</strong></div>
+        <div><small>Converted online orders</small><strong>${report.convertedOrders}</strong></div>
+        <div><small>Completed orders</small><strong>${report.completed.length}</strong></div>
+        <div><small>Discounts</small><strong>${report.discounts} GHS</strong></div>
+        <div><small>Average order</small><strong>${report.average} GHS</strong></div>
+        <div class="void-metric"><small>Voided orders</small><strong>${report.voided.length}</strong></div>
+        <div class="void-metric"><small>Voided value</small><strong>${report.voidValue} GHS</strong></div>
+      </div>
+      <div class="report-orders"><h3>Order audit</h3>${report.orders.length ? report.orders.map(entry=>`
+        <div class="report-order ${entry.status === 'voided' ? 'voided' : ''}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(paymentLabel(entry.pay))}${entry.voidReason ? ` · ${escapeHtml(entry.voidReason)}` : ''}</small></span><strong>${entry.total} GHS</strong></div>`).join('') : '<div class="empty-state">No orders for this date.</div>'}</div>
+    </div>`;
+  }
+  function openDailyReport(){
+    const input = document.getElementById('reportDate');
+    if(!input.value) input.value = dateInputValue(new Date());
+    renderDailyReport();
+    document.getElementById('modalDailyReport').classList.add('open');
+    refreshHistoryFromRemote().then(()=>renderDailyReport());
+  }
+  function renderDailyReport(){
+    const input = document.getElementById('reportDate');
+    document.getElementById('dailyReportBody').innerHTML = dailyReportHtml(dailyReportData(input && input.value));
+  }
+  function closeDailyReport(){ document.getElementById('modalDailyReport').classList.remove('open'); }
+  function exportDailyReportCsv(){
+    const report = dailyReportData(document.getElementById('reportDate').value);
+    const rows = [['orderNo','status','source','platformReference','payment','fulfilment','refundStatus','issuedAt','subtotal','discount','total','voidReason']];
+    report.orders.forEach(entry=>rows.push([entry.orderNo,entry.status,entry.orderSource,entry.externalOrderNo,entry.pay,entry.fulfilment,entry.refundStatus,new Date(entry.closedAt).toISOString(),entry.subtotal,entry.discount,entry.total,entry.voidReason]));
+    rows.push([],['SUMMARY'],['netSales',report.netSales],['cash',report.cashTotal],['momo',report.momoTotal],['bolt',report.boltTotal],['hubtel',report.hubtelTotal],['chowdeck',report.chowdeckTotal],['convertedOnlineOrders',report.convertedOrders],['discounts',report.discounts],['completedOrders',report.completed.length],['voidedOrders',report.voided.length],['voidedValue',report.voidValue]);
+    const csv = rows.map(row=>row.map(value=>`"${String(value == null ? '' : value).replace(/"/g,'""')}"`).join(',')).join('\n');
+    downloadFile(`bk-daily-report-${report.date}.csv`, csv, 'text/csv');
+  }
+  function printDailyReport(){
+    const report = dailyReportData(document.getElementById('reportDate').value);
+    document.getElementById('printArea').innerHTML = `<h2>BurgerKiss – Daily Sales Report</h2>${dailyReportHtml(report)}`;
+    window.print();
+  }
   function downloadFile(name, content, type){
     const blob = new Blob([content], {type});
     const url = URL.createObjectURL(blob);
@@ -1501,19 +2235,19 @@
     URL.revokeObjectURL(url);
   }
   function exportHistoryJson(){
-    loadHistoryRemoteOnce().finally(()=>{
+    refreshHistoryFromRemote().finally(()=>{
       downloadFile(`bk-history-${Date.now()}.json`, JSON.stringify(getHistory(), null, 2), 'application/json');
     });
   }
   function exportHistoryCsv(){
     const writeCsv = ()=>{
     const hist = getHistory();
-    const rows = [['orderNo','slotName','pay','issued','createdAt','closedAt','subtotal','combos']];
-    hist.forEach(h=> rows.push([h.orderNo,h.slotName,h.pay,h.issued,h.createdAt,h.closedAt,h.subtotal,h.combos]));
+    const rows = [['orderNo','slotName','status','pay','issued','createdAt','closedAt','subtotal','discount','total','packMode','voidReason','voidedAt','voidedBy','combos']];
+    hist.forEach(h=> rows.push([h.orderNo,h.slotName,h.status,h.pay,h.issued,h.createdAt,h.closedAt,h.subtotal,h.discount,h.total,h.packMode,h.voidReason,h.voidedAt,h.voidedBy,h.combos]));
     const csv = rows.map(r=> r.map(v=> `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
     downloadFile(`bk-history-${Date.now()}.csv`, csv, 'text/csv');
     };
-    loadHistoryRemoteOnce().finally(writeCsv);
+    refreshHistoryFromRemote().finally(writeCsv);
   }
 
   function formatAge(createdAt){
@@ -1649,7 +2383,7 @@
 
   function openSummary(){
     const st = BK_STATE.getState();
-    if(!st.slots.length){ BK_STATE.addSlot(); }
+    if(!st.slots.length){ infoDialog('No active order. Create a new order first.'); return; }
     const {slots, active, discountRate} = BK_STATE.getState();
     const s = slots[active]; const c = BK_LOGIC.computeSlot(s);
     document.getElementById('sumTitle').textContent = `Summary – ${s.name}`;
@@ -1786,19 +2520,38 @@
   function deleteActiveSlot(){
     const {slots, active} = BK_STATE.getState();
     if(!slots.length) return;
-    confirmDialog('Delete slot', `Delete ${slots[active].name}?`).then(ok=>{
+    const slot = slots[active];
+    const protectedOrder = slot.issued || slot.pay !== 'unpaid';
+    const title = protectedOrder ? 'Void and remove order' : 'Delete draft order';
+    const message = protectedOrder
+      ? `${slot.name} is paid or issued. It cannot be deleted without a permanent void record.`
+      : `Delete unpaid draft ${slot.name}?`;
+    confirmDialog(title, message, {confirmLabel:protectedOrder ? 'Continue to void' : 'Delete draft'}).then(ok=>{
       if(!ok) return;
-      BK_STATE.deleteActive();
-      renderAll();
+      if(!protectedOrder){ BK_STATE.deleteActive(); renderAll(); return; }
+      requestVoidReason().then(reason=>{
+        if(!reason) return;
+        pushHistory(slotSnapshot(slot));
+        const entry = getHistory().find(item=>item.orderNo === slot.orderNo);
+        if(!entry) return;
+        voidHistoryOrder(entry.id, reason);
+        BK_STATE.deleteActive();
+        renderAll();
+      });
     });
   }
 
   function clearAllWithConfirm(){
-    confirmDialog('Reset all', 'Clear all slots now? This also resets saved state.').then(ok=>{
+    const protectedOpenOrders = BK_STATE.getState().slots.filter(slot=>slot.pay !== 'unpaid' && !slot.issued);
+    if(protectedOpenOrders.length){
+      infoDialog('Reset blocked: one or more paid orders have not been issued. Complete or void those orders individually first.');
+      return;
+    }
+    confirmDialog('Reset all', 'Clear all draft slots? Completed orders remain in history.').then(ok=>{
       if(!ok) return;
+      recoverIssuedSlotsToHistory();
       BK_STATE.clearAll();
-      BK_STATE.addSlot();
-      renderAll();
+      BK_STATE.addSlot().then(renderAll).catch(showOrderNumberError);
     });
   }
 
@@ -1809,6 +2562,30 @@
       location.reload();
     });
   }
+
+  function getPackagingRules(){
+      const fallback = {
+        drinkBagId: 'white_plastic_bag',
+        foodBagSmallId: 'small_paper_bag',
+        foodBagMediumId: 'medium_paper_bag',
+        foodBagLargeId: 'large_paper_bag',
+        mediumFoodMin: 2,
+        largeFoodMin: 4,
+        largeMenuChildMin: 2,
+        drinksPerPlasticBag: 2,
+        singleFoodUnitsPerLargeBag: 3
+      };
+      try{
+        const parsed = JSON.parse(localStorage.getItem(PACK_RULES_KEY) || '{}');
+        return Object.assign({}, fallback, parsed || {});
+      }catch(e){ return fallback; }
+    }
+  function prettyName(raw){
+      const txt = String(raw || '').trim();
+      if(!txt) return '';
+      if(txt.includes('_')) return txt.split('_').map(x=> x ? x[0].toUpperCase() + x.slice(1) : '').join(' ');
+      return txt;
+    }
 
   function renderAll(){
     bindProductSearch();
@@ -1828,7 +2605,9 @@
   window.BK_UI = {
     renderAll, renderOrder, renderMake, renderPay, renderIssue, refreshTotals,
     renderStock,
-    openSummary, closeSummary, openHistory, closeHistory, exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, clearHistory,
+    openSummary, closeSummary, openHistory, closeHistory, openHistoryOrder, closeHistoryOrder, reprintHistoryOrder, voidSelectedHistoryOrder,
+    exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, clearHistoryFilters,
+    openDailyReport, closeDailyReport, renderDailyReport, exportDailyReportCsv, printDailyReport, dailyReportData, voidHistoryOrder, archiveCompletedSlots, workflowNextState, buildHandoverPlan, handoverPlanHtml,
     openStockOverview, closeStockOverview,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
@@ -1836,30 +2615,9 @@
     openMenus, closeMenus, addMenuRow, saveMenus, resetMenus,
     openImages, closeImages, saveImages, resetImages,
     openStock, closeStock, saveStock, resetStock,
-    openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid,
+    openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid, openOnlineOrderDialog, convertOnlineOrder,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment, requestSlotPayment, continueFromPayment, choosePackaging
   };
 })();
-    function getPackagingRules(){
-      const fallback = {
-        drinkBagId: 'white_plastic_bag',
-        foodBagSmallId: 'small_paper_bag',
-        foodBagMediumId: 'medium_paper_bag',
-        foodBagLargeId: 'large_paper_bag',
-        mediumFoodMin: 2,
-        largeFoodMin: 4,
-        largeMenuChildMin: 2
-      };
-      try{
-        const parsed = JSON.parse(localStorage.getItem(PACK_RULES_KEY) || '{}');
-        return Object.assign({}, fallback, parsed || {});
-      }catch(e){ return fallback; }
-    }
-    function prettyName(raw){
-      const txt = String(raw || '').trim();
-      if(!txt) return '';
-      if(txt.includes('_')) return txt.split('_').map(x=> x ? x[0].toUpperCase() + x.slice(1) : '').join(' ');
-      return txt;
-    }

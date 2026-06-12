@@ -137,7 +137,7 @@
     if(!body) return;
     body.innerHTML = `
       <div class="stock-editor-intro">
-        <div><h4>Standard menus</h4><p>Each row creates a Menu tile in POS. Staff can keep the defaults or change fries/drink/sauce in the guided menu dialog.</p></div>
+        <div><h4>Standard menus</h4><p>Each row configures the menu price and default choices shown after staff select Menu on a main product.</p></div>
       </div>
     ` + DRAFT.map(rowHtml).join('');
     bindRowEvents(body);
