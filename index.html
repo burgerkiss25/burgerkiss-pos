@@ -3,300 +3,35 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>BurgerKiss – POS</title>
-  <link rel="stylesheet" href="./style.css?v=46" />
-
-  <!-- POS-Konfiguration aus externer Datei -->
-  <script src="./firebase-config.js?v=2"></script>
+  <meta name="theme-color" content="#090a0f" />
+  <title>BurgerKiss – Start Order</title>
+  <style>
+    :root{color-scheme:dark;--accent:#ffd24d;--ink:#f7f8fb;--muted:#aeb7c4;--line:#2a303b}
+    *{box-sizing:border-box}
+    html,body{min-height:100%;margin:0}
+    body{min-height:100dvh;display:grid;place-items:center;padding:20px;background:radial-gradient(circle at top left,#1b1720 0,#090a0f 38%,#07080c 100%);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    main{width:min(680px,100%);padding:clamp(28px,6vw,52px);border:1px solid var(--line);border-radius:24px;background:rgba(16,18,24,.96);box-shadow:0 28px 70px rgba(0,0,0,.42);text-align:center}
+    .brand{width:64px;height:64px;margin:0 auto 22px;display:grid;place-items:center;border-radius:18px;background:linear-gradient(135deg,var(--accent),#ff8f1f);box-shadow:0 14px 30px rgba(255,191,31,.24);color:#201300;font-size:20px;font-weight:950}
+    .eyebrow{margin:0;color:var(--muted);font-size:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}
+    h1{margin:8px 0 10px;font-size:clamp(34px,7vw,52px);line-height:1.05}
+    .copy{margin:0;color:#c0c9d6;font-size:clamp(16px,2.5vw,19px)}
+    .actions{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:30px}
+    .action{min-height:76px;display:grid;place-items:center;padding:14px 18px;border:1px solid #d2a91f;border-radius:14px;background:var(--accent);color:#211700;text-decoration:none;font-size:18px;font-weight:950;box-shadow:0 10px 24px rgba(0,0,0,.2)}
+    .action.online{border-color:#2d8bab;background:#123244;color:#d8f7ff}
+    .action:focus-visible{outline:3px solid #7eb4ff;outline-offset:3px}
+    @media(max-width:560px){body{padding:12px}main{padding:28px 18px}.actions{grid-template-columns:1fr}.action{min-height:66px}}
+  </style>
 </head>
 <body>
-  <!-- Sticky HUD -->
-  <div class="hud-wrap">
-    <header class="app-header">
-      <div class="brand-block" aria-label="BurgerKiss POS">
-        <div class="brand-mark">BK</div>
-        <div>
-          <div class="eyebrow">BurgerKiss POS</div>
-          <div class="order-context" id="activeSlotLabel">SN1</div>
-        </div>
-      </div>
-
-      <nav class="tabbar" aria-label="Order workflow">
-        <button id="tabOrder" class="active workflow-step"><span class="step-no">1</span><span>Order</span></button>
-        <button id="tabMake" class="workflow-step"><span class="step-no">2</span><span>Make</span></button>
-        <button id="tabPay" class="workflow-step"><span class="step-no">3</span><span>Pay</span></button>
-        <button id="tabIssue" class="workflow-step"><span class="step-no">4</span><span>Issue</span></button>
-      </nav>
-
-      <div class="staff-session" id="staffSession" aria-live="polite"></div>
-
-      <div class="totals" aria-live="polite">
-        <div class="total-label">Grand total</div>
-        <h1 id="grand">0 GHS</h1>
-        <div class="stats">
-          <span class="pill" id="combosPill">Combos: 0</span>
-          <span class="pill" id="discountTag">No discount</span>
-        </div>
-      </div>
-
-      <details class="more-menu">
-        <summary class="x more-trigger">More</summary>
-        <div class="more-panel">
-          <button class="x" id="btnSummary">Summary</button>
-          <button class="x" id="btnStockOverview">Stock <span class="stock-alert-badge hidden" id="stockAlertBadge">0</span></button>
-          <button class="x" id="btnHistory">History</button>
-          <button class="x" id="btnDailyReport" data-permission="daily_report">Daily Report</button>
-          <button class="x" id="btnReceipt">Receipt</button>
-          <button class="x" id="btnGroup">Group Ticket</button>
-          <button class="x online-order-trigger" id="btnOnlineOrderMenu">+ Online Order</button>
-          <button class="x danger-link" id="btnReset">Reset Order</button>
-          <button class="x" id="btnClearStorage" data-permission="maintenance">Clear Storage</button>
-          <a class="x admin-link" href="admin.html" data-permission="admin">Admin</a>
-        </div>
-      </details>
-    </header>
-
-    <div class="hud-rows compact-actions">
-      <div class="toolbar slot-tools" id="slotsBar" aria-label="Open orders">
-        <!-- Open orders remain available while legacy slot-management controls stay hidden. -->
-        <button class="chip primary-chip" id="btnAddSlot" type="button">+ Slot</button>
-        <button class="chip online-order-trigger" id="btnOnlineOrder" type="button">+ Online Order</button>
-      </div>
-
-      <details class="tool-menu discount-menu">
-        <summary class="chip">Discount</summary>
-        <div class="tool-panel" aria-label="Discount actions">
-          <button class="disc" data-disc="0.01" type="button">-1%</button>
-          <button class="disc" data-disc="0.03" type="button">-3%</button>
-          <button class="disc" data-disc="0.05" data-min-role="supervisor" type="button">-5%</button>
-          <button class="disc" data-disc="0.10" data-min-role="supervisor" type="button">-10%</button>
-          <button class="ok" id="btnClearDisc" type="button">Clear Discount</button>
-        </div>
-      </details>
-
+  <main aria-labelledby="welcomeTitle">
+    <div class="brand" aria-hidden="true">BK</div>
+    <p class="eyebrow">Welcome to BurgerKiss</p>
+    <h1 id="welcomeTitle">Start an order</h1>
+    <p class="copy">Choose how the customer placed this order.</p>
+    <div class="actions">
+      <a class="action" href="order.html?start=walkin">Walk-in Order</a>
+      <a class="action online" href="order.html?start=online">Online Order</a>
     </div>
-  </div>
-
-  <!-- Kategorien -->
-  <div class="catbar" aria-label="Product categories">
-    <button class="category-arrow" id="previousCategory" type="button" aria-label="Previous product category">‹</button>
-    <button class="tab active" data-cat="burger">Burgers</button>
-    <button class="tab" data-cat="wings">Wings</button>
-    <button class="tab" data-cat="fries">Fries</button>
-    <button class="tab" data-cat="salad">Salads</button>
-    <button class="tab" data-cat="drink">Drinks</button>
-    <button class="category-arrow" id="nextCategory" type="button" aria-label="Next product category">›</button>
-    <div class="search-wrap">
-      <span aria-hidden="true">⌕</span>
-      <input id="productSearch" class="product-search" placeholder="Search products" aria-label="Search products" />
-    </div>
-    <button id="clearProductSearch" class="tab clear-search" type="button">Clear</button>
-  </div>
-
-  <!-- Hauptbereich -->
-  <div class="wrap">
-    <!-- ORDER -->
-    <section id="tab-order">
-      <div class="order-welcome panel hidden" id="orderWelcome">
-        <div class="brand-mark">BK</div>
-        <p class="eyebrow">Welcome to BurgerKiss</p>
-        <h2>Start an order</h2>
-        <p>Choose how the customer placed this order.</p>
-        <div class="order-welcome-actions"><button class="workflow-next-button" id="btnStartWalkin" type="button">Walk-in Order</button><button class="workflow-next-button online-order-trigger" id="btnStartOnline" type="button">Online Order</button></div>
-      </div>
-      <div class="order-layout">
-        <div class="order-main" id="productPager">
-          <div class="product-page-heading">
-            <div><span class="eyebrow">Product category</span><h2 id="productCategoryTitle">Burgers</h2></div>
-            <span class="page-status" id="productPageStatus" aria-live="polite"></span>
-          </div>
-          <div class="grid" id="buttons"></div>
-          <div class="product-page-controls" aria-label="Product pages">
-            <button class="page-button" id="previousProductPage" type="button">‹ Previous</button>
-            <div class="page-dots" id="productPageDots" aria-hidden="true"></div>
-            <button class="page-button" id="nextProductPage" type="button">Next ›</button>
-          </div>
-        </div>
-
-        <aside class="order-side panel" id="orderCart">
-          <div class="order-side-heading"><h3>Current order</h3><button class="cart-close" id="mobileCartClose" type="button" aria-label="Close current order">×</button></div>
-          <div class="rows" id="lines"></div>
-          <div class="flow-action" id="orderFlowNav"></div>
-          <div class="sumline"><span>Subtotal</span><b id="subtotal">0 GHS</b></div>
-          <div class="sumline"><span>Discount</span><b id="discount">0 GHS</b></div>
-          <div class="sumline"><span>Total</span><b id="total">0 GHS</b></div>
-        </aside>
-        <button class="mobile-cart-toggle" id="mobileCartToggle" type="button" aria-controls="orderCart" aria-expanded="false">
-          <span><b id="mobileCartCount">0 items</b><small>View current order</small></span>
-          <strong id="mobileCartTotal">0 GHS</strong>
-        </button>
-      </div>
-    </section>
-
-    <!-- MAKE -->
-    <section id="tab-make" class="hidden">
-      <div id="makeList" class="panel">
-        <h3>Preparation – mark items as done</h3>
-        <div class="flow-action" id="makeFlowNav"></div>
-      </div>
-    </section>
-
-    <!-- PAY -->
-    <section id="tab-pay" class="hidden">
-      <div id="payList" class="panel">
-        <h3>Payment status</h3>
-        <div class="flow-action" id="payFlowNav"></div>
-      </div>
-      <div class="panel" style="margin-top:10px">
-        <div class="sumline"><span>All Slots Subtotal</span><b id="allSubtotal">0 GHS</b></div>
-        <div class="sumline"><span>Global Discount</span><b id="allDiscount">0 GHS</b></div>
-        <div class="sumline"><span>Grand Total</span><b id="allGrand">0 GHS</b></div>
-      </div>
-    </section>
-
-    <!-- ISSUE -->
-    <section id="tab-issue" class="hidden">
-      <div id="issueList" class="panel">
-        <h3>Issue / Handover</h3>
-        <div class="flow-action" id="issueFlowNav"></div>
-      </div>
-    </section>
-
-    <!-- PRINT AREA -->
-    <section id="printArea" class="hidden"></section>
-  </div>
-
-  <!-- SUMMARY MODAL -->
-  <div class="modal" id="modalSummary">
-    <div class="sheet">
-      <header>
-        <b id="sumTitle">Summary – SN1</b>
-        <div><button class="x" id="sumClose">Close</button></div>
-      </header>
-      <div class="body" id="sumBody"></div>
-    </div>
-  </div>
-
-  <!-- HISTORY MODAL -->
-  <div class="modal" id="modalHistory">
-    <div class="sheet">
-      <header>
-        <b>Order History</b>
-        <div>
-          <input id="hSearch" placeholder="Search order / platform reference" style="min-width:220px;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:8px" />
-          <button class="x" id="hToday">Today</button>
-          <button class="x" id="hClear">Clear Filters</button>
-          <button class="x" id="hExportJson" data-permission="history_export">Export JSON</button>
-          <button class="x" id="hExportCsv" data-permission="history_export">Export CSV</button>
-          <button class="x" id="hClose">Close</button>
-        </div>
-      </header>
-      <div class="body" id="historyBody"></div>
-    </div>
-  </div>
-
-  <!-- HISTORY ORDER DETAIL MODAL -->
-  <div class="modal" id="modalHistoryDetail">
-    <div class="sheet history-detail-sheet">
-      <header>
-        <b id="historyDetailTitle">Order details</b>
-        <div>
-          <button class="x" id="hdReprint">Reprint Receipt</button>
-          <button class="x danger-link" id="hdVoid" data-permission="void_order">Void Order</button>
-          <button class="x" id="hdClose">Close</button>
-        </div>
-      </header>
-      <div class="body" id="historyDetailBody"></div>
-    </div>
-  </div>
-
-  <!-- DAILY REPORT MODAL -->
-  <div class="modal" id="modalDailyReport">
-    <div class="sheet report-sheet">
-      <header>
-        <b>Daily Sales Report</b>
-        <div>
-          <input id="reportDate" type="date" />
-          <button class="x" id="reportExport">Export CSV</button>
-          <button class="x" id="reportPrint">Print Report</button>
-          <button class="x" id="reportClose">Close</button>
-        </div>
-      </header>
-      <div class="body" id="dailyReportBody"></div>
-    </div>
-  </div>
-
-  <!-- STOCK OVERVIEW MODAL -->
-  <div class="modal" id="modalStockOverview">
-    <div class="sheet">
-      <header>
-        <b>Stock overview</b>
-        <div><button class="x" id="stockOverviewClose">Close</button></div>
-      </header>
-      <div class="body" id="stockOverviewBody"></div>
-    </div>
-  </div>
-
-  <!-- RECEIPT MODAL -->
-  <div class="modal" id="modalReceipt">
-    <div class="sheet">
-      <header>
-        <b>Receipt</b>
-        <div>
-          <button class="x" id="rCopy">Copy</button>
-          <button class="x" id="rWA">WhatsApp</button>
-          <button class="x" id="rPrint">Print</button>
-          <button class="x" id="rClose">Close</button>
-        </div>
-      </header>
-      <div class="body" id="receiptBody"></div>
-    </div>
-  </div>
-
-  <!-- GROUP MODAL -->
-  <div class="modal" id="modalGroup">
-    <div class="sheet">
-      <header>
-        <b>Group Ticket</b>
-        <div>
-          <button class="x" id="gMake">Create Receipt</button>
-          <button class="x" id="gPaid">Mark Paid</button>
-          <button class="x" id="gClose">Close</button>
-        </div>
-      </header>
-      <div class="body" id="groupBody"></div>
-    </div>
-  </div>
-
-  <script>
-    if(!window.FIREBASE_CONFIG){
-      console.warn('Firebase config missing: online database is disabled until firebase-config.js is filled.');
-    }
-  </script>
-
-  <!-- =================== Firebase SDK (Compat) =================== -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-
-  <!-- ====================== App-Skripte ====================== -->
-  <script src="./access.js?v=2"></script>
-  <script src="./data.js?v=13"></script>
-  <script src="./prices.js?v=14"></script>
-  <script src="./products.js?v=14"></script>
-  <script src="./menus.js?v=2"></script>
-  <script src="./images.js?v=18"></script>
-  <script src="./stock_data.js?v=13"></script>
-  <script src="./stock_utils.js?v=15"></script>
-  <script src="./stock.js?v=18"></script>
-  <script src="./state.js?v=20"></script>
-  <script src="./logic.js?v=14"></script>
-  <script src="./packing.js?v=1"></script>
-  <script src="./ui.js?v=45"></script>
-  <script src="./main.js?v=20"></script>
-  <script>BK_ACCESS.init();</script>
-
-  <!-- =============== Live-Sync (Variante B, Polling) =============== -->
-  <script src="./sync_poll.js?v=13"></script>
+  </main>
 </body>
 </html>

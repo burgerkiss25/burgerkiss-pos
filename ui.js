@@ -994,11 +994,6 @@
   function renderOrder(){
     const {slots, active} = BK_STATE.getState();
     const lines = document.getElementById('lines'); lines.innerHTML='';
-    const welcome = document.getElementById('orderWelcome');
-    const layout = document.querySelector('#tab-order .order-layout');
-    if(welcome) welcome.classList.toggle('hidden', !!slots.length);
-    if(layout) layout.classList.toggle('hidden', !slots.length);
-    document.body.classList.toggle('order-empty', !slots.length);
     if(!slots.length){
       setSlotTotals(0,0,0);
       const mobileCount = document.getElementById('mobileCartCount');
@@ -1722,7 +1717,10 @@
     const syncOnlineFields = ()=> document.getElementById('onlinePhoneRow').classList.toggle('hidden', platformInput.value !== 'whatsapp');
     platformInput.onchange = syncOnlineFields; syncOnlineFields();
     reference.focus();
-    document.getElementById('dlgCancel').onclick = closeDialog;
+    document.getElementById('dlgCancel').onclick = ()=>{
+      closeDialog();
+      if(!BK_STATE.getState().slots.length) window.location.replace('index.html');
+    };
     document.getElementById('dlgConfirm').onclick = ()=>{
       const platform = document.getElementById('onlinePlatform').value;
       const externalOrderNo = reference.value.trim();

@@ -6,10 +6,40 @@
   BK_IMAGES.load();
   BK_STOCK.load();
   BK_STATE.load();
-  BK_STATE.whenReady().then(function(){
+  let stateReady = false;
+  let entryHandled = false;
+  const entryMode = new URLSearchParams(window.location.search).get('start');
+
+  function handleOrderPageEntry(){
+    if(entryHandled || !stateReady || !BK_ACCESS.current()) return;
+    entryHandled = true;
     BK_UI.archiveCompletedSlots();
-    BK_UI.renderAll();
+    const {slots} = BK_STATE.getState();
+    document.body.classList.remove('app-loading');
+    if(slots.length){
+      history.replaceState(null, '', 'order.html');
+      BK_UI.renderAll();
+      return;
+    }
+    if(entryMode === 'walkin'){
+      history.replaceState(null, '', 'order.html');
+      if(BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot();
+      return;
+    }
+    if(entryMode === 'online'){
+      history.replaceState(null, '', 'order.html');
+      if(BK_ACCESS.guardNewSale()) BK_UI.openOnlineOrderDialog();
+      return;
+    }
+    window.location.replace('index.html');
+  }
+
+  document.addEventListener('bk-access-ready', handleOrderPageEntry);
+  BK_STATE.whenReady().then(function(){
+    stateReady = true;
+    handleOrderPageEntry();
   }).catch(function(error){
+    document.body.classList.remove('app-loading');
     console.error('Initial order number allocation failed:', error && error.message);
     if(window.BK_UI) BK_UI.infoDialog('A new order could not be created because no unique order number could be reserved. Check the internet connection and reload.');
   });
@@ -24,7 +54,7 @@
     });
   }
 
-  // Schutz gegen fehlerhafte Merge-Duplikate in index.html
+  // Schutz gegen fehlerhafte Merge-Duplikate in order.html
   removeDuplicateIds([
     'tabOrder','tabMake','tabPay','tabIssue',
     'btnSummary','btnStockOverview','btnHistory','btnDailyReport','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup','btnOnlineOrder',
@@ -49,7 +79,6 @@
     BK_UI.clearStorageWithConfirm();
   };
 
-  document.getElementById('btnStartWalkin').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot(); };
   document.getElementById('btnAddSlot').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot(); };
 
   if(forceSlot){
