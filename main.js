@@ -8,8 +8,7 @@
   BK_STATE.load();
   BK_STATE.whenReady().then(function(){
     BK_UI.archiveCompletedSlots();
-    if(BK_STATE.getState().slots.length){ BK_UI.renderAll(); return; }
-    return BK_STATE.addSlot().then(function(){ BK_UI.renderAll(); });
+    BK_UI.renderAll();
   }).catch(function(error){
     console.error('Initial order number allocation failed:', error && error.message);
     if(window.BK_UI) BK_UI.infoDialog('A new order could not be created because no unique order number could be reserved. Check the internet connection and reload.');
@@ -51,6 +50,7 @@
     BK_UI.clearStorageWithConfirm();
   };
 
+  document.getElementById('btnStartWalkin').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot(); };
   document.getElementById('btnAddSlot').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot(); };
   document.getElementById('btnRenameSlot').onclick = ()=> BK_UI.renameActiveSlot();
   document.getElementById('btnDeleteSlot').onclick = ()=> BK_UI.deleteActiveSlot();
@@ -95,7 +95,10 @@
     BK_UI.refreshTotals();
   };
   document.getElementById('tabOrder').onclick = ()=> showTab('order');
-  document.getElementById('tabMake').onclick  = ()=> showTab('make');
+  document.getElementById('tabMake').onclick  = ()=>{
+    const state = BK_STATE.getState(); const slot = state.slots[state.active];
+    if(slot && slot.items.length && !slot.sentToKitchen) BK_UI.continueOrderToKitchen(state.active); else showTab('make');
+  };
   document.getElementById('tabPay').onclick   = ()=> showTab('pay');
   document.getElementById('tabIssue').onclick = ()=> showTab('issue');
 

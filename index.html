@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – POS</title>
-  <link rel="stylesheet" href="./style.css?v=44" />
+  <link rel="stylesheet" href="./style.css?v=45" />
 
   <!-- POS-Konfiguration aus externer Datei -->
   <script src="./firebase-config.js?v=2"></script>
@@ -107,6 +107,13 @@
   <div class="wrap">
     <!-- ORDER -->
     <section id="tab-order">
+      <div class="order-welcome panel hidden" id="orderWelcome">
+        <div class="brand-mark">BK</div>
+        <p class="eyebrow">Welcome to BurgerKiss</p>
+        <h2>Start an order</h2>
+        <p>Choose how the customer placed this order.</p>
+        <div class="order-welcome-actions"><button class="workflow-next-button" id="btnStartWalkin" type="button">Walk-in Order</button><button class="workflow-next-button online-order-trigger" id="btnStartOnline" type="button">Online Order</button></div>
+      </div>
       <div class="order-layout">
         <div class="order-main">
           <div class="grid" id="buttons"></div>
@@ -270,7 +277,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
   <!-- ====================== App-Skripte ====================== -->
-  <script src="./access.js?v=1"></script>
+  <script src="./access.js?v=2"></script>
   <script src="./data.js?v=13"></script>
   <script src="./prices.js?v=14"></script>
   <script src="./products.js?v=14"></script>
@@ -279,9 +286,10 @@
   <script src="./stock_data.js?v=13"></script>
   <script src="./stock_utils.js?v=15"></script>
   <script src="./stock.js?v=18"></script>
-  <script src="./state.js?v=19"></script>
+  <script src="./state.js?v=20"></script>
   <script src="./logic.js?v=14"></script>
-  <script src="./ui.js?v=44"></script>
+  <script src="./packing.js?v=1"></script>
+  <script src="./ui.js?v=45"></script>
   <script src="./main.js?v=20"></script>
   <script>BK_ACCESS.init();</script>
 

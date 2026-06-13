@@ -30,6 +30,36 @@
     if(!store) return false;
     try{ store.setItem(key, JSON.stringify(value)); return true; }catch(e){ return false; }
   }
+  function remoteAccessRef(){
+    try{
+      if(!(root.FIREBASE_CONFIG && root.firebase && root.firebase.database)) return null;
+      const app = root.firebase.apps && root.firebase.apps.length ? root.firebase.app() : root.firebase.initializeApp(root.FIREBASE_CONFIG);
+      return root.firebase.database(app).ref((root.BK_ACCESS_PATH || '/pos/access/staffPins').replace(/\/+$/,''));
+    }catch(e){ return null; }
+  }
+  function ensureRemoteAuth(){
+    try{
+      if(!(root.FIREBASE_CONFIG && root.firebase && root.firebase.auth)) return Promise.resolve(false);
+      const app = root.firebase.apps && root.firebase.apps.length ? root.firebase.app() : root.firebase.initializeApp(root.FIREBASE_CONFIG);
+      const auth = root.firebase.auth(app);
+      return auth.currentUser ? Promise.resolve(true) : auth.signInAnonymously().then(()=>true).catch(()=>false);
+    }catch(e){ return Promise.resolve(false); }
+  }
+  function loadRemoteConfig(){
+    const ref = remoteAccessRef();
+    if(!ref) return Promise.resolve(false);
+    return ensureRemoteAuth().then(()=>ref.get()).then(snapshot=>{
+      const config = snapshot.val();
+      if(!(config && config.version === 1 && config.pins)) return false;
+      writeJson(localStorageSafe(), CONFIG_KEY, config);
+      return true;
+    }).catch(()=>false);
+  }
+  function saveRemoteConfig(config){
+    const ref = remoteAccessRef();
+    if(!ref) return Promise.resolve(false);
+    return ensureRemoteAuth().then(()=>ref.set(config)).then(()=>true).catch(error=>{ console.warn('staff access sync failed:', error && error.message); return false; });
+  }
   function minutes(date){ return date.getHours() * 60 + date.getMinutes(); }
   function suggestedShift(date){ return minutes(date || new Date()) >= 15 * 60 ? 'late' : 'early'; }
   function salesStatus(date){
@@ -49,18 +79,21 @@
   function staffById(id){ return STAFF.find(person=>person.id === id) || null; }
   function normalizeSession(raw){
     const person = staffById(raw && raw.staffId);
-    const shift = SHIFTS[raw && raw.shiftId];
-    if(!person || !shift) return null;
+    const mode = raw && raw.mode === 'remote' && person && person.role !== 'employee' ? 'remote' : 'operational';
+    const shift = mode === 'operational' ? SHIFTS[raw && raw.shiftId] : null;
+    if(!person || (mode === 'operational' && !shift)) return null;
     return {
-      staffId:person.id, name:person.name, role:person.role, roleLabel:person.roleLabel,
-      shiftId:shift.id, shiftLabel:shift.label, shiftHours:shift.hours,
+      staffId:person.id, name:person.name, role:person.role, roleLabel:person.roleLabel, mode,
+      shiftId:shift ? shift.id : '', shiftLabel:shift ? shift.label : 'Remote support', shiftHours:shift ? shift.hours : 'No shift',
       businessDate:String(raw.businessDate || businessDate()), signedInAt:Number(raw.signedInAt) || Date.now()
     };
   }
   function actor(){
     if(!session) return null;
-    return { id:session.staffId, name:session.name, role:session.role, shiftId:session.shiftId, businessDate:session.businessDate };
+    return { id:session.staffId, name:session.name, role:session.role, mode:session.mode, shiftId:session.shiftId, businessDate:session.businessDate };
   }
+  function operationalActor(){ return session && session.mode === 'operational' ? actor() : null; }
+  function canOperate(){ return !!(session && session.mode === 'operational'); }
   function configured(){
     const config = readJson(localStorageSafe(), CONFIG_KEY);
     return !!(config && config.version === 1 && config.pins && STAFF.every(person=>config.pins[person.id]));
@@ -90,7 +123,9 @@
       const salt = randomHex(16);
       pins[person.id] = { salt, hash:await hashPin(pin, salt) };
     }
-    writeJson(localStorageSafe(), CONFIG_KEY, { version:1, createdAt:Date.now(), pins });
+    const config = { version:1, createdAt:Date.now(), pins };
+    writeJson(localStorageSafe(), CONFIG_KEY, config);
+    await saveRemoteConfig(config);
   }
   async function verifyPin(staffId, pin){
     const config = readJson(localStorageSafe(), CONFIG_KEY);
@@ -100,10 +135,12 @@
   }
   function setSession(staffId, shiftId){
     const person = staffById(staffId);
-    if(!person || !SHIFTS[shiftId]) return null;
+    const mode = shiftId === 'remote' && person && person.role !== 'employee' ? 'remote' : 'operational';
+    const shift = SHIFTS[shiftId];
+    if(!person || (mode === 'operational' && !shift)) return null;
     session = {
-      staffId:person.id, name:person.name, role:person.role, roleLabel:person.roleLabel,
-      shiftId, shiftLabel:SHIFTS[shiftId].label, shiftHours:SHIFTS[shiftId].hours,
+      staffId:person.id, name:person.name, role:person.role, roleLabel:person.roleLabel, mode,
+      shiftId:shift ? shift.id : '', shiftLabel:shift ? shift.label : 'Remote support', shiftHours:shift ? shift.hours : 'No shift',
       businessDate:businessDate(), signedInAt:Date.now()
     };
     writeJson(sessionStorageSafe(), SESSION_KEY, session);
@@ -168,7 +205,17 @@
   function showLogin(message){
     const host = shell();
     const selectedShift = suggestedShift(new Date());
-    host.innerHTML = `<div class="access-card"><div class="brand-mark">BK</div><p class="access-kicker">BurgerKiss POS</p><h1>Who is using this till?</h1><p class="access-copy">Select your name, shift and enter your personal PIN.</p><form id="accessLoginForm" class="access-form"><div class="staff-picker">${STAFF.map((person,index)=>`<label class="staff-choice"><input type="radio" name="staffId" value="${person.id}" ${index===0?'checked':''}><span><b>${escapeHtml(person.name)}</b><small>${escapeHtml(person.roleLabel)}</small></span></label>`).join('')}</div><label><span>Shift</span><select name="shiftId">${Object.values(SHIFTS).map(shift=>`<option value="${shift.id}" ${shift.id===selectedShift?'selected':''}>${escapeHtml(shift.label)} · ${escapeHtml(shift.hours)}</option>`).join('')}</select></label><label><span>Personal PIN</span><input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="current-password" required autofocus></label><div class="access-error" id="accessError">${escapeHtml(message || '')}</div><button class="access-primary" type="submit">Start shift</button></form></div>`;
+    host.innerHTML = `<div class="access-card"><div class="brand-mark">BK</div><p class="access-kicker">BurgerKiss POS</p><h1>Who is signing in?</h1><p class="access-copy">Staff working in the truck choose a shift. Mr Asamoah and Vera may choose Remote Support without joining a shift.</p><form id="accessLoginForm" class="access-form"><div class="staff-picker">${STAFF.map((person,index)=>`<label class="staff-choice"><input type="radio" name="staffId" value="${person.id}" data-role="${person.role}" ${index===0?'checked':''}><span><b>${escapeHtml(person.name)}</b><small>${escapeHtml(person.roleLabel)}</small></span></label>`).join('')}</div><label><span>Access mode</span><select name="shiftId" id="accessMode"><option value="remote">Remote Support · no shift</option>${Object.values(SHIFTS).map(shift=>`<option value="${shift.id}" >${escapeHtml(shift.label)} · ${escapeHtml(shift.hours)}</option>`).join('')}</select></label><label><span>Personal PIN</span><input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="current-password" required autofocus></label><div class="access-error" id="accessError">${escapeHtml(message || '')}</div><button class="access-primary" type="submit">Sign in</button></form></div>`;
+    const syncModes = ()=>{
+      const selected = document.querySelector('input[name="staffId"]:checked');
+      const remote = document.querySelector('#accessMode option[value="remote"]');
+      const employee = selected && selected.dataset.role === 'employee';
+      remote.disabled = employee;
+      if(employee) document.getElementById('accessMode').value = selectedShift;
+      else document.getElementById('accessMode').value = 'remote';
+    };
+    document.querySelectorAll('input[name="staffId"]').forEach(input=>input.addEventListener('change', syncModes));
+    syncModes();
     document.getElementById('accessLoginForm').onsubmit = async event=>{
       event.preventDefault();
       const data = Object.fromEntries(new FormData(event.currentTarget).entries());
@@ -194,16 +241,23 @@
       document.dispatchEvent(new CustomEvent('bk-access-ready', {detail:session}));
       return;
     }
-    if(configured()) showLogin(); else showSetup();
+    if(configured()){ showLogin(); return; }
+    const host = shell();
+    host.innerHTML = '<div class="access-card"><div class="brand-mark">BK</div><h1>Loading staff access…</h1><p class="access-copy">Checking the shared BurgerKiss staff configuration.</p></div>';
+    loadRemoteConfig().then(found=>{ if(found || configured()) showLogin(); else showSetup(); });
   }
   function guardNewSale(slot){
+    if(!canOperate()){
+      if(root.BK_UI && BK_UI.infoDialog) BK_UI.infoDialog('Remote Support is for monitoring and approvals. Join an Early or Late shift to operate the till.');
+      return false;
+    }
     const status = salesStatus();
     if(status.open || (slot && Array.isArray(slot.items) && slot.items.length)) return true;
     if(root.BK_UI && BK_UI.infoDialog) BK_UI.infoDialog(`${status.label}. ${status.detail}. Existing orders can still be completed.`);
     return false;
   }
 
-  const api = { STAFF, SHIFTS, ROLE_LEVEL, suggestedShift, salesStatus, businessDate, init, current:()=>session, actor, hasRole, can, applyPermissions, guardNewSale, signOut };
+  const api = { STAFF, SHIFTS, ROLE_LEVEL, suggestedShift, salesStatus, businessDate, init, current:()=>session, actor, operationalActor, canOperate, hasRole, can, applyPermissions, guardNewSale, signOut };
   root.BK_ACCESS = api;
   if(typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

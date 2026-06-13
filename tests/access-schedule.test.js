@@ -23,3 +23,12 @@ test('after-midnight closeout remains assigned to previous business date', () =>
   assert.equal(access.businessDate(at(0, 15, 14)), '2026-06-13');
   assert.equal(access.businessDate(at(8, 0, 14)), '2026-06-14');
 });
+
+
+test('owner and supervisor roles expose remote-capable identities', () => {
+  const owner = access.STAFF.find(person=>person.id === 'asamoah');
+  const supervisor = access.STAFF.find(person=>person.id === 'vera');
+  assert.equal(owner.role, 'owner');
+  assert.equal(supervisor.role, 'supervisor');
+  assert.equal(access.STAFF.filter(person=>person.role === 'employee').length, 2);
+});

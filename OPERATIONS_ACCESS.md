@@ -1,13 +1,15 @@
-# BurgerKiss staff access and operating schedule
+# BurgerKiss staff access and operating workflow
 
-## Staff roles
+## Staff roles and access modes
 
 - **Mr Asamoah** — Owner
 - **Vera** — Supervisor
 - **Josephine** — Employee
 - **Erica** — Employee
 
-On first use, Mr Asamoah creates a personal 4–6 digit PIN for every staff member. The browser stores salted PBKDF2 hashes rather than plain-text PINs. A signed-in operator selects the early or late shift, and the current operator remains active for the browser tab until they choose their identity in the header to sign out or switch staff.
+Mr Asamoah and Vera may sign in using **Remote Support** without joining a shift. Remote sessions are independent per device/browser tab, do not replace the active Foodtruck operator, and are intended for monitoring, reports and approvals. To operate the till, either person explicitly joins the Early or Late shift. Josephine and Erica always select an operational shift.
+
+PINs are stored locally as salted PBKDF2 hashes rather than plain text. True multi-device identity and remote approvals still require Firebase Authentication and server-side Database Rules.
 
 ## Shifts and sales hours
 
@@ -16,14 +18,22 @@ On first use, Mr Asamoah creates a personal 4–6 digit PIN for every staff memb
 - Handover overlap: **15:00–16:00**
 - Sales hours: **08:00–23:59**, Monday through Sunday
 
-Before 08:00 the POS shows preparation time. After 23:59 it blocks the first item of a new order and new online orders, while existing orders can still be prepared, paid, issued, or voided by an authorized person. Closeout activity before 08:00 is assigned to the previous business date.
+Before 08:00 the POS shows preparation time. After 23:59 it blocks new orders while existing orders can still be completed. Closeout activity before 08:00 is assigned to the previous business date.
 
-## Role permissions in this phase
+## Starting orders
 
-Employees can perform the normal Order → Make → Pay → Issue workflow, print receipts, inspect history, and use discounts up to 3%. Vera and Mr Asamoah can additionally use 5%/10% discounts, void completed orders, and open the daily report. Only Mr Asamoah can open Admin, clear local device storage, and export full history data.
+When there is no open order, the POS shows **Walk-in Order** and **Online Order** instead of allocating an empty order number. Online channels are WhatsApp, Bolt, Chowdeck and Hubtel. Bolt, Chowdeck and Hubtel are prepaid. WhatsApp remains unpaid until the applicable pickup/delivery payment event.
 
-Order history now retains the staff member who created, paid, issued, or voided the order together with shift and business-date metadata.
+## WhatsApp fulfilment
 
-## Security boundary
+- **Pickup:** Cash or MoMo at pickup.
+- **Customer rider:** MoMo must be received before handover.
+- **BurgerKiss rider:** MoMo on delivery. Handover to the BurgerKiss rider changes the order to `out-for-delivery`; the order closes only after MoMo and delivery are confirmed.
 
-This access gate protects day-to-day use of the POS interface, but it is not a replacement for server-side authorization. Firebase Authentication claims and Realtime Database Rules must still enforce the same roles before the application is treated as secure against a person who can modify browser storage or run developer tools.
+## Packaging confirmation
+
+Packaging is confirmed only after **Continue to Kitchen**, never while products are still being selected. Every menu always remains in its own food bag. Extra items are explicitly assigned to a menu/customer or a separate bag. Drinks may be packed together to reduce bag use or kept separated by customer group.
+
+## Role permissions
+
+Employees perform the normal Order → Make → Pay → Issue workflow and use discounts up to 3%. Vera and Mr Asamoah can additionally use 5%/10% discounts, void completed orders and open the daily report. Only Mr Asamoah can open Admin, clear local device storage and export full history data.

@@ -95,6 +95,7 @@ pos/stock/inventory
 pos/stock/addons
 pos/history
 pos/counters/orderNumber
+pos/access/staffPins
 ```
 
 Wenn später Sicherheit aktiviert wird, ersetzen wir diese Entwicklungsregeln durch Rollen-/Auth-Regeln.
