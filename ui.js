@@ -604,6 +604,13 @@
 
 
   async function addProductWithFlow(product){
+    const accessState = BK_STATE.getState();
+    const accessSlot = accessState.slots[accessState.active];
+    if(window.BK_ACCESS && !BK_ACCESS.guardNewSale(accessSlot)) return;
+    if(accessSlot && !accessSlot.createdBy && window.BK_ACCESS && BK_ACCESS.current()){
+      const activeAccess = BK_ACCESS.current();
+      BK_STATE.updateSlot(accessState.active, { createdBy:BK_ACCESS.operationalActor ? BK_ACCESS.operationalActor() : BK_ACCESS.actor(), businessDate:activeAccess.businessDate, shiftId:activeAccess.shiftId });
+    }
     const pendingNote = '';
     let added = false;
 
@@ -616,17 +623,6 @@
     }
 
     if(!added) return;
-    const st = BK_STATE.getState();
-    const slot = st.slots[st.active];
-    if(slot && !slot.packAsked){
-      const foodCount = (slot.items || []).filter(it=>{
-        const p = productById(it.itemId);
-        return p && p.cat !== 'drink' && p.cat !== 'extra' && !String(p.id || '').startsWith('x_sauce_');
-      }).length;
-      if(foodCount >= 2){
-        choosePackaging(st.active);
-      }
-    }
     renderSlotsBar();
     renderOrder();
     renderMake();
@@ -887,28 +883,13 @@
   }
 
   function packagingLabel(slot){
-    return slot && slot.packMode === 'split' ? 'Single items packed separately' : 'Eligible single items packed together';
+    if(!slot || !slot.packAsked) return 'Packing not confirmed';
+    const drinks = slot.drinkPackMode === 'by-customer' ? 'drinks by customer' : 'drinks together where possible';
+    return `Menu bags stay separate · ${drinks}`;
   }
 
   function choosePackaging(slotIndex){
-    const st = BK_STATE.getState();
-    const slot = st.slots[slotIndex];
-    if(!slot || slot.issued) return Promise.resolve(false);
-    BK_STATE.setActive(slotIndex);
-    renderSlotsBar();
-    return confirmDialog('Packaging preference', 'Choose how eligible single food items should be packed. Every menu always uses its own large paper bag. Cold drinks always use plastic bags.', {
-      cancelLabel: 'Pack separately',
-      confirmLabel: 'Pack together'
-    }).then(together=>{
-      const latest = BK_STATE.getState().slots[slotIndex];
-      if(!latest || latest.issued) return false;
-      BK_STATE.setPackMode(slotIndex, together ? 'shared' : 'split');
-      renderOrder();
-      renderMake();
-      renderIssue();
-      refreshTotals();
-      return true;
-    });
+    return packingAssignmentDialog(slotIndex);
   }
 
   function packagingControl(slot, slotIndex, compact){
@@ -932,6 +913,10 @@
   function renderOrder(){
     const {slots, active} = BK_STATE.getState();
     const lines = document.getElementById('lines'); lines.innerHTML='';
+    const welcome = document.getElementById('orderWelcome');
+    const layout = document.querySelector('#tab-order .order-layout');
+    if(welcome) welcome.classList.toggle('hidden', !!slots.length);
+    if(layout) layout.classList.toggle('hidden', !slots.length);
     if(!slots.length){ setSlotTotals(0,0,0); return; }
     const s = slots[active];
     lines.appendChild(packagingControl(s, active, false));
@@ -1026,7 +1011,102 @@
     const c = BK_LOGIC.computeSlot(s);
     setSlotTotals(c.subtotal, 0, c.subtotal);
     const orderNext = workflowNextState('order', s);
-    renderWorkflowNext('orderFlowNav', Object.assign({}, orderNext, {onClick:()=>goTab(orderNext.target)}));
+    renderWorkflowNext('orderFlowNav', Object.assign({}, orderNext, {onClick:()=>continueOrderToKitchen(active)}));
+  }
+
+  function whatsappOrderSetup(slotIndex){
+    const slot = BK_STATE.getState().slots[slotIndex];
+    if(!slot || slot.orderSource !== 'whatsapp' || slot.fulfilment) return Promise.resolve(true);
+    return new Promise(resolve=>{
+      const host = ensureDialogHost();
+      document.getElementById('appDialogTitle').textContent = 'WhatsApp fulfilment';
+      document.getElementById('appDialogBody').innerHTML = `
+        <p>Confirm how the customer will receive and pay for this WhatsApp order.</p>
+        <label class="dialog-label">Receive order<select id="waFulfilment" class="dialog-field"><option value="pickup">Customer pickup</option><option value="delivery">Delivery</option></select></label>
+        <label class="dialog-label" id="waPickupPaymentRow">Pickup payment<select id="waPickupPayment" class="dialog-field"><option value="cash">Cash</option><option value="momo">MoMo</option></select></label>
+        <label class="dialog-label hidden" id="waRiderRow">Rider arrangement<select id="waRiderType" class="dialog-field"><option value="customer-rider">Customer sends a rider — pay before handover</option><option value="burgerkiss-rider">BurgerKiss rider — MoMo on delivery</option></select></label>
+        <div class="packing-summary-note" id="waPaymentRule">Payment is collected when the customer picks up the order.</div>
+        <div class="dialog-actions"><button class="x" id="dlgCancel">Back to Order</button><button class="x modifier-primary" id="dlgConfirm">Continue</button></div>`;
+      host.classList.add('open');
+      const fulfilment = document.getElementById('waFulfilment');
+      const sync = ()=>{
+        const delivery = fulfilment.value === 'delivery';
+        document.getElementById('waPickupPaymentRow').classList.toggle('hidden', delivery);
+        document.getElementById('waRiderRow').classList.toggle('hidden', !delivery);
+        document.getElementById('waPaymentRule').textContent = delivery
+          ? (document.getElementById('waRiderType').value === 'customer-rider' ? 'MoMo must be received before handing the order to the customer’s rider.' : 'BurgerKiss delivers the order. The customer pays by MoMo when the rider arrives.')
+          : 'The customer may pay by Cash or MoMo at pickup.';
+      };
+      fulfilment.onchange = sync;
+      document.getElementById('waRiderType').onchange = sync;
+      sync();
+      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(false); };
+      document.getElementById('dlgConfirm').onclick = ()=>{
+        const delivery = fulfilment.value === 'delivery';
+        const riderType = delivery ? document.getElementById('waRiderType').value : '';
+        const preferredPayment = delivery ? 'momo' : document.getElementById('waPickupPayment').value;
+        BK_STATE.updateSlot(slotIndex, {fulfilment:delivery ? 'delivery' : 'pickup', riderType, preferredPayment, deliveryStatus:delivery ? 'preparing' : ''});
+        closeDialog(); resolve(true);
+      };
+    });
+  }
+
+  function packingAssignmentDialog(slotIndex){
+    const slot = BK_STATE.getState().slots[slotIndex];
+    if(!slot || !window.BK_PACKING || !BK_PACKING.needsPackingReview(slot, BK_DATA.BASE)){
+      if(slot) BK_STATE.updateSlot(slotIndex, {packAsked:true, sentToKitchen:true});
+      return Promise.resolve(true);
+    }
+    return new Promise(resolve=>{
+      const groups = BK_PACKING.menuGroups(slot);
+      const assignable = BK_PACKING.assignableItems(slot, BK_DATA.BASE);
+      const host = ensureDialogHost();
+      const groupOptions = groups.length
+        ? groups.map((group,index)=>`<option value="${escapeHtml(group.id)}">Bag ${index+1} — ${escapeHtml(group.label)}</option>`).join('')
+        : '<option value="shared-single">Shared food/drink group</option>';
+      const rows = assignable.map((entry,index)=>{
+        const current = entry.item.customerGroupId || '';
+        return `<label class="packing-assignment-row"><span><b>${escapeHtml(entry.product.name || entry.item.itemId)}</b><small>${BK_PACKING.isDrink(entry.item, BK_DATA.BASE) ? 'Drink' : 'Single item'}</small></span><select class="dialog-field packing-assignment" data-item-index="${entry.index}"><option value="">Choose customer / bag…</option>${groupOptions}<option value="separate-${index}">Separate bag / customer</option></select></label>`;
+      }).join('');
+      const drinkCount = (slot.items || []).filter(item=>BK_PACKING.isDrink(item, BK_DATA.BASE)).length;
+      const drinkChoice = drinkCount > 1 ? `<fieldset class="modifier-section"><legend>Drink packaging</legend><p>Ask whether the customers are leaving together.</p><label class="staff-choice"><input type="radio" name="drinkPackMode" value="shared" checked><span><b>Together — fewer bags</b><small>Combine drinks from different customers where capacity allows.</small></span></label><label class="staff-choice"><input type="radio" name="drinkPackMode" value="by-customer"><span><b>By customer</b><small>Keep drink bags separated by customer group.</small></span></label></fieldset>` : '';
+      document.getElementById('appDialogTitle').textContent = 'Assign items to bags';
+      document.getElementById('appDialogBody').innerHTML = `
+        <p>Every menu stays in its own food bag. Assign each extra item to the correct menu/customer or keep it separate.</p>
+        <div class="packing-assignment-list">${rows}</div>
+        ${drinkChoice}
+        <div id="packingError" class="field-error"></div>
+        <div class="dialog-actions"><button class="x" id="dlgCancel">Back to Order</button><button class="x modifier-primary" id="dlgConfirm">Confirm & Send to Kitchen</button></div>`;
+      host.classList.add('open');
+      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(false); };
+      document.getElementById('dlgConfirm').onclick = ()=>{
+        const selects = Array.from(document.querySelectorAll('.packing-assignment'));
+        if(selects.some(select=>!select.value)){ document.getElementById('packingError').textContent = 'Assign every extra item before continuing.'; return; }
+        const latest = BK_STATE.getState().slots[slotIndex];
+        if(!latest) return;
+        const items = latest.items.map(item=>Object.assign({}, item));
+        selects.forEach(select=>{
+          const index = Number(select.dataset.itemIndex);
+          if(!items[index]) return;
+          items[index].customerGroupId = select.value;
+          items[index].packGroupId = select.value;
+        });
+        items.forEach(item=>{ if(item.menuGroupId){ item.customerGroupId = item.menuGroupId; item.packGroupId = item.menuGroupId; } });
+        const drinkChoiceInput = document.querySelector('input[name="drinkPackMode"]:checked');
+        const drinkPackMode = drinkChoiceInput ? drinkChoiceInput.value : 'shared';
+        BK_STATE.updateSlot(slotIndex, {items, drinkPackMode, packAsked:true, sentToKitchen:true});
+        closeDialog(); resolve(true);
+      };
+    });
+  }
+
+  function continueOrderToKitchen(slotIndex){
+    const slot = BK_STATE.getState().slots[slotIndex];
+    if(!slot || !slot.items.length) return;
+    whatsappOrderSetup(slotIndex).then(ok=>{
+      if(!ok) return false;
+      return packingAssignmentDialog(slotIndex);
+    }).then(ok=>{ if(ok) goTab('make'); });
   }
 
   function workflowNextState(stage, slot){
@@ -1156,7 +1236,7 @@
   function paymentDisplay(slot){
     if(slot.issued) return { state:'locked', label:'Payment locked', detail:`${paymentLabel(slot.pay)} · Order issued` };
     if(!Array.isArray(slot.items) || slot.items.length === 0) return { state:'empty', label:'Nothing to pay', detail:'Add products before taking payment' };
-    if(isOnlineOrder(slot) && slot.finalChannel !== 'direct') return { state:'paid', label:`Paid via ${platformLabel(slot.orderSource)}`, detail:`Online payment · ${slot.externalOrderNo || 'platform reference missing'}` };
+    if(isPrepaidPlatform(slot)) return { state:'paid', label:`Paid via ${platformLabel(slot.orderSource)}`, detail:`Online payment · ${slot.externalOrderNo || 'platform reference missing'}` };
     if(slot.pay === 'cash') return { state:'paid', label:'Paid by Cash', detail:slot.finalChannel === 'direct' ? 'Converted online order · direct payment' : 'Payment confirmed' };
     if(slot.pay === 'momo') return { state:'paid', label:'Paid by MoMo', detail:slot.finalChannel === 'direct' ? 'Converted online order · direct payment' : 'Payment confirmed' };
     return { state:'pending', label:'Payment pending', detail:'Select the payment method after receiving payment' };
@@ -1166,12 +1246,17 @@
     const st = BK_STATE.getState();
     const slot = st.slots[slotIndex];
     if(!slot || slot.issued || !Array.isArray(slot.items) || slot.items.length === 0 || !['unpaid','cash','momo'].includes(method)) return;
+    if(isWhatsapp(slot) && slot.fulfilment === 'delivery' && method === 'cash'){ infoDialog('WhatsApp delivery is MoMo only.'); return; }
     BK_STATE.setActive(slotIndex);
     renderSlotsBar();
     renderPay();
     refreshTotals();
     if(slot.pay === method) return;
     const isUnpaid = method === 'unpaid';
+    if(isUnpaid && slot.pay !== 'unpaid' && window.BK_ACCESS && !BK_ACCESS.hasRole('supervisor')){
+      infoDialog('A supervisor or owner is required to reverse a confirmed payment.');
+      return;
+    }
     const paymentName = method === 'momo' ? 'MoMo' : 'Cash';
     const title = isUnpaid ? 'Change payment status' : `Confirm ${paymentName} payment`;
     const message = isUnpaid
@@ -1216,9 +1301,9 @@
         </div>
         <div class="payment-panel ${payment.state}">
           <div class="payment-summary"><strong>${payment.label}</strong><small>${payment.detail}</small></div>
-          ${isOnlineOrder(s) && s.finalChannel !== 'direct' ? `<div class="online-paid-lock"><b>${platformLabel(s.orderSource)} payment recorded</b><small>No additional payment step is required.</small></div>` : `<div class="payment-methods" role="group" aria-label="Payment method for ${s.name}">
+          ${isPrepaidPlatform(s) ? `<div class="online-paid-lock"><b>${platformLabel(s.orderSource)} payment recorded</b><small>No additional payment step is required.</small></div>` : `<div class="payment-methods" role="group" aria-label="Payment method for ${s.name}">
             <button class="payment-method ${s.pay === 'unpaid' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'unpaid');">Unpaid</button>
-            <button class="payment-method ${s.pay === 'cash' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'cash');">Cash</button>
+            <button class="payment-method ${s.pay === 'cash' ? 'selected' : ''}" ${(paymentDisabled || (isWhatsapp(s) && s.fulfilment === 'delivery')) ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'cash');">Cash</button>
             <button class="payment-method ${s.pay === 'momo' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'momo');">MoMo</button>
           </div>`}
         </div>
@@ -1277,10 +1362,18 @@
     if(slot.voided) return { state:'voided', label:'Order voided', detail:slot.voidReason || 'Retained in history for audit.', action:'Voided', target:'issue', disabled:true };
     if(slot.issued) return { state:'issued', label:'Order issued', detail:'Handover completed and locked.', action:'Issued', target:'issue', disabled:true };
     if(!hasItems) return { state:'blocked', label:'Order is empty', detail:'Add at least one product before handover.', action:'Go to Order', target:'order' };
+    if(isWhatsapp(slot) && slot.fulfilment === 'delivery' && slot.riderType === 'burgerkiss-rider'){
+      if(!kitchenDone) return { state:'waiting', label:'Kitchen not finished', detail:'Complete every kitchen item before dispatch.', action:'Go to Make', target:'make' };
+      if(slot.deliveryStatus !== 'out-for-delivery') return { state:'ready', label:'Ready for BurgerKiss rider', detail:'Customer pays by MoMo when the rider arrives.', action:'Handed to BurgerKiss Rider', target:'issue' };
+      if(!paid) return { state:'blocked', label:'Out for delivery · payment pending', detail:'Confirm MoMo after the rider reaches the customer.', action:'Confirm MoMo Payment', target:'pay' };
+      return { state:'ready', label:'Payment received', detail:'Confirm delivery to close this order.', action:'Delivered to Customer', target:'issue' };
+    }
     if(!paid && !kitchenDone) return { state:'blocked', label:'2 steps remaining', detail:'Payment required · Kitchen not finished', action:'Go to Payment', target:'pay' };
     if(!paid) return { state:'blocked', label:'Payment required', detail:'Complete payment before handover.', action:'Go to Payment', target:'pay' };
     if(!kitchenDone) return { state:'waiting', label:'Kitchen not finished', detail:'Complete every kitchen item before handover.', action:'Go to Make', target:'make' };
-    if(isOnlineOrder(slot) && slot.finalChannel !== 'direct') return { state:'ready', label:'Ready for pickup', detail:`Prepared and paid via ${platformLabel(slot.orderSource)}.`, action:`Handed to ${platformLabel(slot.orderSource)} Rider`, target:'issue' };
+    if(isPrepaidPlatform(slot)) return { state:'ready', label:'Ready for pickup', detail:`Prepared and paid via ${platformLabel(slot.orderSource)}.`, action:`Handed to ${platformLabel(slot.orderSource)} Rider`, target:'issue' };
+    if(isWhatsapp(slot) && slot.fulfilment === 'delivery') return { state:'ready', label:'Ready for customer rider', detail:'MoMo received. The order may now be handed over.', action:'Handed to Customer Rider', target:'issue' };
+    if(isWhatsapp(slot) && slot.fulfilment === 'pickup') return { state:'ready', label:'Ready for customer pickup', detail:`${paymentLabel(slot.pay)} received.`, action:'Handed to Customer', target:'issue' };
     if(slot.finalChannel === 'direct') return { state:'ready', label:'Ready for direct delivery', detail:`Collect ${paymentLabel(slot.pay)} · ${slot.fulfilment === 'customer-rider' ? 'Customer-arranged rider' : 'BurgerKiss delivery'}.`, action:slot.fulfilment === 'customer-rider' ? 'Handed to Customer Rider' : 'Handed to BurgerKiss Rider', target:'issue' };
     return { state:'ready', label:'Ready for handover', detail:'Paid and all kitchen items are complete.', action:'Start Final Handover', target:'issue' };
   }
@@ -1427,6 +1520,7 @@
 
   function createFreshOrderSlot(slotName){
     return BK_STATE.allocateOrderNo().then(function(orderNo){
+      const access = window.BK_ACCESS && BK_ACCESS.current ? BK_ACCESS.current() : null;
       return {
         name: slotName,
         items: [],
@@ -1436,8 +1530,13 @@
         voidReason: '',
         packMode: 'shared',
         packAsked: false,
+        drinkPackMode: 'shared',
+        sentToKitchen: false,
         orderNo,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        createdBy: window.BK_ACCESS && BK_ACCESS.operationalActor ? BK_ACCESS.operationalActor() : null,
+        businessDate: access ? access.businessDate : '',
+        shiftId: access ? access.shiftId : ''
       };
     });
   }
@@ -1497,13 +1596,15 @@
     }).catch(showOrderNumberError);
   }
 
-  const ONLINE_PLATFORMS = new Set(['bolt','hubtel','chowdeck']);
+  const ONLINE_PLATFORMS = new Set(['whatsapp','bolt','hubtel','chowdeck']);
   function platformLabel(value){
-    const labels = {walkin:'Walk-in', bolt:'Bolt', hubtel:'Hubtel', chowdeck:'Chowdeck'};
+    const labels = {walkin:'Walk-in', whatsapp:'WhatsApp', bolt:'Bolt', hubtel:'Hubtel', chowdeck:'Chowdeck'};
     return labels[String(value || '').toLowerCase()] || 'Walk-in';
   }
   function isOnlineOrder(slot){ return !!(slot && ONLINE_PLATFORMS.has(slot.orderSource)); }
-  function paymentLabel(pay){ return ({unpaid:'Unpaid',cash:'Cash',momo:'MoMo',bolt:'Bolt',hubtel:'Hubtel',chowdeck:'Chowdeck'})[pay] || String(pay || 'Unknown'); }
+  function isPrepaidPlatform(slot){ return !!(slot && ['bolt','hubtel','chowdeck'].includes(slot.orderSource) && slot.finalChannel !== 'direct'); }
+  function isWhatsapp(slot){ return !!(slot && slot.orderSource === 'whatsapp'); }
+  function paymentLabel(pay){ return ({unpaid:'Unpaid',cash:'Cash',momo:'MoMo',whatsapp:'WhatsApp',bolt:'Bolt',hubtel:'Hubtel',chowdeck:'Chowdeck'})[pay] || String(pay || 'Unknown'); }
   function orderChannelText(slot){
     if(!slot) return '';
     if(slot.finalChannel === 'direct') return `${platformLabel(slot.originalSource || slot.orderSource)} → Direct ${paymentLabel(slot.pay)}`;
@@ -1519,18 +1620,23 @@
     const host = ensureDialogHost();
     document.getElementById('appDialogTitle').textContent = 'New online order';
     document.getElementById('appDialogBody').innerHTML = `
-      <p>Enter the order from the delivery platform. It will be marked as paid online and sent directly to the kitchen.</p>
-      <label class="dialog-label">Platform<select id="onlinePlatform" class="dialog-field"><option value="bolt">Bolt</option><option value="hubtel">Hubtel</option><option value="chowdeck">Chowdeck</option></select></label>
-      <label class="dialog-label">Platform order number<input id="onlineReference" class="dialog-field" maxlength="80" placeholder="e.g. BOLT-847263" autocomplete="off"></label>
+      <p>Choose the order channel. Bolt, Chowdeck and Hubtel are already paid online. WhatsApp orders remain unpaid until pickup or delivery.</p>
+      <label class="dialog-label">Channel<select id="onlinePlatform" class="dialog-field"><option value="whatsapp">WhatsApp</option><option value="bolt">Bolt</option><option value="chowdeck">Chowdeck</option><option value="hubtel">Hubtel</option></select></label>
+      <label class="dialog-label">Order reference / customer name<input id="onlineReference" class="dialog-field" maxlength="80" placeholder="e.g. Ama or BOLT-847263" autocomplete="off"></label>
+      <label class="dialog-label hidden" id="onlinePhoneRow">Customer phone<input id="onlinePhone" class="dialog-field" maxlength="30" inputmode="tel" placeholder="Optional for pickup; needed for delivery"></label>
       <div id="onlineOrderError" class="field-error"></div>
       <div class="dialog-actions"><button class="x" id="dlgCancel">Cancel</button><button class="x modifier-primary" id="dlgConfirm">Create Online Order</button></div>`;
     host.classList.add('open');
     const reference = document.getElementById('onlineReference');
+    const platformInput = document.getElementById('onlinePlatform');
+    const syncOnlineFields = ()=> document.getElementById('onlinePhoneRow').classList.toggle('hidden', platformInput.value !== 'whatsapp');
+    platformInput.onchange = syncOnlineFields; syncOnlineFields();
     reference.focus();
     document.getElementById('dlgCancel').onclick = closeDialog;
     document.getElementById('dlgConfirm').onclick = ()=>{
       const platform = document.getElementById('onlinePlatform').value;
       const externalOrderNo = reference.value.trim();
+      const customerPhone = document.getElementById('onlinePhone').value.trim();
       const error = document.getElementById('onlineOrderError');
       if(!externalOrderNo){ error.textContent = 'The platform order number is required.'; return; }
       if(onlineOrderExists(platform, externalOrderNo)){ error.textContent = `This ${platformLabel(platform)} order already exists.`; return; }
@@ -1541,13 +1647,13 @@
         closeDialog();
         renderAll();
         goTab('order');
-        infoDialog(`${platformLabel(platform)} order ${externalOrderNo} created. Payment is already recorded; enter the products and continue to Kitchen.`);
+        infoDialog(platform === 'whatsapp' ? `WhatsApp order for ${externalOrderNo} created. Enter the products; fulfilment and payment rules are confirmed before Kitchen.` : `${platformLabel(platform)} order ${externalOrderNo} created. Payment is already recorded; enter the products and continue to Kitchen.`);
       };
       if(current && !current.items.length && current.pay === 'unpaid'){
-        BK_STATE.updateSlot(state.active, {orderSource:platform, externalOrderNo, pay:platform});
+        BK_STATE.updateSlot(state.active, {orderSource:platform, externalOrderNo, customerName:platform === 'whatsapp' ? externalOrderNo : '', customerPhone, pay:platform === 'whatsapp' ? 'unpaid' : platform});
         finish(state.active);
       }else{
-        BK_STATE.addSlot(undefined, {orderSource:platform, externalOrderNo, pay:platform}).then(finish).catch(showOrderNumberError);
+        BK_STATE.addSlot(undefined, {orderSource:platform, externalOrderNo, customerName:platform === 'whatsapp' ? externalOrderNo : '', customerPhone, pay:platform === 'whatsapp' ? 'unpaid' : platform}).then(finish).catch(showOrderNumberError);
       }
     };
   }
@@ -1729,6 +1835,14 @@
       issued: !!slot.issued,
       createdAt: slot.createdAt || Date.now(),
       closedAt: Date.now(),
+      businessDate: slot.businessDate || (window.BK_ACCESS && BK_ACCESS.current ? (BK_ACCESS.current() || {}).businessDate : ''),
+      shiftId: slot.shiftId || '',
+      createdBy: slot.createdBy || null,
+      paidBy: slot.paidBy || null,
+      paidAt: slot.paidAt || 0,
+      issuedBy: slot.issuedBy || null,
+      riderType: slot.riderType || '',
+      deliveryStatus: slot.deliveryStatus || '',
       subtotal: c.subtotal,
       discountRate,
       discount,
@@ -1864,7 +1978,10 @@
     const rules = getPackagingRules();
     const drinksPerBag = Math.max(1, Number(rules.drinksPerPlasticBag) || 2);
     const drinkCount = menuDrinkCount + standaloneDrinkCount;
-    if(drinkCount) packaging.push({name:'Plastic Bag — drinks only', qty:Math.ceil(drinkCount / drinksPerBag), kind:'drink'});
+    if(drinkCount){
+      const qty = window.BK_PACKING ? BK_PACKING.drinkBagCount(slot, BK_DATA.BASE, drinksPerBag) : Math.ceil(drinkCount / drinksPerBag);
+      packaging.push({name:slot && slot.drinkPackMode === 'by-customer' ? 'Plastic Bag — drinks only · by customer' : 'Plastic Bag — drinks only · shared', qty, kind:'drink'});
+    }
     const wingsCount = standaloneFood.filter(entry=>entry.cat === 'wings').reduce((total,entry)=>total+(Number(entry.qty)||0),0);
     const saladCount = standaloneFood.filter(entry=>entry.cat === 'salad').reduce((total,entry)=>total+(Number(entry.qty)||0),0);
     if(wingsCount) packaging.push({name:'Wings Box', qty:wingsCount, kind:'food'});
@@ -1916,7 +2033,8 @@
     const standaloneHtml = plan.standalone.map((entry,index)=>{
       const lines = [handoverCardLine(entry.name, staffFacingNote(entry.note).join(' · '), entry.qty)];
       (entry.children || []).forEach(child=>lines.push(handoverCardLine(staffFacingItemName(child), '', child.qty)));
-      return handoverCard(`SINGLE ITEM ${index+1} — ${entry.name}`, '', lines);
+      const groupLabel = entry.customerGroupId ? `CUSTOMER ${entry.customerGroupId}` : '';
+      return handoverCard(`SINGLE ITEM ${index+1} — ${entry.name}`, groupLabel, lines);
     }).join('');
     const essentials = [];
     if(plan.standaloneNapkins) essentials.push(handoverCardLine('Napkins', 'For single food items', plan.standaloneNapkins));
@@ -1942,10 +2060,18 @@
       if(!ok) return;
       const latestSlot = BK_STATE.getState().slots[i];
       if(!latestSlot || latestSlot.issued) return;
-      const stockResult = window.BK_STOCK && typeof BK_STOCK.consumeSlot === 'function'
+      const burgerKissDispatch = isWhatsapp(latestSlot) && latestSlot.fulfilment === 'delivery' && latestSlot.riderType === 'burgerkiss-rider' && latestSlot.deliveryStatus !== 'out-for-delivery';
+      const shouldConsume = !latestSlot.stockConsumed;
+      const stockResult = shouldConsume && window.BK_STOCK && typeof BK_STOCK.consumeSlot === 'function'
         ? BK_STOCK.consumeSlot(latestSlot)
         : null;
-      pushHistory(slotSnapshot({...latestSlot, issued:true}));
+      if(burgerKissDispatch){
+        BK_STATE.updateSlot(i, {deliveryStatus:'out-for-delivery', stockConsumed:true});
+        renderAll();
+        infoDialog('Order is out for delivery. Confirm MoMo when the rider reaches the customer, then confirm delivery.');
+        return;
+      }
+      pushHistory(slotSnapshot({...latestSlot, issued:true, issuedBy:window.BK_ACCESS && BK_ACCESS.operationalActor ? BK_ACCESS.operationalActor() : null}));
       const nextState = BK_STATE.getState();
       nextState.slots.splice(i, 1);
       nextState.active = Math.min(i, Math.max(0, nextState.slots.length - 1));
@@ -1956,11 +2082,8 @@
         const suffix = stockResult && stockResult.message ? ` ${stockResult.message}` : '';
         infoDialog(`Order completed and archived. It is now available only in History.${suffix}`);
       };
-      if(nextState.slots.length){
-        finish();
-      }else{
-        BK_STATE.addSlot().then(function(){ finish(); goTab('order'); }).catch(showOrderNumberError);
-      }
+      finish();
+      if(!nextState.slots.length) goTab('order');
     });
   }
 
@@ -2137,7 +2260,7 @@
     target.status = 'voided';
     target.voidReason = cleanReason;
     target.voidedAt = Date.now();
-    target.voidedBy = window.BK_TERMINAL_NAME || window.BK_SYNC_FORCE_SLOT || 'POS terminal';
+    target.voidedBy = window.BK_ACCESS && BK_ACCESS.actor ? BK_ACCESS.actor() : (window.BK_TERMINAL_NAME || window.BK_SYNC_FORCE_SLOT || 'POS terminal');
     saveHistory(history);
     saveHistoryRemote(target);
     const state = BK_STATE.getState();
@@ -2522,6 +2645,10 @@
     if(!slots.length) return;
     const slot = slots[active];
     const protectedOrder = slot.issued || slot.pay !== 'unpaid';
+    if(protectedOrder && window.BK_ACCESS && !BK_ACCESS.hasRole('supervisor')){
+      infoDialog('A supervisor or owner is required to void a paid or issued order.');
+      return;
+    }
     const title = protectedOrder ? 'Void and remove order' : 'Delete draft order';
     const message = protectedOrder
       ? `${slot.name} is paid or issued. It cannot be deleted without a permanent void record.`
@@ -2618,6 +2745,6 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid, openOnlineOrderDialog, convertOnlineOrder,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment, requestSlotPayment, continueFromPayment, choosePackaging
+    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment, requestSlotPayment, continueFromPayment, choosePackaging, continueOrderToKitchen
   };
 })();

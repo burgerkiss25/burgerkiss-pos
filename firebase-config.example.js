@@ -19,6 +19,7 @@ window.BK_STOCK_ADDONS_PATH = '/pos/stock/addons';
 window.BK_STOCK_TRANSFERS_PATH = '/pos/stock/transfers';
 window.BK_STOCK_MOVEMENTS_PATH = '/pos/stock/movements';
 window.BK_HISTORY_PATH = '/pos/history';
+window.BK_ACCESS_PATH = '/pos/access/staffPins';
 
 window.FIREBASE_CONFIG = {
   apiKey: 'YOUR_API_KEY',

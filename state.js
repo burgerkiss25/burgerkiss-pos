@@ -7,8 +7,8 @@
   let discountRate = 0;
   let orderSeq = 0;
   const history = [];
-  const PAY_SET = new Set(['unpaid', 'cash', 'momo', 'bolt', 'hubtel', 'chowdeck']);
-  const SOURCE_SET = new Set(['walkin', 'bolt', 'hubtel', 'chowdeck']);
+  const PAY_SET = new Set(['unpaid', 'cash', 'momo', 'bolt', 'hubtel', 'chowdeck', 'whatsapp']);
+  const SOURCE_SET = new Set(['walkin', 'whatsapp', 'bolt', 'hubtel', 'chowdeck']);
 
   function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
   function normalizeDiscount(v){
@@ -25,7 +25,9 @@
       menuGroupId: typeof it.menuGroupId === 'string' ? it.menuGroupId : '',
       menuName: typeof it.menuName === 'string' ? it.menuName : '',
       menuRole: typeof it.menuRole === 'string' ? it.menuRole : '',
-      menuNoSauce: !!it.menuNoSauce
+      menuNoSauce: !!it.menuNoSauce,
+      customerGroupId: typeof it.customerGroupId === 'string' ? it.customerGroupId : '',
+      packGroupId: typeof it.packGroupId === 'string' ? it.packGroupId : ''
     };
   }
   function normalizeSlot(slot, idx){
@@ -39,6 +41,8 @@
       voidReason: String((slot && slot.voidReason) || ''),
       packMode: (slot && slot.packMode === 'split') ? 'split' : 'shared',
       packAsked: !!(slot && slot.packAsked),
+      drinkPackMode: (slot && slot.drinkPackMode === 'by-customer') ? 'by-customer' : 'shared',
+      sentToKitchen: !!(slot && slot.sentToKitchen),
       orderNo: (slot && typeof slot.orderNo==='string' && slot.orderNo.trim()) ? slot.orderNo.trim() : null,
       createdAt: Number(slot && slot.createdAt) > 0 ? Number(slot.createdAt) : Date.now(),
       orderSource: SOURCE_SET.has(slot && slot.orderSource) ? slot.orderSource : 'walkin',
@@ -49,7 +53,18 @@
       fulfilment: String((slot && slot.fulfilment) || ''),
       conversionReason: String((slot && slot.conversionReason) || ''),
       refundStatus: String((slot && slot.refundStatus) || ''),
-      convertedAt: Number(slot && slot.convertedAt) || 0
+      convertedAt: Number(slot && slot.convertedAt) || 0,
+      createdBy: (slot && slot.createdBy && typeof slot.createdBy === 'object') ? slot.createdBy : null,
+      paidBy: (slot && slot.paidBy && typeof slot.paidBy === 'object') ? slot.paidBy : null,
+      paidAt: Number(slot && slot.paidAt) || 0,
+      businessDate: String((slot && slot.businessDate) || ''),
+      shiftId: String((slot && slot.shiftId) || ''),
+      customerName: String((slot && slot.customerName) || ''),
+      customerPhone: String((slot && slot.customerPhone) || ''),
+      preferredPayment: String((slot && slot.preferredPayment) || ''),
+      riderType: String((slot && slot.riderType) || ''),
+      deliveryStatus: String((slot && slot.deliveryStatus) || ''),
+      stockConsumed: !!(slot && slot.stockConsumed)
     };
   }
   function normalizeState(st){
@@ -258,7 +273,9 @@
     return allocateOrderNo().then(function(orderNo){
       const source = SOURCE_SET.has(details.orderSource) ? details.orderSource : 'walkin';
       const pay = PAY_SET.has(details.pay) ? details.pay : (source === 'walkin' ? 'unpaid' : source);
-      slots.push({name: label || `SN${idx}`, items: [], pay, issued:false, voided:false, voidReason:'', packMode:'shared', packAsked:false, orderNo, createdAt: Date.now(), orderSource:source, externalOrderNo:String(details.externalOrderNo || '').trim(), originalSource:'', originalPay:'', finalChannel:'', fulfilment:'', conversionReason:'', refundStatus:'', convertedAt:0});
+      const access = window.BK_ACCESS && BK_ACCESS.current ? BK_ACCESS.current() : null;
+      const actor = window.BK_ACCESS && BK_ACCESS.operationalActor ? BK_ACCESS.operationalActor() : null;
+      slots.push({name: label || `SN${idx}`, items: [], pay, issued:false, voided:false, voidReason:'', packMode:'shared', packAsked:false, drinkPackMode:'shared', sentToKitchen:false, orderNo, createdAt: Date.now(), orderSource:source, externalOrderNo:String(details.externalOrderNo || '').trim(), originalSource:'', originalPay:'', finalChannel:'', fulfilment:'', conversionReason:'', refundStatus:'', convertedAt:0, customerName:String(details.customerName || ''), customerPhone:String(details.customerPhone || ''), preferredPayment:String(details.preferredPayment || ''), riderType:String(details.riderType || ''), deliveryStatus:String(details.deliveryStatus || ''), stockConsumed:false, createdBy:actor, paidBy:pay === 'unpaid' ? null : actor, paidAt:pay === 'unpaid' ? 0 : Date.now(), businessDate:access ? access.businessDate : '', shiftId:access ? access.shiftId : ''});
       active = slots.length-1;
       save();
       return active;
@@ -290,6 +307,8 @@
   function addItem(id, note, meta){
     if(!slots.length || slots[active].issued) return;
     const details = meta && typeof meta === 'object' ? meta : {};
+    slots[active].packAsked = false;
+    slots[active].sentToKitchen = false;
     slots[active].items.push({
       itemId:id,
       note: (note||'').trim(),
@@ -297,7 +316,9 @@
       menuGroupId: typeof details.menuGroupId === 'string' ? details.menuGroupId : '',
       menuName: typeof details.menuName === 'string' ? details.menuName : '',
       menuRole: typeof details.menuRole === 'string' ? details.menuRole : '',
-      menuNoSauce: !!details.menuNoSauce
+      menuNoSauce: !!details.menuNoSauce,
+      customerGroupId: typeof details.customerGroupId === 'string' ? details.customerGroupId : '',
+      packGroupId: typeof details.packGroupId === 'string' ? details.packGroupId : ''
     });
     history.push({slot:active});
     save();
@@ -328,17 +349,19 @@
     const s = slots[active]; if(!s || s.issued) return;
     const [id, note='', menuGroupId=''] = parseItemKey(key);
     const idx = s.items.findIndex(it => it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId));
-    if(idx>-1){ s.items.splice(idx,1); save(); }
+    if(idx>-1){ s.items.splice(idx,1); s.packAsked=false; s.sentToKitchen=false; save(); }
   }
   function removeItemForKey(key){
     const s = slots[active]; if(!s || s.issued) return;
     const [id, note='', menuGroupId=''] = parseItemKey(key);
     const next = s.items.filter(it => !(it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId)));
-    if(next.length !== s.items.length){ s.items = next; save(); }
+    if(next.length !== s.items.length){ s.items = next; s.packAsked=false; s.sentToKitchen=false; save(); }
   }
   function setPay(i,status){
     if(!slots[i] || slots[i].issued) return;
     slots[i].pay = PAY_SET.has(status) ? status : 'unpaid';
+    slots[i].paidBy = slots[i].pay === 'unpaid' ? null : (window.BK_ACCESS && BK_ACCESS.operationalActor ? BK_ACCESS.operationalActor() : null);
+    slots[i].paidAt = slots[i].pay === 'unpaid' ? 0 : Date.now();
     save();
   }
   function updateSlot(i, changes){

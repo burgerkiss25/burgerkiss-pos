@@ -4,10 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – Admin Editors</title>
-  <link rel="stylesheet" href="./style.css?v=43" />
+  <link rel="stylesheet" href="./style.css?v=45" />
   <script src="./firebase-config.js?v=2"></script>
 </head>
 <body class="admin-page">
+  <div class="staff-session admin-session" id="staffSession" aria-live="polite"></div>
   <div class="hud-wrap admin-hud">
     <header class="admin-header">
       <div class="brand-block admin-brand" aria-label="BurgerKiss admin editors">
@@ -68,6 +69,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
+  <script src="./access.js?v=2"></script>
   <script src="./data.js?v=13"></script>
   <script src="./prices.js?v=14"></script>
   <script src="./products.js?v=14"></script>
@@ -76,9 +78,23 @@
   <script src="./stock_data.js?v=13"></script>
   <script src="./stock_utils.js?v=15"></script>
   <script src="./stock.js?v=18"></script>
-  <script src="./state.js?v=18"></script>
+  <script src="./state.js?v=20"></script>
   <script src="./logic.js?v=14"></script>
-  <script src="./ui.js?v=43"></script>
-  <script src="admin.js"></script>
+  <script src="./packing.js?v=1"></script>
+  <script src="./ui.js?v=45"></script>
+  <script>
+    document.addEventListener('bk-access-ready', function(){
+      if(!BK_ACCESS.hasRole('owner')){
+        window.location.replace('index.html');
+        return;
+      }
+      if(document.querySelector('script[data-admin-boot]')) return;
+      const script = document.createElement('script');
+      script.src = 'admin.js?v=2';
+      script.dataset.adminBoot = 'true';
+      document.body.appendChild(script);
+    });
+    BK_ACCESS.init();
+  </script>
 </body>
 </html>
