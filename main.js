@@ -28,13 +28,12 @@
   removeDuplicateIds([
     'tabOrder','tabMake','tabPay','tabIssue',
     'btnSummary','btnStockOverview','btnHistory','btnDailyReport','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup','btnOnlineOrder',
-    'btnUndo','btnReset','btnClearDisc','btnClearStorage',
-    'btnAddSlot','btnRenameSlot','btnDeleteSlot','activeSlotLabel',
+    'btnReset','btnClearDisc','btnClearStorage',
+    'btnAddSlot','activeSlotLabel',
     'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalHistory','modalHistoryDetail','modalDailyReport','modalReceipt','modalStockOverview'
   ]);
 
   // Buttons
-  document.getElementById('btnUndo').onclick = ()=>{ BK_STATE.undo(); BK_UI.renderOrder(); BK_UI.renderMake(); BK_UI.refreshTotals(); };
   document.getElementById('btnReset').onclick= ()=> BK_UI.clearAllWithConfirm();
   document.querySelectorAll('.disc').forEach(b=> b.onclick = ()=>{
     const rate = Number(b.dataset.disc);
@@ -52,15 +51,8 @@
 
   document.getElementById('btnStartWalkin').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot(); };
   document.getElementById('btnAddSlot').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot(); };
-  document.getElementById('btnRenameSlot').onclick = ()=> BK_UI.renameActiveSlot();
-  document.getElementById('btnDeleteSlot').onclick = ()=> BK_UI.deleteActiveSlot();
 
   if(forceSlot){
-    ['btnRenameSlot', 'btnDeleteSlot'].forEach(id=>{
-      const el = document.getElementById(id);
-      el.classList.add('disabled');
-      el.onclick = ()=> BK_UI.infoDialog(`Slot management disabled while force-slot mode is active (${window.BK_SYNC_FORCE_SLOT}).`);
-    });
     const add = document.getElementById('btnAddSlot');
     add.classList.remove('disabled');
     add.onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot(); };
