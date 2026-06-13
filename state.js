@@ -6,6 +6,7 @@
   let active = 0;
   let discountRate = 0;
   let orderSeq = 0;
+  let updatedAt = 0;
   const history = [];
   const PAY_SET = new Set(['unpaid', 'cash', 'momo', 'bolt', 'hubtel', 'chowdeck', 'whatsapp']);
   const SOURCE_SET = new Set(['walkin', 'whatsapp', 'bolt', 'hubtel', 'chowdeck']);
@@ -81,7 +82,8 @@
     const nextActive = clamp(Number(st && st.active) || 0, 0, Math.max(0, nextSlots.length-1));
     const nextDiscount = 0;
     const nextSeq = Math.max(0, Number(st && st.orderSeq) || 0);
-    return { slots: nextSlots, active: nextActive, discountRate: nextDiscount, orderSeq: nextSeq };
+    const nextUpdatedAt = Math.max(0, Number(st && st.ts) || 0);
+    return { slots: nextSlots, active: nextActive, discountRate: nextDiscount, orderSeq: nextSeq, updatedAt: nextUpdatedAt };
   }
   function parseOrderSequence(orderNo){
     const match = String(orderNo || '').match(/(\d+)$/);
@@ -200,15 +202,30 @@
     }catch(e){ return null; }
   }
   let remoteSaveTimer = null;
+  function remotePayload(){
+    return { slots, active, discountRate, orderSeq, v:5, ts:updatedAt || Date.now() };
+  }
+  function saveRemoteNow(){
+    if(remoteSaveTimer){
+      clearTimeout(remoteSaveTimer);
+      remoteSaveTimer = null;
+    }
+    if(!remoteEnabled()) return Promise.resolve(true);
+    return ensureRemoteAuth().then(function(){
+      const ref = getRemoteRef();
+      if(!ref) throw new Error('Remote state reference unavailable.');
+      return ref.set(remotePayload());
+    }).then(()=>true).catch(function(error){
+      console.warn('remote state save failed:', error && error.message);
+      return false;
+    });
+  }
   function saveRemoteSoon(){
     if(!remoteEnabled()) return;
     if(remoteSaveTimer) clearTimeout(remoteSaveTimer);
     remoteSaveTimer = setTimeout(function(){
-      ensureRemoteAuth().then(function(){
-        const ref = getRemoteRef();
-        if(!ref) throw new Error('Remote state reference unavailable.');
-        return ref.set({ slots, active, discountRate, orderSeq, v:5, ts: Date.now() });
-      }).catch(function(error){ console.warn('remote state save failed:', error && error.message); });
+      remoteSaveTimer = null;
+      saveRemoteNow();
     }, 250);
   }
   function loadRemoteOnce(){
@@ -221,15 +238,17 @@
       if(!snap) return false;
       const raw = snap.val();
       if(!raw || !raw.v) return false;
+      if(updatedAt && Number(raw.ts) <= updatedAt) return false;
       const n = normalizeState(raw);
-      slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq;
+      slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq; updatedAt = n.updatedAt;
       rememberCounter(knownSequenceFloor());
-      try{ localStorage.setItem(SAVE_KEY, JSON.stringify({slots, active, discountRate, orderSeq, v:5})); }catch(e){}
+      try{ localStorage.setItem(SAVE_KEY, JSON.stringify(remotePayload())); }catch(e){}
       return true;
     }).catch(()=>false);
   }
   function save(){
-    try{ localStorage.setItem(SAVE_KEY, JSON.stringify({slots, active, discountRate, orderSeq, v:5})); }catch(e){}
+    updatedAt = Date.now();
+    try{ localStorage.setItem(SAVE_KEY, JSON.stringify(remotePayload())); }catch(e){}
     saveRemoteSoon();
   }
   function load(){
@@ -239,7 +258,7 @@
       hadLocal = !!raw;
       if(raw){
         const n = normalizeState(JSON.parse(raw));
-        slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq;
+        slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq; updatedAt = n.updatedAt;
         rememberCounter(knownSequenceFloor());
       }
     }catch(e){
@@ -428,7 +447,7 @@
   function getState(){ return {slots, active, discountRate}; }
   function setState(st){
     const n = normalizeState(st || {});
-    slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq;
+    slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq; updatedAt = n.updatedAt;
     rememberCounter(knownSequenceFloor());
     save();
     repairOrderNumbers().catch(function(e){ console.warn('order number repair failed:', e && e.message); });
@@ -442,6 +461,6 @@
     addItem, addItemForKey, undo, decItemForKey, removeItemForKey, setPay, setIssued, toggleDone, setDoneForKey,
     setPackMode,
     setDiscount,
-    getState, setState, whenReady, allocateOrderNo, repairOrderNumbers, formatOrderNo
+    getState, setState, whenReady, allocateOrderNo, repairOrderNumbers, formatOrderNo, flushRemote:saveRemoteNow
   };
 })();

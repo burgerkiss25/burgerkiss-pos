@@ -2234,7 +2234,8 @@
       nextState.active = Math.min(i, Math.max(0, nextState.slots.length - 1));
       BK_STATE.setState(nextState);
       if(!nextState.slots.length){
-        window.location.replace('index.html');
+        const flush = BK_STATE.flushRemote ? BK_STATE.flushRemote() : Promise.resolve(true);
+        flush.finally(()=>window.location.replace('index.html'));
         return;
       }
       const finish = ()=>{

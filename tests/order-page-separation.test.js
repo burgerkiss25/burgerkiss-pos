@@ -30,6 +30,12 @@ test('order page consumes an explicit start mode after state and access are read
 
 test('finishing the final open order returns to the landing page', () => {
   const markIssued = ui.slice(ui.indexOf('function markIssued('), ui.indexOf('function historyStatusLabel'));
-  assert.match(markIssued, /if\(!nextState\.slots\.length\)\{\s*window\.location\.replace\('index\.html'\);\s*return;/);
+  assert.match(markIssued, /if\(!nextState\.slots\.length\)\{[\s\S]*BK_STATE\.flushRemote[\s\S]*window\.location\.replace\('index\.html'\)/);
   assert.doesNotMatch(markIssued, /if\(!nextState\.slots\.length\) goTab\('order'\)/);
+});
+
+test('a completed order cannot be restored by an older remote snapshot', () => {
+  const state = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
+  assert.match(state, /if\(updatedAt && Number\(raw\.ts\) <= updatedAt\) return false;/);
+  assert.match(state, /flushRemote:saveRemoteNow/);
 });
