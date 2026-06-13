@@ -2,7 +2,8 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const packing = require('../packing.js');
 const products = [
-  {id:'burger',cat:'burger'}, {id:'fries',cat:'fries'}, {id:'cola',cat:'drink'}, {id:'fanta',cat:'drink'}
+  {id:'burger',cat:'burger'}, {id:'fries',cat:'fries'}, {id:'cola',cat:'drink'}, {id:'fanta',cat:'drink'},
+  {id:'i_sauce_ketchup',cat:'extra'}, {id:'x_sauce_mayo',cat:'extra'}
 ];
 function item(itemId, extra={}){ return Object.assign({itemId}, extra); }
 test('two menus without extras need no assignment', ()=>{
@@ -19,4 +20,13 @@ test('drink bags can be shared or separated by customer', ()=>{
   assert.equal(packing.drinkBagCount(slot,products,2),1);
   slot.drinkPackMode='by-customer';
   assert.equal(packing.drinkBagCount(slot,products,2),2);
+});
+test('included and paid sauces stay with their linked food without a packing question', ()=>{
+  const slot={items:[
+    item('fries'),
+    item('i_sauce_ketchup',{note:'included for Fries'}),
+    item('x_sauce_mayo',{note:'extra for Fries'})
+  ]};
+  assert.deepEqual(packing.assignableItems(slot,products).map(entry=>entry.item.itemId),['fries']);
+  assert.equal(packing.needsPackingReview(slot,products),false);
 });

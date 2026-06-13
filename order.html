@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BurgerKiss – POS</title>
+  <link rel="stylesheet" href="./style.css?v=53" />
+
+  <!-- POS-Konfiguration aus externer Datei -->
+  <script src="./firebase-config.js?v=2"></script>
+</head>
+<body class="order-app app-loading">
+  <!-- Sticky HUD -->
+  <div class="hud-wrap">
+    <header class="app-header">
+      <div class="brand-block" aria-label="BurgerKiss POS">
+        <div class="brand-mark">BK</div>
+        <div class="eyebrow">BurgerKiss POS</div>
+      </div>
+
+      <nav class="tabbar" aria-label="Order workflow">
+        <button id="tabOrder" class="active workflow-step"><span class="step-no">1</span><span>Order</span></button>
+        <button id="tabMake" class="workflow-step"><span class="step-no">2</span><span>Make</span></button>
+        <button id="tabPay" class="workflow-step"><span class="step-no">3</span><span>Pay</span></button>
+        <button id="tabIssue" class="workflow-step"><span class="step-no">4</span><span>Issue</span></button>
+      </nav>
+
+      <div class="staff-session" id="staffSession" aria-live="polite"></div>
+
+      <button class="chip workflow-new-order" id="btnWorkflowNewOrder" type="button">+ New Order</button>
+
+      <details class="more-menu">
+        <summary class="x more-trigger">Tools</summary>
+        <div class="more-panel">
+          <button class="x" id="btnStockOverview">Stock <span class="stock-alert-badge hidden" id="stockAlertBadge">0</span></button>
+          <button class="x" id="btnHistory">History</button>
+          <button class="x" id="btnReceipt">Receipt</button>
+          <button class="x" id="btnDailyReport" data-permission="daily_report">Daily Report</button>
+          <button class="x" id="btnClearStorage" data-permission="maintenance">Clear Storage</button>
+          <a class="x admin-link" href="admin.html" data-permission="admin">Admin</a>
+        </div>
+      </details>
+    </header>
+
+    <div class="hud-rows compact-actions">
+      <div class="toolbar slot-tools" id="slotsBar" aria-label="Open orders">
+        <!-- Open orders remain available while legacy slot-management controls stay hidden. -->
+        <button class="chip primary-chip" id="btnAddSlot" type="button">+ New Order</button>
+        <button class="chip online-order-trigger" id="btnOnlineOrder" type="button">+ Online Order</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Kategorien -->
+  <div class="catbar" aria-label="Product categories">
+    <button class="category-arrow" id="previousCategory" type="button" aria-label="Previous product category">‹</button>
+    <button class="tab active" data-cat="burger">Burgers</button>
+    <button class="tab" data-cat="wings">Wings</button>
+    <button class="tab" data-cat="fries">Fries</button>
+    <button class="tab" data-cat="salad">Salads</button>
+    <button class="tab" data-cat="drink">Drinks</button>
+    <button class="category-arrow" id="nextCategory" type="button" aria-label="Next product category">›</button>
+    <div class="search-wrap">
+      <span aria-hidden="true">⌕</span>
+      <input id="productSearch" class="product-search" placeholder="Search products" aria-label="Search products" />
+    </div>
+    <button id="clearProductSearch" class="tab clear-search" type="button">Clear</button>
+  </div>
+
+  <!-- Hauptbereich -->
+  <div class="wrap">
+    <!-- ORDER -->
+    <section id="tab-order">
+      <div class="order-layout">
+        <div class="order-main" id="productPager">
+          <div class="product-page-heading">
+            <div><span class="eyebrow">Product category</span><h2 id="productCategoryTitle">Burgers</h2></div>
+            <span class="page-status" id="productPageStatus" aria-live="polite"></span>
+          </div>
+          <div class="grid" id="buttons"></div>
+          <div class="product-page-controls" aria-label="Product pages">
+            <button class="page-button" id="previousProductPage" type="button">‹ Previous</button>
+            <div class="page-dots" id="productPageDots" aria-hidden="true"></div>
+            <button class="page-button" id="nextProductPage" type="button">Next ›</button>
+          </div>
+        </div>
+
+        <aside class="order-side panel" id="orderCart">
+          <div class="order-side-heading">
+            <div><h3>Current order</h3><small id="currentOrderMeta">New order</small></div>
+            <button class="cart-close" id="mobileCartClose" type="button" aria-label="Close current order">×</button>
+          </div>
+          <div class="rows" id="lines"></div>
+          <div class="flow-action" id="orderFlowNav"></div>
+          <div class="order-discount-row">
+            <span><b>Discount</b><small id="currentDiscountLabel">No discount</small></span>
+            <details class="tool-menu discount-menu">
+              <summary class="chip">Add / Change</summary>
+              <div class="tool-panel" aria-label="Discount actions">
+                <button class="disc" data-disc="0.01" type="button">Request -1%</button>
+                <button class="disc" data-disc="0.03" type="button">Request -3%</button>
+                <button class="disc" data-disc="0.05" type="button">Request -5%</button>
+                <button class="disc" data-disc="0.10" type="button">Request -10%</button>
+                <button class="ok" id="btnClearDisc" type="button">Request removal</button>
+              </div>
+            </details>
+          </div>
+          <div class="sumline"><span>Subtotal</span><b id="subtotal">0 GHS</b></div>
+          <div class="sumline"><span>Discount</span><b id="discount">0 GHS</b></div>
+          <div class="sumline"><span>Total</span><b id="total">0 GHS</b></div>
+        </aside>
+        <button class="mobile-cart-toggle" id="mobileCartToggle" type="button" aria-controls="orderCart" aria-expanded="false">
+          <span><b id="mobileCartCount">0 items</b><small>View current order</small></span>
+          <strong id="mobileCartTotal">0 GHS</strong>
+        </button>
+      </div>
+    </section>
+
+    <!-- MAKE -->
+    <section id="tab-make" class="hidden">
+      <div id="makeList" class="panel">
+        <div class="kitchen-page-head">
+          <button class="x kitchen-back" id="btnMakeBack" type="button">← Order</button>
+          <div>
+            <p class="eyebrow">Step 2 of 4</p>
+            <h2>Kitchen</h2>
+            <small>Mark each prepared item as done.</small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAY -->
+    <section id="tab-pay" class="hidden">
+      <div id="payList" class="panel">
+        <div class="workflow-page-head">
+          <button class="x workflow-back" id="btnPayBack" type="button">← Kitchen</button>
+          <div>
+            <p class="eyebrow">Step 3 of 4</p>
+            <h2>Payment</h2>
+            <small>Confirm payment for the selected order.</small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ISSUE -->
+    <section id="tab-issue" class="hidden">
+      <div id="issueList" class="panel">
+        <div class="workflow-page-head">
+          <button class="x workflow-back" id="btnIssueBack" type="button">← Payment</button>
+          <div>
+            <p class="eyebrow">Step 4 of 4</p>
+            <h2>Handover</h2>
+            <small>Check the complete order before handing it over.</small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRINT AREA -->
+    <section id="printArea" class="hidden"></section>
+  </div>
+
+  <!-- SUMMARY MODAL -->
+  <div class="modal" id="modalSummary">
+    <div class="sheet">
+      <header>
+        <b id="sumTitle">Summary – SN1</b>
+        <div><button class="x" id="sumClose">Close</button></div>
+      </header>
+      <div class="body" id="sumBody"></div>
+    </div>
+  </div>
+
+  <!-- HISTORY MODAL -->
+  <div class="modal" id="modalHistory">
+    <div class="sheet">
+      <header>
+        <b>Order History</b>
+        <div>
+          <input id="hSearch" placeholder="Search order / platform reference" style="min-width:220px;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:8px" />
+          <button class="x" id="hToday">Today</button>
+          <button class="x" id="hClear">Clear Filters</button>
+          <button class="x" id="hExportJson" data-permission="history_export">Export JSON</button>
+          <button class="x" id="hExportCsv" data-permission="history_export">Export CSV</button>
+          <button class="x" id="hClose">Close</button>
+        </div>
+      </header>
+      <div class="body" id="historyBody"></div>
+    </div>
+  </div>
+
+  <!-- HISTORY ORDER DETAIL MODAL -->
+  <div class="modal" id="modalHistoryDetail">
+    <div class="sheet history-detail-sheet">
+      <header>
+        <b id="historyDetailTitle">Order details</b>
+        <div>
+          <button class="x" id="hdReprint">Reprint Receipt</button>
+          <button class="x danger-link" id="hdVoid" data-permission="void_order">Void Order</button>
+          <button class="x" id="hdClose">Close</button>
+        </div>
+      </header>
+      <div class="body" id="historyDetailBody"></div>
+    </div>
+  </div>
+
+  <!-- DAILY REPORT MODAL -->
+  <div class="modal" id="modalDailyReport">
+    <div class="sheet report-sheet">
+      <header>
+        <b>Daily Sales Report</b>
+        <div>
+          <input id="reportDate" type="date" />
+          <button class="x" id="reportExport">Export CSV</button>
+          <button class="x" id="reportPrint">Print Report</button>
+          <button class="x" id="reportClose">Close</button>
+        </div>
+      </header>
+      <div class="body" id="dailyReportBody"></div>
+    </div>
+  </div>
+
+  <!-- STOCK OVERVIEW MODAL -->
+  <div class="modal" id="modalStockOverview">
+    <div class="sheet">
+      <header>
+        <b>Stock overview</b>
+        <div><button class="x" id="stockOverviewClose">Close</button></div>
+      </header>
+      <div class="body" id="stockOverviewBody"></div>
+    </div>
+  </div>
+
+  <!-- RECEIPT MODAL -->
+  <div class="modal" id="modalReceipt">
+    <div class="sheet">
+      <header>
+        <b>Receipt</b>
+        <div>
+          <button class="x" id="rCopy">Copy</button>
+          <button class="x" id="rWA">WhatsApp</button>
+          <button class="x" id="rPrint">Print</button>
+          <button class="x" id="rClose">Close</button>
+        </div>
+      </header>
+      <div class="body" id="receiptBody"></div>
+    </div>
+  </div>
+
+  <!-- GROUP MODAL -->
+  <div class="modal" id="modalGroup">
+    <div class="sheet">
+      <header>
+        <b>Group Ticket</b>
+        <div>
+          <button class="x" id="gMake">Create Receipt</button>
+          <button class="x" id="gPaid">Mark Paid</button>
+          <button class="x" id="gClose">Close</button>
+        </div>
+      </header>
+      <div class="body" id="groupBody"></div>
+    </div>
+  </div>
+
+  <script>
+    if(!window.FIREBASE_CONFIG){
+      console.warn('Firebase config missing: online database is disabled until firebase-config.js is filled.');
+    }
+  </script>
+
+  <!-- =================== Firebase SDK (Compat) =================== -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+  <!-- ====================== App-Skripte ====================== -->
+  <script src="./access.js?v=2"></script>
+  <script src="./data.js?v=14"></script>
+  <script src="./prices.js?v=15"></script>
+  <script src="./products.js?v=15"></script>
+  <script src="./menus.js?v=2"></script>
+  <script src="./images.js?v=18"></script>
+  <script src="./stock_data.js?v=14"></script>
+  <script src="./stock_utils.js?v=15"></script>
+  <script src="./stock.js?v=19"></script>
+  <script src="./state.js?v=20"></script>
+  <script src="./logic.js?v=15"></script>
+  <script src="./packing.js?v=2"></script>
+  <script src="./ui.js?v=53"></script>
+  <script src="./main.js?v=24"></script>
+  <script>BK_ACCESS.init();</script>
+
+  <!-- =============== Live-Sync (Variante B, Polling) =============== -->
+  <script src="./sync_poll.js?v=13"></script>
+</body>
+</html>

@@ -43,6 +43,9 @@
       packAsked: !!(slot && slot.packAsked),
       drinkPackMode: (slot && slot.drinkPackMode === 'by-customer') ? 'by-customer' : 'shared',
       sentToKitchen: !!(slot && slot.sentToKitchen),
+      discountRate: normalizeDiscount(slot && slot.discountRate),
+      discountApprovedBy: (slot && slot.discountApprovedBy && typeof slot.discountApprovedBy === 'object') ? slot.discountApprovedBy : null,
+      discountApprovedAt: Number(slot && slot.discountApprovedAt) || 0,
       orderNo: (slot && typeof slot.orderNo==='string' && slot.orderNo.trim()) ? slot.orderNo.trim() : null,
       createdAt: Number(slot && slot.createdAt) > 0 ? Number(slot.createdAt) : Date.now(),
       orderSource: SOURCE_SET.has(slot && slot.orderSource) ? slot.orderSource : 'walkin',
@@ -69,9 +72,14 @@
   }
   function normalizeState(st){
     const rawSlots = Array.isArray(st && st.slots) ? st.slots : [];
-    const nextSlots = rawSlots.map((slot, i)=> normalizeSlot(slot, i));
+    const legacyDiscount = normalizeDiscount(st && st.discountRate);
+    const nextSlots = rawSlots.map((slot, i)=>{
+      const normalized = normalizeSlot(slot, i);
+      if(!normalized.discountRate && legacyDiscount) normalized.discountRate = legacyDiscount;
+      return normalized;
+    });
     const nextActive = clamp(Number(st && st.active) || 0, 0, Math.max(0, nextSlots.length-1));
-    const nextDiscount = normalizeDiscount(st && st.discountRate);
+    const nextDiscount = 0;
     const nextSeq = Math.max(0, Number(st && st.orderSeq) || 0);
     return { slots: nextSlots, active: nextActive, discountRate: nextDiscount, orderSeq: nextSeq };
   }
@@ -275,7 +283,7 @@
       const pay = PAY_SET.has(details.pay) ? details.pay : (source === 'walkin' ? 'unpaid' : source);
       const access = window.BK_ACCESS && BK_ACCESS.current ? BK_ACCESS.current() : null;
       const actor = window.BK_ACCESS && BK_ACCESS.operationalActor ? BK_ACCESS.operationalActor() : null;
-      slots.push({name: label || `SN${idx}`, items: [], pay, issued:false, voided:false, voidReason:'', packMode:'shared', packAsked:false, drinkPackMode:'shared', sentToKitchen:false, orderNo, createdAt: Date.now(), orderSource:source, externalOrderNo:String(details.externalOrderNo || '').trim(), originalSource:'', originalPay:'', finalChannel:'', fulfilment:'', conversionReason:'', refundStatus:'', convertedAt:0, customerName:String(details.customerName || ''), customerPhone:String(details.customerPhone || ''), preferredPayment:String(details.preferredPayment || ''), riderType:String(details.riderType || ''), deliveryStatus:String(details.deliveryStatus || ''), stockConsumed:false, createdBy:actor, paidBy:pay === 'unpaid' ? null : actor, paidAt:pay === 'unpaid' ? 0 : Date.now(), businessDate:access ? access.businessDate : '', shiftId:access ? access.shiftId : ''});
+      slots.push({name: label || `SN${idx}`, items: [], pay, issued:false, voided:false, voidReason:'', packMode:'shared', packAsked:false, drinkPackMode:'shared', sentToKitchen:false, discountRate:0, discountApprovedBy:null, discountApprovedAt:0, orderNo, createdAt: Date.now(), orderSource:source, externalOrderNo:String(details.externalOrderNo || '').trim(), originalSource:'', originalPay:'', finalChannel:'', fulfilment:'', conversionReason:'', refundStatus:'', convertedAt:0, customerName:String(details.customerName || ''), customerPhone:String(details.customerPhone || ''), preferredPayment:String(details.preferredPayment || ''), riderType:String(details.riderType || ''), deliveryStatus:String(details.deliveryStatus || ''), stockConsumed:false, createdBy:actor, paidBy:pay === 'unpaid' ? null : actor, paidAt:pay === 'unpaid' ? 0 : Date.now(), businessDate:access ? access.businessDate : '', shiftId:access ? access.shiftId : ''});
       active = slots.length-1;
       save();
       return active;
@@ -303,12 +311,19 @@
     active = clamp(Number(i)||0, 0, Math.max(0, slots.length-1));
     save();
   }
+  function clearSlotDiscount(slot){
+    if(!slot) return;
+    slot.discountRate = 0;
+    slot.discountApprovedBy = null;
+    slot.discountApprovedAt = 0;
+  }
 
   function addItem(id, note, meta){
     if(!slots.length || slots[active].issued) return;
     const details = meta && typeof meta === 'object' ? meta : {};
     slots[active].packAsked = false;
     slots[active].sentToKitchen = false;
+    clearSlotDiscount(slots[active]);
     slots[active].items.push({
       itemId:id,
       note: (note||'').trim(),
@@ -349,13 +364,13 @@
     const s = slots[active]; if(!s || s.issued) return;
     const [id, note='', menuGroupId=''] = parseItemKey(key);
     const idx = s.items.findIndex(it => it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId));
-    if(idx>-1){ s.items.splice(idx,1); s.packAsked=false; s.sentToKitchen=false; save(); }
+    if(idx>-1){ s.items.splice(idx,1); s.packAsked=false; s.sentToKitchen=false; clearSlotDiscount(s); save(); }
   }
   function removeItemForKey(key){
     const s = slots[active]; if(!s || s.issued) return;
     const [id, note='', menuGroupId=''] = parseItemKey(key);
     const next = s.items.filter(it => !(it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId)));
-    if(next.length !== s.items.length){ s.items = next; s.packAsked=false; s.sentToKitchen=false; save(); }
+    if(next.length !== s.items.length){ s.items = next; s.packAsked=false; s.sentToKitchen=false; clearSlotDiscount(s); save(); }
   }
   function setPay(i,status){
     if(!slots[i] || slots[i].issued) return;
@@ -398,7 +413,16 @@
     if(changed) save();
   }
 
-  function setDiscount(r){ discountRate = normalizeDiscount(r); save(); }
+  function setDiscount(r, approval){
+    const slot = slots[active];
+    if(!slot || slot.issued) return false;
+    slot.discountRate = normalizeDiscount(r);
+    slot.discountApprovedBy = slot.discountRate && approval && typeof approval === 'object' ? approval : null;
+    slot.discountApprovedAt = slot.discountRate ? Date.now() : 0;
+    discountRate = 0;
+    save();
+    return true;
+  }
 
   // getters
   function getState(){ return {slots, active, discountRate}; }

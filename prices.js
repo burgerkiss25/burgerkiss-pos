@@ -69,6 +69,7 @@
     loadRemoteOnce();
   }
   function getPrice(id){
+    if(String(id || '').startsWith('i_sauce_')) return 0;
     const fromBase = (BK_DATA.BASE || []).find(x=>x.id===id);
     const fromDefault = (BK_DATA.DEFAULT_BASE || []).find(x=>x.id===id);
     const base = Number((fromBase && fromBase.price) ?? (fromDefault && fromDefault.price));

@@ -130,7 +130,13 @@
   }
   function usageForSlots(slots){
     const usage = {}; Object.keys(INGREDIENTS).forEach(k=>{ usage[k] = 0; });
-    (slots || []).forEach(s=>{ (s.items || []).forEach(it=>{ const rec = RECIPES[it.itemId] || {}; Object.entries(rec).forEach(([id, qty])=>{ const n = Number(qty); if(Number.isFinite(n) && n > 0) usage[id] = (usage[id] || 0) + n; }); }); });
+    (slots || []).forEach(s=>{ (s.items || []).forEach(it=>{
+      const productId = String(it.itemId || '');
+      const rec = productId.startsWith('i_sauce_') || productId.startsWith('x_sauce_')
+        ? Object.assign({}, DEFAULTS.recipes[productId] || {}, RECIPES[productId] || {})
+        : (RECIPES[productId] || DEFAULTS.recipes[productId] || {});
+      Object.entries(rec).forEach(([id, qty])=>{ const n = Number(qty); if(Number.isFinite(n) && n > 0) usage[id] = (usage[id] || 0) + n; });
+    }); });
     return usage;
   }
   function persistRemoteSoon(){
