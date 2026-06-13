@@ -19,7 +19,9 @@
   function isExtra(item, products){
     if(!item || item.menuGroupId) return false;
     const product = productById(item.itemId, products);
-    return product.cat !== 'extra' && !String(item.itemId || '').startsWith('x_sauce_');
+    const id = String(item.itemId || '');
+    if(id.startsWith('i_sauce_') || id.startsWith('x_sauce_')) return false;
+    return product.cat !== 'extra';
   }
   function assignableItems(slot, products){
     return (slot && slot.items || []).map((item,index)=>({item,index,product:productById(item.itemId, products)}))

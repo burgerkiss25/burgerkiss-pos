@@ -66,19 +66,16 @@
   // Buttons
   document.querySelectorAll('.disc').forEach(b=> b.onclick = ()=>{
     const rate = Number(b.dataset.disc);
-    if(rate > 0.03 && !(window.BK_ACCESS && BK_ACCESS.hasRole('supervisor'))){
-      BK_UI.infoDialog('A supervisor or owner is required for discounts above 3%.');
-      return;
-    }
-    BK_STATE.setDiscount(rate); BK_UI.refreshTotals();
+    BK_UI.requestDiscountApproval(rate);
   });
-  document.getElementById('btnClearDisc').onclick = ()=>{ BK_STATE.setDiscount(0); BK_UI.refreshTotals(); };
+  document.getElementById('btnClearDisc').onclick = ()=> BK_UI.requestDiscountApproval(0);
   document.getElementById('btnClearStorage').onclick = ()=>{
     if(window.BK_ACCESS && !BK_ACCESS.can('maintenance')) return BK_UI.infoDialog('Owner access is required.');
     BK_UI.clearStorageWithConfirm();
   };
 
   document.getElementById('btnAddSlot').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot(); };
+  document.getElementById('btnWorkflowNewOrder').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot(); };
 
   if(forceSlot){
     const add = document.getElementById('btnAddSlot');

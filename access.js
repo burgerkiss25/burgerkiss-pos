@@ -133,6 +133,11 @@
     if(!record) return false;
     return (await hashPin(String(pin || ''), record.salt)) === record.hash;
   }
+  async function authorizeOwnerPin(pin){
+    const owner = STAFF.find(person=>person.role === 'owner');
+    if(!owner || !(await verifyPin(owner.id, pin))) return null;
+    return {id:owner.id, name:owner.name, role:owner.role, mode:'approval'};
+  }
   function setSession(staffId, shiftId){
     const person = staffById(staffId);
     const mode = shiftId === 'remote' && person && person.role !== 'employee' ? 'remote' : 'operational';
@@ -257,7 +262,7 @@
     return false;
   }
 
-  const api = { STAFF, SHIFTS, ROLE_LEVEL, suggestedShift, salesStatus, businessDate, init, current:()=>session, actor, operationalActor, canOperate, hasRole, can, applyPermissions, guardNewSale, signOut };
+  const api = { STAFF, SHIFTS, ROLE_LEVEL, suggestedShift, salesStatus, businessDate, init, current:()=>session, actor, operationalActor, authorizeOwnerPin, canOperate, hasRole, can, applyPermissions, guardNewSale, signOut };
   root.BK_ACCESS = api;
   if(typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

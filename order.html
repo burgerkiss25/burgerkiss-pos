@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – POS</title>
-  <link rel="stylesheet" href="./style.css?v=52" />
+  <link rel="stylesheet" href="./style.css?v=53" />
 
   <!-- POS-Konfiguration aus externer Datei -->
   <script src="./firebase-config.js?v=2"></script>
@@ -26,6 +26,8 @@
       </nav>
 
       <div class="staff-session" id="staffSession" aria-live="polite"></div>
+
+      <button class="chip workflow-new-order" id="btnWorkflowNewOrder" type="button">+ New Order</button>
 
       <details class="more-menu">
         <summary class="x more-trigger">Tools</summary>
@@ -96,11 +98,11 @@
             <details class="tool-menu discount-menu">
               <summary class="chip">Add / Change</summary>
               <div class="tool-panel" aria-label="Discount actions">
-                <button class="disc" data-disc="0.01" type="button">-1%</button>
-                <button class="disc" data-disc="0.03" type="button">-3%</button>
-                <button class="disc" data-disc="0.05" data-min-role="supervisor" type="button">-5%</button>
-                <button class="disc" data-disc="0.10" data-min-role="supervisor" type="button">-10%</button>
-                <button class="ok" id="btnClearDisc" type="button">Clear Discount</button>
+                <button class="disc" data-disc="0.01" type="button">Request -1%</button>
+                <button class="disc" data-disc="0.03" type="button">Request -3%</button>
+                <button class="disc" data-disc="0.05" type="button">Request -5%</button>
+                <button class="disc" data-disc="0.10" type="button">Request -10%</button>
+                <button class="ok" id="btnClearDisc" type="button">Request removal</button>
               </div>
             </details>
           </div>
@@ -286,9 +288,9 @@
   <script src="./stock.js?v=19"></script>
   <script src="./state.js?v=20"></script>
   <script src="./logic.js?v=15"></script>
-  <script src="./packing.js?v=1"></script>
-  <script src="./ui.js?v=52"></script>
-  <script src="./main.js?v=23"></script>
+  <script src="./packing.js?v=2"></script>
+  <script src="./ui.js?v=53"></script>
+  <script src="./main.js?v=24"></script>
   <script>BK_ACCESS.init();</script>
 
   <!-- =============== Live-Sync (Variante B, Polling) =============== -->

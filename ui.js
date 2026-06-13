@@ -144,6 +144,49 @@
     });
   }
 
+  function requestDiscountApproval(rate){
+    const st = BK_STATE.getState();
+    const slot = st.slots[st.active];
+    if(!slot || !slot.items.length){
+      infoDialog('Add products before requesting a discount.');
+      return;
+    }
+    if(slot.sentToKitchen || slot.issued){
+      infoDialog('Discounts can only be approved while the order is still being taken.');
+      return;
+    }
+    const requestedRate = Math.max(0, Number(rate) || 0);
+    const host = ensureDialogHost();
+    document.getElementById('appDialogTitle').textContent = requestedRate ? `Owner approval: ${Math.round(requestedRate * 100)}% discount` : 'Owner approval: remove discount';
+    document.getElementById('appDialogBody').innerHTML = `
+      <p>The employee remains signed in. Mr Asamoah must enter the owner PIN to approve this change for Order #${escapeHtml(shortOrderNumber(slot.orderNo))}.</p>
+      <label class="dialog-label">Owner PIN<input id="discountOwnerPin" class="dialog-field" type="password" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off"></label>
+      <div id="discountApprovalError" class="field-error" aria-live="polite"></div>
+      <div class="dialog-actions"><button class="x" id="dlgCancel" type="button">Cancel</button><button class="x modifier-primary" id="dlgConfirm" type="button">Approve</button></div>`;
+    host.classList.add('open');
+    const pin = document.getElementById('discountOwnerPin');
+    pin.focus();
+    document.getElementById('dlgCancel').onclick = closeDialog;
+    document.getElementById('dlgConfirm').onclick = async ()=>{
+      const button = document.getElementById('dlgConfirm');
+      button.disabled = true;
+      const approval = window.BK_ACCESS && BK_ACCESS.authorizeOwnerPin
+        ? await BK_ACCESS.authorizeOwnerPin(pin.value)
+        : null;
+      if(!approval){
+        document.getElementById('discountApprovalError').textContent = 'Owner PIN incorrect. Discount was not changed.';
+        button.disabled = false;
+        pin.select();
+        return;
+      }
+      BK_STATE.setDiscount(requestedRate, approval);
+      closeDialog();
+      renderOrder();
+      renderPay();
+      refreshTotals();
+    };
+  }
+
   function handoverChecklistDialog(title, message){
     return new Promise(resolve=>{
       const host = ensureDialogHost();
@@ -519,18 +562,14 @@
   }
 
   function addBurgerExtras(product, picked, meta){
-    const burgerSummary = describeQuantities([...(picked.burgerExtras || []), ...(picked.eggExtras || [])]);
-    const itemNote = joinNotes(picked.itemNote, burgerSummary ? `Add-ons: ${burgerSummary}` : '');
-    BK_STATE.addItem(product.id, itemNote, meta);
+    BK_STATE.addItem(product.id, picked.itemNote, meta);
     const addonNote = modifierLinkNote('for', product.name, picked.itemNote);
     addQuantities(picked.burgerExtras, addonNote, meta && Object.assign({}, meta, {menuRole:'addon'}));
     addQuantities(picked.eggExtras, addonNote, meta && Object.assign({}, meta, {menuRole:'addon'}));
   }
 
   function addWingsExtras(product, picked, meta){
-    const extraSummary = describeQuantities(picked.extraSauce);
-    const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
-    BK_STATE.addItem(product.id, itemNote, meta);
+    BK_STATE.addItem(product.id, picked.itemNote, meta);
     if(picked.wingsSauce) BK_STATE.addItem(picked.wingsSauce, modifierLinkNote('included', product.name, picked.itemNote), meta && Object.assign({}, meta, {menuRole:'sauce'}));
     addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote), meta && Object.assign({}, meta, {menuRole:'sauce'}));
   }
@@ -569,9 +608,7 @@
         { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one free sauce for this fries item.', options:includedSauceOptions() },
         { title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add several paid extra sauces.', options:paidSauceOptions() }
       ], { note: pendingNote });
-      const extraSummary = describeQuantities(picked.extraSauce);
-      const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
-      BK_STATE.addItem(product.id, itemNote);
+      BK_STATE.addItem(product.id, picked.itemNote);
       if(picked.includedSauce) BK_STATE.addItem(picked.includedSauce, modifierLinkNote('included', product.name, picked.itemNote));
       addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
     }else if(isBurgerBase(product)){
@@ -1016,8 +1053,6 @@
     const itemCount = (s.items || []).reduce((total, item)=> total + (Number(item.qty) || 0), 0);
     const mobileCount = document.getElementById('mobileCartCount');
     if(mobileCount) mobileCount.textContent = `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`;
-    lines.appendChild(packagingControl(s, active, false));
-
     const entries = groupedCartRows(s.items);
     if(entries.length===0){
       const row = document.createElement('div');
@@ -1107,7 +1142,7 @@
     });
 
     const c = BK_LOGIC.computeSlot(s);
-    const activeDiscount = Math.round(c.subtotal * (discountRate || 0));
+    const activeDiscount = Math.round(c.subtotal * (s.discountRate || 0));
     setSlotTotals(c.subtotal, activeDiscount, c.subtotal - activeDiscount);
     const orderNext = workflowNextState('order', s);
     renderWorkflowNext('orderFlowNav', Object.assign({}, orderNext, {onClick:()=>continueOrderToKitchen(active)}));
@@ -1394,7 +1429,7 @@
       return;
     }
     const c = BK_LOGIC.computeSlot(s);
-    const discount = Math.round(c.subtotal * (discountRate || 0));
+    const discount = Math.round(c.subtotal * (s.discountRate || 0));
     const amountDue = c.subtotal - discount;
     const payment = paymentDisplay(s);
     const payNext = workflowNextState('pay', s);
@@ -1697,8 +1732,12 @@
   function addNewOrderSlot(){
     const st = BK_STATE.getState();
     const slot = st.slots[st.active];
-    if(slot && slot.items.length>0 && slot.pay === 'unpaid'){
-      infoDialog('Please confirm payment first, then use + Slot to start the next order.');
+    if(slot && slot.items.length === 0){
+      goTab('order');
+      return;
+    }
+    if(slot && slot.items.length > 0 && !slot.sentToKitchen){
+      infoDialog('Finish the current order intake and send it to Kitchen before starting another order.');
       return;
     }
     BK_STATE.addSlot().then(function(){
@@ -1848,6 +1887,8 @@
       subtotal: Number(entry.subtotal) || 0,
       discountRate: Math.max(0, Number(entry.discountRate) || 0),
       discount: Math.max(0, Number(entry.discount) || 0),
+      discountApprovedBy: (entry.discountApprovedBy && typeof entry.discountApprovedBy === 'object') ? entry.discountApprovedBy : null,
+      discountApprovedAt: Number(entry.discountApprovedAt) || 0,
       total: Number.isFinite(Number(entry.total)) ? Number(entry.total) : Math.max(0, (Number(entry.subtotal) || 0) - (Number(entry.discount) || 0)),
       combos: Number(entry.combos) || 0,
       packMode: entry.packMode === 'split' ? 'split' : 'shared',
@@ -1930,7 +1971,7 @@
   }
   function slotSnapshot(slot){
     const c = BK_LOGIC.computeSlot(slot);
-    const discountRate = Math.max(0, Number(BK_STATE.getState().discountRate) || 0);
+    const discountRate = Math.max(0, Number(slot.discountRate) || 0);
     const discount = Math.round(c.subtotal * discountRate);
     return {
       id: String(slot.orderNo || `ORD-${Date.now()}`).replace(/[^a-zA-Z0-9_\-]/g, '_'),
@@ -1954,6 +1995,8 @@
       createdBy: slot.createdBy || null,
       paidBy: slot.paidBy || null,
       paidAt: slot.paidAt || 0,
+      discountApprovedBy: slot.discountApprovedBy || null,
+      discountApprovedAt: slot.discountApprovedAt || 0,
       issuedBy: slot.issuedBy || null,
       riderType: slot.riderType || '',
       deliveryStatus: slot.deliveryStatus || '',
@@ -2506,15 +2549,16 @@
   }
 
   function refreshTotals(){
-    const {slots, discountRate, active} = BK_STATE.getState();
+    const {slots, active} = BK_STATE.getState();
     const activeSlot = slots[active];
     const c = activeSlot ? BK_LOGIC.computeSlot(activeSlot) : {subtotal:0, combos:0};
-    const activeDiscount = Math.round(c.subtotal * (discountRate || 0));
+    const activeRate = activeSlot ? Number(activeSlot.discountRate) || 0 : 0;
+    const activeDiscount = Math.round(c.subtotal * activeRate);
     setSlotTotals(c.subtotal, activeDiscount, c.subtotal - activeDiscount);
     const mobileTotal = document.getElementById('mobileCartTotal');
     if(mobileTotal) mobileTotal.textContent = `${c.subtotal - activeDiscount} GHS`;
     const discountLabel = document.getElementById('currentDiscountLabel');
-    if(discountLabel) discountLabel.textContent = activeDiscount > 0 ? `${Math.round(discountRate * 100)}% · -${activeDiscount} GHS` : 'No discount';
+    if(discountLabel) discountLabel.textContent = activeDiscount > 0 ? `${Math.round(activeRate * 100)}% · -${activeDiscount} GHS · owner approved` : 'No discount';
     renderStock();
   }
 
@@ -2622,14 +2666,14 @@
   function openSummary(){
     const st = BK_STATE.getState();
     if(!st.slots.length){ infoDialog('No active order. Create a new order first.'); return; }
-    const {slots, active, discountRate} = BK_STATE.getState();
+    const {slots, active} = BK_STATE.getState();
     const s = slots[active]; const c = BK_LOGIC.computeSlot(s);
     document.getElementById('sumTitle').textContent = `Summary – ${s.name}`;
     const body = document.getElementById('sumBody');
     body.innerHTML = htmlGroupedRows(s.items) +
       `<div class="sumline"><span>Slot Subtotal</span><b>${c.subtotal} GHS</b></div>
        <div style="padding:8px 0;color:#9aa3ad;font-size:12px">
-         Combos in slot: <b>${c.combos}</b> · Global Discount: ${Math.round((discountRate||0)*100)}%
+         Combos in slot: <b>${c.combos}</b> · Order Discount: ${Math.round((s.discountRate||0)*100)}%
        </div>`;
     document.getElementById('modalSummary').classList.add('open');
   }
@@ -2645,20 +2689,20 @@
   }
 
   function openReceipt(indices){
-    const {slots, discountRate} = BK_STATE.getState();
+    const {slots} = BK_STATE.getState();
     const idxs = Array.isArray(indices)? indices : [BK_STATE.getState().active];
-    let subtotal=0, combos=0;
+    let subtotal=0, discount=0, combos=0;
     const sections = idxs.map(i=>{
       const s=slots[i]; const c=BK_LOGIC.computeSlot(s);
       subtotal += c.subtotal; combos += c.combos;
+      discount += Math.round(c.subtotal * (Number(s.discountRate) || 0));
       return receiptSectionHtml(s);
     }).join('');
-    const discount = Math.round(subtotal * (discountRate||0));
     const total = subtotal - discount;
     const html = `
       <div style="line-height:1.35">
         <div><b>BurgerKiss – Order</b></div>
-        <div style="color:#9aa3ad">Combos: ${combos} · Discount: ${Math.round((discountRate||0)*100)}%</div>
+        <div style="color:#9aa3ad">Combos: ${combos} · Approved order discounts included</div>
         <hr style="border:0;border-top:1px solid #2a2f39;margin:8px 0">
         ${sections}
         <div class="sumline"><span>Subtotal</span><b>${subtotal} GHS</b></div>
@@ -2858,6 +2902,6 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid, openOnlineOrderDialog, convertOnlineOrder,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment, requestSlotPayment, continueFromPayment, choosePackaging, continueOrderToKitchen
+    infoDialog, confirmDialog, requestDiscountApproval, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment, requestSlotPayment, continueFromPayment, choosePackaging, continueOrderToKitchen
   };
 })();
