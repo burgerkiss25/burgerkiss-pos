@@ -71,11 +71,16 @@
       x_cheese: { cheese_slice:1 },
       x_fried_egg: { egg:1 },
       x_omelette: { egg:2 },
-      x_sauce_ketchup: { ketchup:20 },
-      x_sauce_mayonnaise: { mayonnaise:20 },
-      x_sauce_chipotle: { mayonnaise:15, chicken_burger_sauce:5 },
-      x_sauce_dutch_special: { mayonnaise:10, ketchup:10, onion_diced:5 },
-      x_sauce_chicken_wings: { chicken_wings_sauce:20 }
+      i_sauce_ketchup: { ketchup:20 },
+      i_sauce_mayonnaise: { mayonnaise:20 },
+      i_sauce_chipotle: { mayonnaise:15, chicken_burger_sauce:5 },
+      i_sauce_dutch_special: { mayonnaise:10, ketchup:10, onion_diced:5 },
+      i_sauce_chicken_wings: { chicken_wings_sauce:20 },
+      x_sauce_ketchup: { ketchup:20, sauce_cup:1 },
+      x_sauce_mayonnaise: { mayonnaise:20, sauce_cup:1 },
+      x_sauce_chipotle: { mayonnaise:15, chicken_burger_sauce:5, sauce_cup:1 },
+      x_sauce_dutch_special: { mayonnaise:10, ketchup:10, onion_diced:5, sauce_cup:1 },
+      x_sauce_chicken_wings: { chicken_wings_sauce:20, sauce_cup:1 }
     }
   };
   window.BK_STOCK_DATA = { DEFAULTS };
