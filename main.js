@@ -123,6 +123,8 @@
   };
   document.getElementById('tabPay').onclick   = ()=> showTab('pay');
   document.getElementById('tabIssue').onclick = ()=> showTab('issue');
+  document.getElementById('btnPayBack').onclick = ()=> showTab('make');
+  document.getElementById('btnIssueBack').onclick = ()=> showTab('pay');
 
   document.querySelectorAll('.more-panel button, .more-panel a, .tool-panel button').forEach(el=>{
     el.addEventListener('click', ()=> el.closest('details')?.removeAttribute('open'));

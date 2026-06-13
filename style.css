@@ -309,16 +309,20 @@ button:focus-visible,.chip:focus-visible,input:focus-visible,a:focus-visible,sum
 /* Bag-by-bag final handover plan */
 .handover-menu-block{margin:12px 0;padding:0 12px 10px;border:2px solid #7a6225;border-radius:12px;background:#1b170c}.handover-menu-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 -12px 6px;padding:10px 12px;border-bottom:2px solid #7a6225;background:#28200e;color:#ffe7a0}.handover-menu-heading span{padding:4px 8px;border-radius:999px;background:#ffd24d;color:#211700;font-size:11px;font-weight:950}.handover-menu-block .handover-check-row{border-top:1px dashed #4a4127}.handover-menu-info{margin:6px 0;padding:8px 10px;border:1px solid #526079;border-radius:8px;background:#121a27;color:#cbd7e8;font-weight:850}.handover-check-content{display:grid;gap:2px}.handover-check-content small{color:#aeb9c8}.handover-check-section{margin:12px 0;padding:0 12px 8px;border:1px solid #394457;border-radius:11px;background:#111720}.handover-check-section-title{margin:0 -12px 4px;padding:9px 12px;border-bottom:1px solid #394457;color:#dfe8f5;font-weight:950;text-transform:uppercase;letter-spacing:.04em}
 
-/* Kitchen tickets prioritize preparation details, never prices. */
-.workflow-make .hud-rows,.workflow-make .catbar,.workflow-make .totals,.workflow-make .more-menu{display:none!important}
-.workflow-make .hud-wrap{position:static}
-.workflow-make .app-header{grid-template-columns:auto minmax(300px,1fr) auto;padding:9px clamp(10px,2vw,18px)}
-.workflow-make .brand-block{min-width:0}.workflow-make .brand-block .order-context{display:none}
-.workflow-make .tabbar{justify-self:center}.workflow-make .staff-session{justify-self:end}
-.workflow-make .wrap{max-width:1500px;padding-top:10px}
+/* Operational workflow pages hide ordering controls and prioritize the current task. */
+.workflow-make .hud-rows,.workflow-make .catbar,.workflow-make .totals,.workflow-make .more-menu,
+.workflow-pay .hud-rows,.workflow-pay .catbar,.workflow-pay .totals,.workflow-pay .more-menu,
+.workflow-issue .hud-rows,.workflow-issue .catbar,.workflow-issue .totals,.workflow-issue .more-menu{display:none!important}
+.workflow-make .hud-wrap,.workflow-pay .hud-wrap,.workflow-issue .hud-wrap{position:static}
+.workflow-make .app-header,.workflow-pay .app-header,.workflow-issue .app-header{grid-template-columns:auto minmax(300px,1fr) auto;padding:9px clamp(10px,2vw,18px)}
+.workflow-make .brand-block,.workflow-pay .brand-block,.workflow-issue .brand-block{min-width:0}
+.workflow-make .brand-block .order-context,.workflow-pay .brand-block .order-context,.workflow-issue .brand-block .order-context{display:none}
+.workflow-make .tabbar,.workflow-pay .tabbar,.workflow-issue .tabbar{justify-self:center}
+.workflow-make .staff-session,.workflow-pay .staff-session,.workflow-issue .staff-session{justify-self:end}
+.workflow-make .wrap,.workflow-pay .wrap,.workflow-issue .wrap{max-width:1500px;padding-top:10px}
 .workflow-make #makeList{margin-top:0}
-.kitchen-page-head{display:flex;align-items:center;gap:14px;padding:12px 14px;border-bottom:1px solid #2b3340;background:#0e131b}
-.kitchen-page-head h2{margin:1px 0;font-size:24px}.kitchen-page-head small{color:#aeb8c8}.kitchen-page-head .eyebrow{margin:0}.kitchen-back{flex:0 0 auto}
+.kitchen-page-head,.workflow-page-head{display:flex;align-items:center;gap:14px;padding:12px 14px;border-bottom:1px solid #2b3340;background:#0e131b}
+.kitchen-page-head h2,.workflow-page-head h2{margin:1px 0;font-size:24px}.kitchen-page-head small,.workflow-page-head small{color:#aeb8c8}.kitchen-page-head .eyebrow,.workflow-page-head .eyebrow{margin:0}.kitchen-back,.workflow-back{flex:0 0 auto}
 .kitchen-order-card{margin:10px;border:1px solid #303949;border-radius:14px;background:#121722;overflow:hidden}
 .kitchen-order-card.active-slot-card{border-color:#806b2b;box-shadow:inset 4px 0 0 var(--accent)}
 .kitchen-order-head{padding:12px 14px;font-size:var(--fz-md);font-weight:850;background:#171d27}
@@ -326,8 +330,20 @@ button:focus-visible,.chip:focus-visible,input:focus-visible,a:focus-visible,sum
 .kitchen-packaging{padding:5px 9px;border:1px solid #43516a;border-radius:999px;background:#152030;color:#dce9ff;font-size:11px;font-weight:900;white-space:nowrap}
 .kitchen-order-card .kitchen-progress{margin:10px 12px 2px}.kitchen-order-card .grouped-todo{gap:2px;padding:0 12px 8px}
 .kitchen-entry{padding:14px 2px}.kitchen-entry .grouped-meal-head{align-items:flex-start;justify-content:flex-start}.kitchen-entry .grouped-meal-head>input[type="checkbox"]{width:28px;height:28px;flex:0 0 28px;margin-top:1px;accent-color:#48bfcf}.kitchen-entry .grouped-meal-title{gap:5px}.kitchen-entry .grouped-meal-title b{font-size:22px;line-height:1.25;color:#fff}.kitchen-entry .grouped-meal-title small{font-size:17px;line-height:1.35;color:#f1dba0;font-weight:800}.kitchen-entry .grouped-meal-child{margin-top:8px;margin-left:40px;padding:5px 0 5px 12px;font-size:17px;line-height:1.35;color:#e2e8f0}.kitchen-entry .grouped-meal-child::first-letter{color:#ffd24d}
-@media(max-width:900px){.workflow-make .app-header{grid-template-columns:auto 1fr}.workflow-make .tabbar{grid-column:1 / -1;justify-self:stretch}.workflow-make .staff-session{display:none}.kitchen-order-head{align-items:flex-start}.kitchen-packaging{white-space:normal}}
-@media(max-width:700px){.workflow-make .app-header{padding:7px 9px}.workflow-make .tabbar{display:grid}.workflow-make .wrap{padding:8px}.kitchen-page-head{padding:10px}.kitchen-page-head h2{font-size:20px}.kitchen-order-card{margin:8px 0}.kitchen-order-head{display:grid;padding:10px 12px}.kitchen-packaging{justify-self:start}.kitchen-order-card .kitchen-progress{margin:8px}.kitchen-entry .grouped-meal-title b{font-size:20px}.kitchen-entry .grouped-meal-title small,.kitchen-entry .grouped-meal-child{font-size:16px}}
+@media(max-width:900px){.workflow-make .app-header,.workflow-pay .app-header,.workflow-issue .app-header{grid-template-columns:auto 1fr}.workflow-make .tabbar,.workflow-pay .tabbar,.workflow-issue .tabbar{grid-column:1 / -1;justify-self:stretch}.workflow-make .staff-session,.workflow-pay .staff-session,.workflow-issue .staff-session{display:none}.kitchen-order-head{align-items:flex-start}.kitchen-packaging{white-space:normal}}
+@media(max-width:700px){.workflow-make .app-header,.workflow-pay .app-header,.workflow-issue .app-header{padding:7px 9px}.workflow-make .tabbar,.workflow-pay .tabbar,.workflow-issue .tabbar{display:grid}.workflow-make .wrap,.workflow-pay .wrap,.workflow-issue .wrap{padding:8px}.kitchen-page-head,.workflow-page-head{padding:10px}.kitchen-page-head h2,.workflow-page-head h2{font-size:20px}.kitchen-order-card{margin:8px 0}.kitchen-order-head{display:grid;padding:10px 12px}.kitchen-packaging{justify-self:start}.kitchen-order-card .kitchen-progress{margin:8px}.kitchen-entry .grouped-meal-title b{font-size:20px}.kitchen-entry .grouped-meal-title small,.kitchen-entry .grouped-meal-child{font-size:16px}}
+
+/* Compact payment and handover cards show only the active order. */
+.workflow-order-card{margin:10px;border:1px solid #303949;border-radius:14px;background:#121722;overflow:hidden}
+.workflow-order-identity{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px;background:#171d27}
+.workflow-order-identity>div:first-child{display:grid;gap:4px}.workflow-order-identity>div:first-child strong{font-size:21px;color:#fff}.workflow-order-identity>div:first-child span{color:#b8c4d3}
+.amount-due{display:grid;gap:2px;text-align:right}.amount-due small{color:#aeb8c8;text-transform:uppercase;letter-spacing:.08em;font-weight:900}.amount-due strong{font-size:28px;color:#fff0b5}
+.payment-totals{display:flex;justify-content:flex-end;gap:22px;padding:9px 14px;border-top:1px solid #2b3340;color:#aeb8c8}.payment-totals span{display:flex;gap:7px}.payment-totals b{color:#f1f5f9}
+.workflow-order-card .payment-panel{margin:10px 12px 12px}.workflow-order-card .payment-next-action{margin-left:0}.change-payment-action{margin-left:auto}
+.handover-statuses{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.handover-statuses span{padding:5px 9px;border:1px solid #4a5568;border-radius:999px;background:#151d28;color:#cbd5e1;font-size:12px;font-weight:900}.handover-statuses .complete{border-color:#356b42;background:#102319;color:#c9f6d2}.handover-statuses .pending{border-color:#705b28;background:#211a0d;color:#ffe2a0}
+.handover-packaging{display:grid;gap:4px;margin:10px 12px 0;padding:10px 12px;border:1px solid #43516a;border-radius:10px;background:#152030}.handover-packaging small{color:#9fb0c4;text-transform:uppercase;letter-spacing:.08em;font-weight:900}.handover-packaging strong{color:#e4efff}
+.workflow-order-card .issue-readiness{margin:10px 12px}.workflow-order-card .issue-checklist{margin:0 12px 12px;padding:12px 0 0}.issue-checklist-title{display:block;margin-bottom:4px;color:#fff}
+@media(max-width:700px){.workflow-order-card{margin:8px 0}.workflow-order-identity{display:grid;padding:12px}.amount-due{text-align:left}.payment-totals{justify-content:space-between}.workflow-order-card .payment-panel{align-items:stretch}.workflow-order-card .payment-next-action,.change-payment-action{width:100%;margin-left:0}.handover-statuses{justify-content:flex-start}}
 
 /* Compact final handover: one confirmation per complete menu/item card. */
 .handover-card-check{display:flex;align-items:flex-start;gap:12px;margin:12px 0;padding:0;border:2px solid #7a6225;border-radius:12px;background:#1b170c;overflow:hidden;cursor:pointer}.handover-card-check>input{width:24px;height:24px;margin:13px 0 0 12px;accent-color:#ffd24d;flex:0 0 auto}.handover-card-body{display:block;min-width:0;flex:1}.handover-card-check .handover-menu-heading{margin:0;padding:10px 12px}.handover-card-lines{display:grid;gap:7px;padding:9px 12px 12px}.handover-card-line{display:grid;gap:2px;padding-top:7px;border-top:1px dashed #4a4127}.handover-card-line:first-child{padding-top:0;border-top:0}.handover-card-line small{color:#aeb9c8}

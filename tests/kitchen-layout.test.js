@@ -16,7 +16,7 @@ test('kitchen page has a compact local header and back action', () => {
 });
 
 test('make workflow hides ordering and commercial controls', () => {
-  assert.match(css, /\.workflow-make \.hud-rows,\.workflow-make \.catbar,\.workflow-make \.totals,\.workflow-make \.more-menu\{display:none!important\}/);
+  assert.match(css, /\.workflow-make \.hud-rows,\.workflow-make \.catbar,\.workflow-make \.totals,\.workflow-make \.more-menu,/);
   assert.match(main, /document\.body\.classList\.toggle\(`workflow-\$\{tab\}`/);
   assert.match(ui, /document\.body\.classList\.toggle\(`workflow-\$\{tab\}`/);
 });

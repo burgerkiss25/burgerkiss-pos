@@ -1366,49 +1366,53 @@
   }
 
   function renderPay(){
-    const {slots, active} = BK_STATE.getState();
+    const {slots, active, discountRate} = BK_STATE.getState();
     const box = document.getElementById('payList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
     box.querySelectorAll('.empty-state').forEach(n=>n.remove());
-    if(!slots.length){
+    const s = slots[active];
+    if(!s){
       const empty = document.createElement('div');
       empty.className = 'empty-state';
       empty.textContent = 'No active orders to pay.';
       box.appendChild(empty);
       return;
     }
-    slots.forEach((s,i)=>{
-      const c = BK_LOGIC.computeSlot(s);
-      const payment = paymentDisplay(s);
-      const payNext = workflowNextState('pay', s);
-      const paymentDisabled = s.issued || !Array.isArray(s.items) || s.items.length === 0;
-      const card = document.createElement('div'); card.className='slot-card';
-      card.dataset.paymentSlot = String(i);
-      card.innerHTML = `
-        <div class="slot-head">
-          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS</div>
-          <div class="pay-status">${i === active ? '<span class="active-order-badge">Active order</span>' : ''}</div>
-        </div>
-        <div class="payment-panel ${payment.state}">
-          <div class="payment-summary"><strong>${payment.label}</strong><small>${payment.detail}</small></div>
-          ${isPrepaidPlatform(s) ? `<div class="online-paid-lock"><b>${platformLabel(s.orderSource)} payment recorded</b><small>No additional payment step is required.</small></div>` : `<div class="payment-methods" role="group" aria-label="Payment method for ${s.name}">
-            <button class="payment-method ${s.pay === 'unpaid' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'unpaid');">Unpaid</button>
-            <button class="payment-method ${s.pay === 'cash' ? 'selected' : ''}" ${(paymentDisabled || (isWhatsapp(s) && s.fulfilment === 'delivery')) ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'cash');">Cash</button>
-            <button class="payment-method ${s.pay === 'momo' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'momo');">MoMo</button>
-          </div>`}
-        </div>
-        <div class="workflow-next ${payNext.state}">
-          <div class="workflow-next-copy"><strong>${payNext.title}</strong><small>${payNext.detail}</small></div>
-          <button type="button" class="workflow-next-button payment-next-action" ${payNext.disabled ? 'disabled' : ''}>${payNext.label}</button>
-        </div>`;
-      const paymentNext = card.querySelector('.payment-next-action');
-      paymentNext.onclick = ()=> continueFromPayment(i);
-      makeSlotCardSelectable(card, i, 'pay', i === active);
-      box.appendChild(card);
-    });
-    ensureFlowActions('payList', [
-      { label:'⬅️ Back to Make', onClick:()=> goTab('make') }
-    ]);
+    const c = BK_LOGIC.computeSlot(s);
+    const discount = Math.round(c.subtotal * (discountRate || 0));
+    const amountDue = c.subtotal - discount;
+    const payment = paymentDisplay(s);
+    const payNext = workflowNextState('pay', s);
+    const paymentDisabled = s.issued || !Array.isArray(s.items) || s.items.length === 0;
+    const canReversePayment = !isPrepaidPlatform(s) && s.pay !== 'unpaid' && !s.issued;
+    const card = document.createElement('div'); card.className='slot-card workflow-order-card';
+    card.dataset.paymentSlot = String(active);
+    card.innerHTML = `
+      <div class="workflow-order-identity">
+        <div><strong>Order #${escapeHtml(shortOrderNumber(s.orderNo))}</strong><span>${escapeHtml(orderChannelText(s))}</span></div>
+        <div class="amount-due"><small>Amount due</small><strong>${amountDue} GHS</strong></div>
+      </div>
+      <div class="payment-totals" aria-label="Payment total">
+        <span>Subtotal <b>${c.subtotal} GHS</b></span>
+        <span>Discount <b>-${discount} GHS</b></span>
+      </div>
+      <div class="payment-panel ${payment.state}">
+        <div class="payment-summary"><strong>${payment.label}</strong><small>${payment.detail}</small></div>
+        ${isPrepaidPlatform(s)
+          ? `<div class="online-paid-lock"><b>${platformLabel(s.orderSource)} payment recorded</b><small>No additional payment step is required.</small></div>`
+          : s.pay === 'unpaid'
+            ? `<div class="payment-methods" role="group" aria-label="Payment method for Order ${escapeHtml(shortOrderNumber(s.orderNo))}">
+                <button class="payment-method" ${(paymentDisabled || (isWhatsapp(s) && s.fulfilment === 'delivery')) ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${active},'cash');">Cash</button>
+                <button class="payment-method" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${active},'momo');">MoMo</button>
+              </div>`
+            : `<button class="x change-payment-action" type="button">Change payment</button>`}
+        <button type="button" class="workflow-next-button payment-next-action" ${payNext.disabled ? 'disabled' : ''}>${payNext.label}</button>
+      </div>`;
+    const paymentNext = card.querySelector('.payment-next-action');
+    paymentNext.onclick = ()=> continueFromPayment(active);
+    const changePayment = card.querySelector('.change-payment-action');
+    if(changePayment && canReversePayment) changePayment.onclick = ()=>requestSlotPayment(active, 'unpaid');
+    box.appendChild(card);
   }
 
   function continueFromPayment(slotIndex, navigate){
@@ -1474,58 +1478,55 @@
     if(!box) return;
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
     box.querySelectorAll('.empty-state').forEach(n=>n.remove());
-    if(!slots.length){
+    const s = slots[active];
+    if(!s){
       const empty = document.createElement('div');
       empty.className = 'empty-state';
       empty.textContent = 'No orders waiting for handover.';
       box.appendChild(empty);
       return;
     }
-    slots.forEach((s,i)=>{
-      const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
-      const readiness = issueReadiness(s);
-      const card = document.createElement('div'); card.className='slot-card';
-      card.innerHTML = `
-        <div class="slot-head">
-          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
-          <div class="pay-status">
-            ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
+    const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
+    const readiness = issueReadiness(s);
+    const card = document.createElement('div'); card.className='slot-card workflow-order-card';
+    card.innerHTML = `
+        <div class="workflow-order-identity handover-identity">
+          <div><strong>Order #${escapeHtml(shortOrderNumber(s.orderNo))}</strong><span>${escapeHtml(orderChannelText(s))} · waiting ${formatAge(s.createdAt)}</span></div>
+          <div class="handover-statuses" aria-label="Order completion status">
+            <span class="${s.pay !== 'unpaid' ? 'complete' : 'pending'}">${s.pay !== 'unpaid' ? '✓' : '○'} ${escapeHtml(paymentLabel(s.pay))}</span>
+            <span class="${allDone ? 'complete' : 'pending'}">${allDone ? '✓' : '○'} Kitchen ${allDone ? 'complete' : 'open'}</span>
           </div>
         </div>
+        <div class="handover-packaging"><small>Packaging</small><strong>${escapeHtml(packagingLabel(s))}</strong></div>
         <div class="workflow-next issue-readiness ${readiness.state}">
           <div class="workflow-next-copy"><strong>${readiness.label}</strong><small>${readiness.detail}</small></div>
           <div class="issue-action-group"><button class="workflow-next-button issue-next-action" ${readiness.disabled ? 'disabled' : ''}>${readiness.action}</button>${readiness.state === 'ready' && isOnlineOrder(s) && s.finalChannel !== 'direct' ? `<button class="x rider-missed-action" type="button">Rider Did Not Pick Up</button>` : ''}</div>
         </div>`;
-      const riderMissedButton = card.querySelector('.rider-missed-action');
-      if(riderMissedButton) riderMissedButton.onclick = ()=>convertOnlineOrder(i);
-      const actionButton = card.querySelector('.issue-next-action');
-      actionButton.onclick = ()=>{
-        if(readiness.disabled) return;
-        if(readiness.state === 'ready') markIssued(i);
-        else focusSlot(i, readiness.target);
-      };
-      card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
-      const checklist = document.createElement('div');
-      checklist.className = 'issue-checklist';
-      const label = document.createElement('small');
-      label.textContent = 'Final check:';
-      checklist.appendChild(label);
-      const grouped = groupedCartRows(s.items);
-      if(grouped.length){
-        grouped.forEach(entry=> appendGroupedEntry(checklist, s, entry, i, { compact:true }));
-      }else{
-        const emptyLine = document.createElement('div');
-        emptyLine.className = 'empty-state';
-        emptyLine.textContent = 'No items';
-        checklist.appendChild(emptyLine);
-      }
-      card.appendChild(checklist);
-      makeSlotCardSelectable(card, i, 'issue', i === active);
-      box.appendChild(card);
-    });
-    ensureFlowActions('issueList', [
-      { label:'⬅️ Back to Payment', onClick:()=> goTab('pay') }
-    ]);
+    const riderMissedButton = card.querySelector('.rider-missed-action');
+    if(riderMissedButton) riderMissedButton.onclick = ()=>convertOnlineOrder(active);
+    const actionButton = card.querySelector('.issue-next-action');
+    actionButton.onclick = ()=>{
+      if(readiness.disabled) return;
+      if(readiness.state === 'ready') markIssued(active);
+      else focusSlot(active, readiness.target);
+    };
+    const checklist = document.createElement('div');
+    checklist.className = 'issue-checklist';
+    const label = document.createElement('strong');
+    label.className = 'issue-checklist-title';
+    label.textContent = 'Items to hand over';
+    checklist.appendChild(label);
+    const grouped = groupedCartRows(s.items);
+    if(grouped.length){
+      grouped.forEach(entry=> appendGroupedEntry(checklist, s, entry, active, { compact:true, showPrices:false }));
+    }else{
+      const emptyLine = document.createElement('div');
+      emptyLine.className = 'empty-state';
+      emptyLine.textContent = 'No items';
+      checklist.appendChild(emptyLine);
+    }
+    card.appendChild(checklist);
+    box.appendChild(card);
   }
 
 
@@ -2484,7 +2485,6 @@
 
   function refreshTotals(){
     const {slots, discountRate, active} = BK_STATE.getState();
-    const g = BK_LOGIC.computeAll(slots, discountRate);
     const activeSlot = slots[active];
     const c = activeSlot ? BK_LOGIC.computeSlot(activeSlot) : {subtotal:0, combos:0};
     const activeDiscount = Math.round(c.subtotal * (discountRate || 0));
@@ -2493,9 +2493,6 @@
     if(mobileTotal) mobileTotal.textContent = `${c.subtotal - activeDiscount} GHS`;
     const discountLabel = document.getElementById('currentDiscountLabel');
     if(discountLabel) discountLabel.textContent = activeDiscount > 0 ? `${Math.round(discountRate * 100)}% · -${activeDiscount} GHS` : 'No discount';
-    document.getElementById('allSubtotal').textContent = `${g.grandSubtotal} GHS`;
-    document.getElementById('allDiscount').textContent = `-${g.discount} GHS`;
-    document.getElementById('allGrand').textContent = `${g.grand} GHS`;
     renderStock();
   }
 

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – POS</title>
-  <link rel="stylesheet" href="./style.css?v=50" />
+  <link rel="stylesheet" href="./style.css?v=51" />
 
   <!-- POS-Konfiguration aus externer Datei -->
   <script src="./firebase-config.js?v=2"></script>
@@ -132,21 +132,28 @@
     <!-- PAY -->
     <section id="tab-pay" class="hidden">
       <div id="payList" class="panel">
-        <h3>Payment status</h3>
-        <div class="flow-action" id="payFlowNav"></div>
-      </div>
-      <div class="panel" style="margin-top:10px">
-        <div class="sumline"><span>All Slots Subtotal</span><b id="allSubtotal">0 GHS</b></div>
-        <div class="sumline"><span>Global Discount</span><b id="allDiscount">0 GHS</b></div>
-        <div class="sumline"><span>Grand Total</span><b id="allGrand">0 GHS</b></div>
+        <div class="workflow-page-head">
+          <button class="x workflow-back" id="btnPayBack" type="button">← Kitchen</button>
+          <div>
+            <p class="eyebrow">Step 3 of 4</p>
+            <h2>Payment</h2>
+            <small>Confirm payment for the selected order.</small>
+          </div>
+        </div>
       </div>
     </section>
 
     <!-- ISSUE -->
     <section id="tab-issue" class="hidden">
       <div id="issueList" class="panel">
-        <h3>Issue / Handover</h3>
-        <div class="flow-action" id="issueFlowNav"></div>
+        <div class="workflow-page-head">
+          <button class="x workflow-back" id="btnIssueBack" type="button">← Payment</button>
+          <div>
+            <p class="eyebrow">Step 4 of 4</p>
+            <h2>Handover</h2>
+            <small>Check the complete order before handing it over.</small>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -280,7 +287,7 @@
   <script src="./state.js?v=20"></script>
   <script src="./logic.js?v=14"></script>
   <script src="./packing.js?v=1"></script>
-  <script src="./ui.js?v=49"></script>
+  <script src="./ui.js?v=50"></script>
   <script src="./main.js?v=23"></script>
   <script>BK_ACCESS.init();</script>
 
