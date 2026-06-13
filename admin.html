@@ -19,7 +19,7 @@
         </div>
       </div>
       <nav class="admin-actions" aria-label="Admin editor navigation">
-        <a class="x" href="index.html">← Back to POS</a>
+        <a class="x" href="order.html">← Back to POS</a>
         <button class="x" id="btnPrices" type="button">Edit Prices</button>
         <button class="x" id="btnProducts" type="button">Edit Products</button>
         <button class="x" id="btnMenus" type="button">Edit Menus</button>
@@ -85,7 +85,7 @@
   <script>
     document.addEventListener('bk-access-ready', function(){
       if(!BK_ACCESS.hasRole('owner')){
-        window.location.replace('index.html');
+        window.location.replace('order.html');
         return;
       }
       if(document.querySelector('script[data-admin-boot]')) return;

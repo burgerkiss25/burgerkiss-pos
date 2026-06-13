@@ -1,5 +1,5 @@
 // Kopiere diese Datei als `firebase-config.js` und trage DEIN Firebase Projekt ein.
-// Die Datei `firebase-config.js` ist in index.html eingebunden.
+// Die Datei `firebase-config.js` ist in order.html eingebunden.
 
 window.BK_ALLOW_PRICE_EDIT = true;
 window.BK_SYNC_ENABLED = true;

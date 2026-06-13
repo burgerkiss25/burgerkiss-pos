@@ -1,7 +1,9 @@
 // UI & Interaktionen – nutzt BK_STATE, BK_PRICES, BK_LOGIC
 (function(){
-  let currentCat = 'all';
+  const PRODUCT_CATEGORIES = ['burger', 'wings', 'fries', 'salad', 'drink'];
+  let currentCat = 'burger';
   let productQuery = '';
+  let productPage = 0;
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
   const CATEGORY_LABELS = { all:'All', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
@@ -193,6 +195,34 @@
     });
   }
 
+  function productsPerPage(){
+    if(window.innerWidth <= 700) return window.innerHeight <= 560 ? 6 : 4;
+    if(window.innerWidth <= 1180) return 6;
+    return 8;
+  }
+
+  function updateProductPager(totalItems, pageCount){
+    const categoryTitle = document.getElementById('productCategoryTitle');
+    const pageStatus = document.getElementById('productPageStatus');
+    const dots = document.getElementById('productPageDots');
+    const previous = document.getElementById('previousProductPage');
+    const next = document.getElementById('nextProductPage');
+    const controls = document.querySelector('.product-page-controls');
+    if(categoryTitle) categoryTitle.textContent = CATEGORY_LABELS[currentCat] || currentCat;
+    if(pageStatus) pageStatus.textContent = totalItems ? `${productPage + 1} / ${pageCount} · ${totalItems} products` : 'No products';
+    if(previous) previous.disabled = productPage <= 0;
+    if(next) next.disabled = productPage >= pageCount - 1;
+    if(controls) controls.classList.toggle('single-page', pageCount <= 1);
+    if(dots){
+      dots.innerHTML = '';
+      for(let index = 0; index < pageCount; index += 1){
+        const dot = document.createElement('span');
+        dot.className = index === productPage ? 'active' : '';
+        dots.appendChild(dot);
+      }
+    }
+  }
+
   function buildProducts(){
     const grid = document.getElementById('buttons');
     if(!grid) return;
@@ -202,8 +232,12 @@
     const query = productQuery.trim().toLowerCase();
     const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
     const items = base.filter(isFrontProduct)
-      .filter(it => currentCat === 'all' ? true : it.cat === currentCat)
+      .filter(it => it.cat === currentCat)
       .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true);
+    const pageSize = productsPerPage();
+    const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+    productPage = Math.min(productPage, pageCount - 1);
+    updateProductPager(items.length, pageCount);
     if(!items.length){
       const empty = document.createElement('div');
       empty.className = 'empty-state product-empty';
@@ -212,7 +246,7 @@
       grid.appendChild(empty);
       return;
     }
-    items.forEach(it=>{
+    items.slice(productPage * pageSize, (productPage + 1) * pageSize).forEach(it=>{
       const b = document.createElement('button');
       b.className = 'item';
       b.type = 'button';
@@ -236,6 +270,7 @@
       grid.appendChild(b);
     });
   }
+
 
   function openModifierSheet(title, sections, opts){
     const host = ensureDialogHost();
@@ -637,6 +672,7 @@
 
     const rerender = ()=>{
       productQuery = (input.value || '').trim();
+      productPage = 0;
       buildProducts();
     };
 
@@ -644,6 +680,7 @@
     clearBtn?.addEventListener('click', ()=>{
       input.value = '';
       productQuery = '';
+      productPage = 0;
       buildProducts();
       input.focus();
     });
@@ -651,7 +688,8 @@
   }
 
   function setCategory(cat){
-    currentCat = cat || 'all';
+    currentCat = PRODUCT_CATEGORIES.includes(cat) ? cat : 'burger';
+    productPage = 0;
     goTab('order');
     document.querySelectorAll('.catbar .tab').forEach(btn=>{
       btn.classList.toggle('active', btn.dataset.cat===currentCat);
@@ -659,12 +697,56 @@
     buildProducts();
   }
 
+  function bindCompactOrderNavigation(){
+    const pager = document.getElementById('productPager');
+    if(!pager || pager.dataset.bound === '1') return;
+    const moveCategory = direction=>{
+      const currentIndex = PRODUCT_CATEGORIES.indexOf(currentCat);
+      const nextIndex = (currentIndex + direction + PRODUCT_CATEGORIES.length) % PRODUCT_CATEGORIES.length;
+      setCategory(PRODUCT_CATEGORIES[nextIndex]);
+    };
+    document.getElementById('previousCategory')?.addEventListener('click', ()=> moveCategory(-1));
+    document.getElementById('nextCategory')?.addEventListener('click', ()=> moveCategory(1));
+    document.getElementById('previousProductPage')?.addEventListener('click', ()=>{
+      if(productPage <= 0) return;
+      productPage -= 1;
+      buildProducts();
+    });
+    document.getElementById('nextProductPage')?.addEventListener('click', ()=>{
+      productPage += 1;
+      buildProducts();
+    });
+    const cart = document.getElementById('orderCart');
+    const cartToggle = document.getElementById('mobileCartToggle');
+    const closeCart = ()=>{
+      cart?.classList.remove('mobile-open');
+      document.body.classList.remove('cart-drawer-open');
+      cartToggle?.setAttribute('aria-expanded', 'false');
+    };
+    cartToggle?.addEventListener('click', ()=>{
+      cart?.classList.add('mobile-open');
+      document.body.classList.add('cart-drawer-open');
+      cartToggle.setAttribute('aria-expanded', 'true');
+    });
+    document.getElementById('mobileCartClose')?.addEventListener('click', closeCart);
+    let touchStartX = 0;
+    pager.addEventListener('touchstart', event=>{ touchStartX = event.changedTouches[0].clientX; }, {passive:true});
+    pager.addEventListener('touchend', event=>{
+      const distance = event.changedTouches[0].clientX - touchStartX;
+      if(Math.abs(distance) < 70) return;
+      moveCategory(distance < 0 ? 1 : -1);
+    }, {passive:true});
+    window.addEventListener('resize', ()=> buildProducts());
+    pager.dataset.bound = '1';
+  }
+
   function slotStatus(slot){
     const progress = kitchenProgress(slot);
     const progressText = `${progress.complete}/${progress.total} prepared`;
     if(slot.voided) return { state:'voided', label:'Voided', detail:'Order cancelled and retained for audit', shortDetail:'Voided' };
     if(slot.issued) return { state:'issued', label:'Issued', detail:'Handover completed', shortDetail:progressText };
-    if(progress.total === 0) return { state:'draft', label:'Draft', detail:'No products added', shortDetail:'Empty' };
+    if(progress.total === 0) return { state:'draft', label:'New', detail:'No products added yet', shortDetail:'Empty' };
+    if(!slot.sentToKitchen) return { state:'draft', label:'In progress', detail:'Products are still being selected', shortDetail:`${progress.total} item${progress.total === 1 ? '' : 's'}` };
     if(progress.complete === progress.total && slot.pay === 'unpaid') return { state:'payment', label:'Payment due', detail:`Kitchen complete · ${progressText}`, shortDetail:progressText };
     if(progress.complete === progress.total) return { state:'ready', label:'Ready', detail:`Paid · ${progressText}`, shortDetail:progressText };
     return { state:'kitchen', label:'Kitchen', detail:progressText, shortDetail:progressText };
@@ -673,16 +755,10 @@
   function renderSlotsBar(){
     const {slots, active} = BK_STATE.getState();
     const bar = document.getElementById('slotsBar');
-    const activeLabel = document.getElementById('activeSlotLabel');
-    const activeSlot = slots[active];
-    if(activeLabel){
-      const activeStatus = activeSlot ? slotStatus(activeSlot) : null;
-      activeLabel.textContent = activeSlot ? `${activeSlot.name} · #${activeSlot.orderNo || '-'} · ${orderChannelText(activeSlot)} · ${activeStatus.label}` : 'No active order';
-    }
     if(!bar) return;
     bar.querySelectorAll('.slot-chip').forEach(n=>n.remove());
 
-    const controlIds = ['btnAddSlot', 'btnOnlineOrder', 'btnRenameSlot', 'btnDeleteSlot'];
+    const controlIds = ['btnAddSlot', 'btnOnlineOrder'];
     const ctl = controlIds
       .map(id => document.getElementById(id))
       .filter(Boolean)
@@ -696,7 +772,9 @@
       el.setAttribute('aria-label', `${s.name}, order ${s.orderNo || 'not assigned'}, ${status.label}, ${status.detail}`);
       if(i === active) el.setAttribute('aria-current', 'true');
       el.title = `${status.label} · ${status.detail}`;
-      el.innerHTML = `<span class="status-dot" aria-hidden="true"></span><span class="slot-chip-order"><b>${isOnlineOrder(s) ? platformLabel(s.orderSource).toUpperCase() : s.name}</b><small>${isOnlineOrder(s) ? escapeHtml(s.externalOrderNo || s.orderNo || '-') : `#${s.orderNo || '-'}`}</small></span><span class="slot-chip-status">${status.label}</span><span class="slot-chip-progress">${status.shortDetail}</span>`;
+      const orderLabel = isOnlineOrder(s) ? platformLabel(s.orderSource).toUpperCase() : `Order #${shortOrderNumber(s.orderNo)}`;
+      const orderDetail = isOnlineOrder(s) ? escapeHtml(s.externalOrderNo || shortOrderNumber(s.orderNo)) : 'Walk-in';
+      el.innerHTML = `<span class="status-dot" aria-hidden="true"></span><span class="slot-chip-order"><b>${orderLabel}</b><small>${orderDetail}</small></span><span class="slot-chip-status">${status.label}</span><span class="slot-chip-progress">${status.shortDetail}</span>`;
       el.onclick = ()=> focusSlot(i, currentWorkflowTab());
       bar.appendChild(el);
     });
@@ -911,14 +989,21 @@
   }
 
   function renderOrder(){
-    const {slots, active} = BK_STATE.getState();
+    const {slots, active, discountRate} = BK_STATE.getState();
     const lines = document.getElementById('lines'); lines.innerHTML='';
-    const welcome = document.getElementById('orderWelcome');
-    const layout = document.querySelector('#tab-order .order-layout');
-    if(welcome) welcome.classList.toggle('hidden', !!slots.length);
-    if(layout) layout.classList.toggle('hidden', !slots.length);
-    if(!slots.length){ setSlotTotals(0,0,0); return; }
+    const orderMeta = document.getElementById('currentOrderMeta');
+    if(!slots.length){
+      setSlotTotals(0,0,0);
+      if(orderMeta) orderMeta.textContent = 'New order';
+      const mobileCount = document.getElementById('mobileCartCount');
+      if(mobileCount) mobileCount.textContent = '0 items';
+      return;
+    }
     const s = slots[active];
+    if(orderMeta) orderMeta.textContent = `Order #${shortOrderNumber(s.orderNo)} · ${orderChannelText(s)}`;
+    const itemCount = (s.items || []).reduce((total, item)=> total + (Number(item.qty) || 0), 0);
+    const mobileCount = document.getElementById('mobileCartCount');
+    if(mobileCount) mobileCount.textContent = `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`;
     lines.appendChild(packagingControl(s, active, false));
 
     const entries = groupedCartRows(s.items);
@@ -1009,7 +1094,8 @@
     });
 
     const c = BK_LOGIC.computeSlot(s);
-    setSlotTotals(c.subtotal, 0, c.subtotal);
+    const activeDiscount = Math.round(c.subtotal * (discountRate || 0));
+    setSlotTotals(c.subtotal, activeDiscount, c.subtotal - activeDiscount);
     const orderNext = workflowNextState('order', s);
     renderWorkflowNext('orderFlowNav', Object.assign({}, orderNext, {onClick:()=>continueOrderToKitchen(active)}));
   }
@@ -1173,6 +1259,12 @@
     return { state:'in-progress', label:'In progress', complete, total, percent, detail:'Continue preparing the remaining items.' };
   }
 
+  function shortOrderNumber(orderNo){
+    const value = String(orderNo || '').trim();
+    const finalPart = value.split('-').pop();
+    return finalPart ? String(Number(finalPart) || finalPart) : value || '-';
+  }
+
   function renderMake(){
     const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('makeList');
@@ -1191,27 +1283,28 @@
       const card = document.createElement('div'); card.className='slot-card kitchen-order-card';
       card.innerHTML = `
         <div class="slot-head kitchen-order-head">
-          <div><span class="label">${isOnlineOrder(s) ? platformLabel(s.orderSource).toUpperCase() : s.name}</span> · ${isOnlineOrder(s) ? escapeHtml(s.externalOrderNo || '') + ' · ' : ''}#${s.orderNo || '-'} · In kitchen: ${formatAge(s.createdAt)}</div>
-          ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
+          <div class="kitchen-order-identity">
+            <strong>Order #${escapeHtml(shortOrderNumber(s.orderNo))}</strong>
+            <span>${escapeHtml(orderChannelText(s))} · waiting ${formatAge(s.createdAt)}</span>
+          </div>
+          <span class="kitchen-packaging">Packaging: ${escapeHtml(packagingLabel(s))}</span>
         </div>
         <div class="kitchen-progress ${progress.state}">
-          <div class="kitchen-progress-copy"><strong>${progress.label}</strong><span>${progress.complete} of ${progress.total} items prepared</span><small>${progress.detail}</small></div>
+          <div class="kitchen-progress-copy"><strong>${progress.label}</strong><span>${progress.complete} / ${progress.total} prepared</span></div>
           <div class="kitchen-progress-track" role="progressbar" aria-label="Kitchen progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="width:${progress.percent}%"></span></div>
           ${progress.state === 'complete' && !s.issued ? `<button class="workflow-next-button kitchen-next-action" type="button">${makeNext.label}</button>` : ''}
         </div>
         <div class="todo grouped-todo" id="todo-${i}"></div>`;
       const nextAction = card.querySelector('.kitchen-next-action');
       if(nextAction) nextAction.onclick = ()=> focusSlot(i, makeNext.target);
-      card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
       makeSlotCardSelectable(card, i, 'make', i === active);
       box.appendChild(card);
       const list = card.querySelector(`#todo-${i}`);
       let menuNumber = 0;
-      let singleNumber = 0;
       groupedCartRows(s.items).forEach(entry=>{
         const displayTitle = entry.menuGroupId
           ? `MENU ${++menuNumber} — ${entry.menuName || `${entry.name} Menu`}`
-          : `SINGLE ITEM ${++singleNumber} — ${entry.qty}x ${entry.name}`;
+          : `${entry.qty}× ${entry.name}`;
         appendGroupedEntry(list, s, entry, i, {
           checkbox: true,
           displayTitle,
@@ -1228,9 +1321,6 @@
         });
       });
     });
-    ensureFlowActions('makeList', [
-      { label:'⬅️ Back to Order', onClick:()=> goTab('order') }
-    ]);
   }
 
   function paymentDisplay(slot){
@@ -1276,49 +1366,53 @@
   }
 
   function renderPay(){
-    const {slots, active} = BK_STATE.getState();
+    const {slots, active, discountRate} = BK_STATE.getState();
     const box = document.getElementById('payList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
     box.querySelectorAll('.empty-state').forEach(n=>n.remove());
-    if(!slots.length){
+    const s = slots[active];
+    if(!s){
       const empty = document.createElement('div');
       empty.className = 'empty-state';
       empty.textContent = 'No active orders to pay.';
       box.appendChild(empty);
       return;
     }
-    slots.forEach((s,i)=>{
-      const c = BK_LOGIC.computeSlot(s);
-      const payment = paymentDisplay(s);
-      const payNext = workflowNextState('pay', s);
-      const paymentDisabled = s.issued || !Array.isArray(s.items) || s.items.length === 0;
-      const card = document.createElement('div'); card.className='slot-card';
-      card.dataset.paymentSlot = String(i);
-      card.innerHTML = `
-        <div class="slot-head">
-          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS</div>
-          <div class="pay-status">${i === active ? '<span class="active-order-badge">Active order</span>' : ''}</div>
-        </div>
-        <div class="payment-panel ${payment.state}">
-          <div class="payment-summary"><strong>${payment.label}</strong><small>${payment.detail}</small></div>
-          ${isPrepaidPlatform(s) ? `<div class="online-paid-lock"><b>${platformLabel(s.orderSource)} payment recorded</b><small>No additional payment step is required.</small></div>` : `<div class="payment-methods" role="group" aria-label="Payment method for ${s.name}">
-            <button class="payment-method ${s.pay === 'unpaid' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'unpaid');">Unpaid</button>
-            <button class="payment-method ${s.pay === 'cash' ? 'selected' : ''}" ${(paymentDisabled || (isWhatsapp(s) && s.fulfilment === 'delivery')) ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'cash');">Cash</button>
-            <button class="payment-method ${s.pay === 'momo' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'momo');">MoMo</button>
-          </div>`}
-        </div>
-        <div class="workflow-next ${payNext.state}">
-          <div class="workflow-next-copy"><strong>${payNext.title}</strong><small>${payNext.detail}</small></div>
-          <button type="button" class="workflow-next-button payment-next-action" ${payNext.disabled ? 'disabled' : ''}>${payNext.label}</button>
-        </div>`;
-      const paymentNext = card.querySelector('.payment-next-action');
-      paymentNext.onclick = ()=> continueFromPayment(i);
-      makeSlotCardSelectable(card, i, 'pay', i === active);
-      box.appendChild(card);
-    });
-    ensureFlowActions('payList', [
-      { label:'⬅️ Back to Make', onClick:()=> goTab('make') }
-    ]);
+    const c = BK_LOGIC.computeSlot(s);
+    const discount = Math.round(c.subtotal * (discountRate || 0));
+    const amountDue = c.subtotal - discount;
+    const payment = paymentDisplay(s);
+    const payNext = workflowNextState('pay', s);
+    const paymentDisabled = s.issued || !Array.isArray(s.items) || s.items.length === 0;
+    const canReversePayment = !isPrepaidPlatform(s) && s.pay !== 'unpaid' && !s.issued;
+    const card = document.createElement('div'); card.className='slot-card workflow-order-card';
+    card.dataset.paymentSlot = String(active);
+    card.innerHTML = `
+      <div class="workflow-order-identity">
+        <div><strong>Order #${escapeHtml(shortOrderNumber(s.orderNo))}</strong><span>${escapeHtml(orderChannelText(s))}</span></div>
+        <div class="amount-due"><small>Amount due</small><strong>${amountDue} GHS</strong></div>
+      </div>
+      <div class="payment-totals" aria-label="Payment total">
+        <span>Subtotal <b>${c.subtotal} GHS</b></span>
+        <span>Discount <b>-${discount} GHS</b></span>
+      </div>
+      <div class="payment-panel ${payment.state}">
+        <div class="payment-summary"><strong>${payment.label}</strong><small>${payment.detail}</small></div>
+        ${isPrepaidPlatform(s)
+          ? `<div class="online-paid-lock"><b>${platformLabel(s.orderSource)} payment recorded</b><small>No additional payment step is required.</small></div>`
+          : s.pay === 'unpaid'
+            ? `<div class="payment-methods" role="group" aria-label="Payment method for Order ${escapeHtml(shortOrderNumber(s.orderNo))}">
+                <button class="payment-method" ${(paymentDisabled || (isWhatsapp(s) && s.fulfilment === 'delivery')) ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${active},'cash');">Cash</button>
+                <button class="payment-method" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${active},'momo');">MoMo</button>
+              </div>`
+            : `<button class="x change-payment-action" type="button">Change payment</button>`}
+        <button type="button" class="workflow-next-button payment-next-action" ${payNext.disabled ? 'disabled' : ''}>${payNext.label}</button>
+      </div>`;
+    const paymentNext = card.querySelector('.payment-next-action');
+    paymentNext.onclick = ()=> continueFromPayment(active);
+    const changePayment = card.querySelector('.change-payment-action');
+    if(changePayment && canReversePayment) changePayment.onclick = ()=>requestSlotPayment(active, 'unpaid');
+    box.appendChild(card);
   }
 
   function continueFromPayment(slotIndex, navigate){
@@ -1384,58 +1478,55 @@
     if(!box) return;
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
     box.querySelectorAll('.empty-state').forEach(n=>n.remove());
-    if(!slots.length){
+    const s = slots[active];
+    if(!s){
       const empty = document.createElement('div');
       empty.className = 'empty-state';
       empty.textContent = 'No orders waiting for handover.';
       box.appendChild(empty);
       return;
     }
-    slots.forEach((s,i)=>{
-      const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
-      const readiness = issueReadiness(s);
-      const card = document.createElement('div'); card.className='slot-card';
-      card.innerHTML = `
-        <div class="slot-head">
-          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
-          <div class="pay-status">
-            ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
+    const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
+    const readiness = issueReadiness(s);
+    const card = document.createElement('div'); card.className='slot-card workflow-order-card';
+    card.innerHTML = `
+        <div class="workflow-order-identity handover-identity">
+          <div><strong>Order #${escapeHtml(shortOrderNumber(s.orderNo))}</strong><span>${escapeHtml(orderChannelText(s))} · waiting ${formatAge(s.createdAt)}</span></div>
+          <div class="handover-statuses" aria-label="Order completion status">
+            <span class="${s.pay !== 'unpaid' ? 'complete' : 'pending'}">${s.pay !== 'unpaid' ? '✓' : '○'} ${escapeHtml(paymentLabel(s.pay))}</span>
+            <span class="${allDone ? 'complete' : 'pending'}">${allDone ? '✓' : '○'} Kitchen ${allDone ? 'complete' : 'open'}</span>
           </div>
         </div>
+        <div class="handover-packaging"><small>Packaging</small><strong>${escapeHtml(packagingLabel(s))}</strong></div>
         <div class="workflow-next issue-readiness ${readiness.state}">
           <div class="workflow-next-copy"><strong>${readiness.label}</strong><small>${readiness.detail}</small></div>
           <div class="issue-action-group"><button class="workflow-next-button issue-next-action" ${readiness.disabled ? 'disabled' : ''}>${readiness.action}</button>${readiness.state === 'ready' && isOnlineOrder(s) && s.finalChannel !== 'direct' ? `<button class="x rider-missed-action" type="button">Rider Did Not Pick Up</button>` : ''}</div>
         </div>`;
-      const riderMissedButton = card.querySelector('.rider-missed-action');
-      if(riderMissedButton) riderMissedButton.onclick = ()=>convertOnlineOrder(i);
-      const actionButton = card.querySelector('.issue-next-action');
-      actionButton.onclick = ()=>{
-        if(readiness.disabled) return;
-        if(readiness.state === 'ready') markIssued(i);
-        else focusSlot(i, readiness.target);
-      };
-      card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
-      const checklist = document.createElement('div');
-      checklist.className = 'issue-checklist';
-      const label = document.createElement('small');
-      label.textContent = 'Final check:';
-      checklist.appendChild(label);
-      const grouped = groupedCartRows(s.items);
-      if(grouped.length){
-        grouped.forEach(entry=> appendGroupedEntry(checklist, s, entry, i, { compact:true }));
-      }else{
-        const emptyLine = document.createElement('div');
-        emptyLine.className = 'empty-state';
-        emptyLine.textContent = 'No items';
-        checklist.appendChild(emptyLine);
-      }
-      card.appendChild(checklist);
-      makeSlotCardSelectable(card, i, 'issue', i === active);
-      box.appendChild(card);
-    });
-    ensureFlowActions('issueList', [
-      { label:'⬅️ Back to Payment', onClick:()=> goTab('pay') }
-    ]);
+    const riderMissedButton = card.querySelector('.rider-missed-action');
+    if(riderMissedButton) riderMissedButton.onclick = ()=>convertOnlineOrder(active);
+    const actionButton = card.querySelector('.issue-next-action');
+    actionButton.onclick = ()=>{
+      if(readiness.disabled) return;
+      if(readiness.state === 'ready') markIssued(active);
+      else focusSlot(active, readiness.target);
+    };
+    const checklist = document.createElement('div');
+    checklist.className = 'issue-checklist';
+    const label = document.createElement('strong');
+    label.className = 'issue-checklist-title';
+    label.textContent = 'Items to hand over';
+    checklist.appendChild(label);
+    const grouped = groupedCartRows(s.items);
+    if(grouped.length){
+      grouped.forEach(entry=> appendGroupedEntry(checklist, s, entry, active, { compact:true, showPrices:false }));
+    }else{
+      const emptyLine = document.createElement('div');
+      emptyLine.className = 'empty-state';
+      emptyLine.textContent = 'No items';
+      checklist.appendChild(emptyLine);
+    }
+    card.appendChild(checklist);
+    box.appendChild(card);
   }
 
 
@@ -1448,6 +1539,7 @@
       infoDialog('This order is already issued and locked. Start a new order slot for further changes.');
       return;
     }
+    valid.forEach(tab=> document.body.classList.toggle(`workflow-${tab}`, tab === target));
 
     const sectionMap = {
       order: 'tab-order',
@@ -1632,7 +1724,10 @@
     const syncOnlineFields = ()=> document.getElementById('onlinePhoneRow').classList.toggle('hidden', platformInput.value !== 'whatsapp');
     platformInput.onchange = syncOnlineFields; syncOnlineFields();
     reference.focus();
-    document.getElementById('dlgCancel').onclick = closeDialog;
+    document.getElementById('dlgCancel').onclick = ()=>{
+      closeDialog();
+      if(!BK_STATE.getState().slots.length) window.location.replace('index.html');
+    };
     document.getElementById('dlgConfirm').onclick = ()=>{
       const platform = document.getElementById('onlinePlatform').value;
       const externalOrderNo = reference.value.trim();
@@ -2076,6 +2171,10 @@
       nextState.slots.splice(i, 1);
       nextState.active = Math.min(i, Math.max(0, nextState.slots.length - 1));
       BK_STATE.setState(nextState);
+      if(!nextState.slots.length){
+        window.location.replace('index.html');
+        return;
+      }
       const finish = ()=>{
         renderAll();
         renderStock();
@@ -2083,7 +2182,6 @@
         infoDialog(`Order completed and archived. It is now available only in History.${suffix}`);
       };
       finish();
-      if(!nextState.slots.length) goTab('order');
     });
   }
 
@@ -2390,16 +2488,14 @@
 
   function refreshTotals(){
     const {slots, discountRate, active} = BK_STATE.getState();
-    const g = BK_LOGIC.computeAll(slots, discountRate);
     const activeSlot = slots[active];
     const c = activeSlot ? BK_LOGIC.computeSlot(activeSlot) : {subtotal:0, combos:0};
-    setSlotTotals(c.subtotal, 0, c.subtotal);
-    document.getElementById('grand').textContent = `${c.subtotal} GHS`;
-    document.getElementById('combosPill').textContent = `Combos: ${c.combos || 0}`;
-    document.getElementById('discountTag').textContent = g.discount>0 ? `Discount: ${Math.round(discountRate*100)}%` : 'No discount';
-    document.getElementById('allSubtotal').textContent = `${g.grandSubtotal} GHS`;
-    document.getElementById('allDiscount').textContent = `-${g.discount} GHS`;
-    document.getElementById('allGrand').textContent = `${g.grand} GHS`;
+    const activeDiscount = Math.round(c.subtotal * (discountRate || 0));
+    setSlotTotals(c.subtotal, activeDiscount, c.subtotal - activeDiscount);
+    const mobileTotal = document.getElementById('mobileCartTotal');
+    if(mobileTotal) mobileTotal.textContent = `${c.subtotal - activeDiscount} GHS`;
+    const discountLabel = document.getElementById('currentDiscountLabel');
+    if(discountLabel) discountLabel.textContent = activeDiscount > 0 ? `${Math.round(discountRate * 100)}% · -${activeDiscount} GHS` : 'No discount';
     renderStock();
   }
 
@@ -2716,10 +2812,8 @@
 
   function renderAll(){
     bindProductSearch();
-    if(!document.querySelector('.catbar .tab.active')){
-      const first = document.querySelector('.catbar .tab[data-cat="all"]');
-      if(first) first.classList.add('active');
-    }
+    bindCompactOrderNavigation();
+    document.querySelectorAll('.catbar .tab[data-cat]').forEach(btn=> btn.classList.toggle('active', btn.dataset.cat === currentCat));
     buildProducts();
     renderSlotsBar();
     renderOrder();
