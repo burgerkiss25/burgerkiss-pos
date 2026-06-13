@@ -49,7 +49,12 @@
       fulfilment: String((slot && slot.fulfilment) || ''),
       conversionReason: String((slot && slot.conversionReason) || ''),
       refundStatus: String((slot && slot.refundStatus) || ''),
-      convertedAt: Number(slot && slot.convertedAt) || 0
+      convertedAt: Number(slot && slot.convertedAt) || 0,
+      createdBy: (slot && slot.createdBy && typeof slot.createdBy === 'object') ? slot.createdBy : null,
+      paidBy: (slot && slot.paidBy && typeof slot.paidBy === 'object') ? slot.paidBy : null,
+      paidAt: Number(slot && slot.paidAt) || 0,
+      businessDate: String((slot && slot.businessDate) || ''),
+      shiftId: String((slot && slot.shiftId) || '')
     };
   }
   function normalizeState(st){
@@ -258,7 +263,9 @@
     return allocateOrderNo().then(function(orderNo){
       const source = SOURCE_SET.has(details.orderSource) ? details.orderSource : 'walkin';
       const pay = PAY_SET.has(details.pay) ? details.pay : (source === 'walkin' ? 'unpaid' : source);
-      slots.push({name: label || `SN${idx}`, items: [], pay, issued:false, voided:false, voidReason:'', packMode:'shared', packAsked:false, orderNo, createdAt: Date.now(), orderSource:source, externalOrderNo:String(details.externalOrderNo || '').trim(), originalSource:'', originalPay:'', finalChannel:'', fulfilment:'', conversionReason:'', refundStatus:'', convertedAt:0});
+      const access = window.BK_ACCESS && BK_ACCESS.current ? BK_ACCESS.current() : null;
+      const actor = window.BK_ACCESS && BK_ACCESS.actor ? BK_ACCESS.actor() : null;
+      slots.push({name: label || `SN${idx}`, items: [], pay, issued:false, voided:false, voidReason:'', packMode:'shared', packAsked:false, orderNo, createdAt: Date.now(), orderSource:source, externalOrderNo:String(details.externalOrderNo || '').trim(), originalSource:'', originalPay:'', finalChannel:'', fulfilment:'', conversionReason:'', refundStatus:'', convertedAt:0, createdBy:actor, paidBy:pay === 'unpaid' ? null : actor, paidAt:pay === 'unpaid' ? 0 : Date.now(), businessDate:access ? access.businessDate : '', shiftId:access ? access.shiftId : ''});
       active = slots.length-1;
       save();
       return active;
@@ -339,6 +346,8 @@
   function setPay(i,status){
     if(!slots[i] || slots[i].issued) return;
     slots[i].pay = PAY_SET.has(status) ? status : 'unpaid';
+    slots[i].paidBy = slots[i].pay === 'unpaid' ? null : (window.BK_ACCESS && BK_ACCESS.actor ? BK_ACCESS.actor() : null);
+    slots[i].paidAt = slots[i].pay === 'unpaid' ? 0 : Date.now();
     save();
   }
   function updateSlot(i, changes){
