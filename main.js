@@ -57,14 +57,13 @@
   // Schutz gegen fehlerhafte Merge-Duplikate in order.html
   removeDuplicateIds([
     'tabOrder','tabMake','tabPay','tabIssue',
-    'btnSummary','btnStockOverview','btnHistory','btnDailyReport','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup','btnOnlineOrder',
-    'btnReset','btnClearDisc','btnClearStorage',
-    'btnAddSlot','activeSlotLabel',
+    'btnStockOverview','btnHistory','btnDailyReport','btnReceipt','btnPrices','btnProducts','btnImages','btnOnlineOrder',
+    'btnClearDisc','btnClearStorage',
+    'btnAddSlot',
     'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalHistory','modalHistoryDetail','modalDailyReport','modalReceipt','modalStockOverview'
   ]);
 
   // Buttons
-  document.getElementById('btnReset').onclick= ()=> BK_UI.clearAllWithConfirm();
   document.querySelectorAll('.disc').forEach(b=> b.onclick = ()=>{
     const rate = Number(b.dataset.disc);
     if(rate > 0.03 && !(window.BK_ACCESS && BK_ACCESS.hasRole('supervisor'))){
@@ -130,7 +129,6 @@
   });
 
   // Summary
-  document.getElementById('btnSummary').onclick = ()=> BK_UI.openSummary();
   document.getElementById('btnStockOverview').onclick = ()=> BK_UI.openStockOverview();
   document.getElementById('stockOverviewClose').onclick = ()=> BK_UI.closeStockOverview();
   document.getElementById('sumClose').onclick   = ()=> BK_UI.closeSummary();
@@ -164,7 +162,6 @@
   document.getElementById('rPrint').onclick     = ()=> BK_UI.printReceipt();
 
   // Group
-  document.getElementById('btnGroup').onclick = ()=> BK_UI.openGroup();
   document.querySelectorAll('.online-order-trigger').forEach(button=>{
     button.onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.openOnlineOrderDialog(); };
   });

@@ -745,7 +745,8 @@
     const progressText = `${progress.complete}/${progress.total} prepared`;
     if(slot.voided) return { state:'voided', label:'Voided', detail:'Order cancelled and retained for audit', shortDetail:'Voided' };
     if(slot.issued) return { state:'issued', label:'Issued', detail:'Handover completed', shortDetail:progressText };
-    if(progress.total === 0) return { state:'draft', label:'Draft', detail:'No products added', shortDetail:'Empty' };
+    if(progress.total === 0) return { state:'draft', label:'New', detail:'No products added yet', shortDetail:'Empty' };
+    if(!slot.sentToKitchen) return { state:'draft', label:'In progress', detail:'Products are still being selected', shortDetail:`${progress.total} item${progress.total === 1 ? '' : 's'}` };
     if(progress.complete === progress.total && slot.pay === 'unpaid') return { state:'payment', label:'Payment due', detail:`Kitchen complete · ${progressText}`, shortDetail:progressText };
     if(progress.complete === progress.total) return { state:'ready', label:'Ready', detail:`Paid · ${progressText}`, shortDetail:progressText };
     return { state:'kitchen', label:'Kitchen', detail:progressText, shortDetail:progressText };
@@ -754,12 +755,6 @@
   function renderSlotsBar(){
     const {slots, active} = BK_STATE.getState();
     const bar = document.getElementById('slotsBar');
-    const activeLabel = document.getElementById('activeSlotLabel');
-    const activeSlot = slots[active];
-    if(activeLabel){
-      const activeStatus = activeSlot ? slotStatus(activeSlot) : null;
-      activeLabel.textContent = activeSlot ? `${activeSlot.name} · #${activeSlot.orderNo || '-'} · ${orderChannelText(activeSlot)} · ${activeStatus.label}` : 'No active order';
-    }
     if(!bar) return;
     bar.querySelectorAll('.slot-chip').forEach(n=>n.remove());
 
@@ -777,7 +772,9 @@
       el.setAttribute('aria-label', `${s.name}, order ${s.orderNo || 'not assigned'}, ${status.label}, ${status.detail}`);
       if(i === active) el.setAttribute('aria-current', 'true');
       el.title = `${status.label} · ${status.detail}`;
-      el.innerHTML = `<span class="status-dot" aria-hidden="true"></span><span class="slot-chip-order"><b>${isOnlineOrder(s) ? platformLabel(s.orderSource).toUpperCase() : s.name}</b><small>${isOnlineOrder(s) ? escapeHtml(s.externalOrderNo || s.orderNo || '-') : `#${s.orderNo || '-'}`}</small></span><span class="slot-chip-status">${status.label}</span><span class="slot-chip-progress">${status.shortDetail}</span>`;
+      const orderLabel = isOnlineOrder(s) ? platformLabel(s.orderSource).toUpperCase() : `Order #${shortOrderNumber(s.orderNo)}`;
+      const orderDetail = isOnlineOrder(s) ? escapeHtml(s.externalOrderNo || shortOrderNumber(s.orderNo)) : 'Walk-in';
+      el.innerHTML = `<span class="status-dot" aria-hidden="true"></span><span class="slot-chip-order"><b>${orderLabel}</b><small>${orderDetail}</small></span><span class="slot-chip-status">${status.label}</span><span class="slot-chip-progress">${status.shortDetail}</span>`;
       el.onclick = ()=> focusSlot(i, currentWorkflowTab());
       bar.appendChild(el);
     });
@@ -992,15 +989,18 @@
   }
 
   function renderOrder(){
-    const {slots, active} = BK_STATE.getState();
+    const {slots, active, discountRate} = BK_STATE.getState();
     const lines = document.getElementById('lines'); lines.innerHTML='';
+    const orderMeta = document.getElementById('currentOrderMeta');
     if(!slots.length){
       setSlotTotals(0,0,0);
+      if(orderMeta) orderMeta.textContent = 'New order';
       const mobileCount = document.getElementById('mobileCartCount');
       if(mobileCount) mobileCount.textContent = '0 items';
       return;
     }
     const s = slots[active];
+    if(orderMeta) orderMeta.textContent = `Order #${shortOrderNumber(s.orderNo)} · ${orderChannelText(s)}`;
     const itemCount = (s.items || []).reduce((total, item)=> total + (Number(item.qty) || 0), 0);
     const mobileCount = document.getElementById('mobileCartCount');
     if(mobileCount) mobileCount.textContent = `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`;
@@ -1094,7 +1094,8 @@
     });
 
     const c = BK_LOGIC.computeSlot(s);
-    setSlotTotals(c.subtotal, 0, c.subtotal);
+    const activeDiscount = Math.round(c.subtotal * (discountRate || 0));
+    setSlotTotals(c.subtotal, activeDiscount, c.subtotal - activeDiscount);
     const orderNext = workflowNextState('order', s);
     renderWorkflowNext('orderFlowNav', Object.assign({}, orderNext, {onClick:()=>continueOrderToKitchen(active)}));
   }
@@ -2486,12 +2487,12 @@
     const g = BK_LOGIC.computeAll(slots, discountRate);
     const activeSlot = slots[active];
     const c = activeSlot ? BK_LOGIC.computeSlot(activeSlot) : {subtotal:0, combos:0};
-    setSlotTotals(c.subtotal, 0, c.subtotal);
-    document.getElementById('grand').textContent = `${c.subtotal} GHS`;
+    const activeDiscount = Math.round(c.subtotal * (discountRate || 0));
+    setSlotTotals(c.subtotal, activeDiscount, c.subtotal - activeDiscount);
     const mobileTotal = document.getElementById('mobileCartTotal');
-    if(mobileTotal) mobileTotal.textContent = `${c.subtotal} GHS`;
-    document.getElementById('combosPill').textContent = `Combos: ${c.combos || 0}`;
-    document.getElementById('discountTag').textContent = g.discount>0 ? `Discount: ${Math.round(discountRate*100)}%` : 'No discount';
+    if(mobileTotal) mobileTotal.textContent = `${c.subtotal - activeDiscount} GHS`;
+    const discountLabel = document.getElementById('currentDiscountLabel');
+    if(discountLabel) discountLabel.textContent = activeDiscount > 0 ? `${Math.round(discountRate * 100)}% · -${activeDiscount} GHS` : 'No discount';
     document.getElementById('allSubtotal').textContent = `${g.grandSubtotal} GHS`;
     document.getElementById('allDiscount').textContent = `-${g.discount} GHS`;
     document.getElementById('allGrand').textContent = `${g.grand} GHS`;

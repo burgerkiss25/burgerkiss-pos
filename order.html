@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – POS</title>
-  <link rel="stylesheet" href="./style.css?v=49" />
+  <link rel="stylesheet" href="./style.css?v=50" />
 
   <!-- POS-Konfiguration aus externer Datei -->
   <script src="./firebase-config.js?v=2"></script>
@@ -15,10 +15,7 @@
     <header class="app-header">
       <div class="brand-block" aria-label="BurgerKiss POS">
         <div class="brand-mark">BK</div>
-        <div>
-          <div class="eyebrow">BurgerKiss POS</div>
-          <div class="order-context" id="activeSlotLabel">SN1</div>
-        </div>
+        <div class="eyebrow">BurgerKiss POS</div>
       </div>
 
       <nav class="tabbar" aria-label="Order workflow">
@@ -30,26 +27,13 @@
 
       <div class="staff-session" id="staffSession" aria-live="polite"></div>
 
-      <div class="totals" aria-live="polite">
-        <div class="total-label">Grand total</div>
-        <h1 id="grand">0 GHS</h1>
-        <div class="stats">
-          <span class="pill" id="combosPill">Combos: 0</span>
-          <span class="pill" id="discountTag">No discount</span>
-        </div>
-      </div>
-
       <details class="more-menu">
-        <summary class="x more-trigger">More</summary>
+        <summary class="x more-trigger">Tools</summary>
         <div class="more-panel">
-          <button class="x" id="btnSummary">Summary</button>
           <button class="x" id="btnStockOverview">Stock <span class="stock-alert-badge hidden" id="stockAlertBadge">0</span></button>
           <button class="x" id="btnHistory">History</button>
-          <button class="x" id="btnDailyReport" data-permission="daily_report">Daily Report</button>
           <button class="x" id="btnReceipt">Receipt</button>
-          <button class="x" id="btnGroup">Group Ticket</button>
-          <button class="x online-order-trigger" id="btnOnlineOrderMenu">+ Online Order</button>
-          <button class="x danger-link" id="btnReset">Reset Order</button>
+          <button class="x" id="btnDailyReport" data-permission="daily_report">Daily Report</button>
           <button class="x" id="btnClearStorage" data-permission="maintenance">Clear Storage</button>
           <a class="x admin-link" href="admin.html" data-permission="admin">Admin</a>
         </div>
@@ -59,20 +43,9 @@
     <div class="hud-rows compact-actions">
       <div class="toolbar slot-tools" id="slotsBar" aria-label="Open orders">
         <!-- Open orders remain available while legacy slot-management controls stay hidden. -->
-        <button class="chip primary-chip" id="btnAddSlot" type="button">+ Slot</button>
+        <button class="chip primary-chip" id="btnAddSlot" type="button">+ New Order</button>
         <button class="chip online-order-trigger" id="btnOnlineOrder" type="button">+ Online Order</button>
       </div>
-
-      <details class="tool-menu discount-menu">
-        <summary class="chip">Discount</summary>
-        <div class="tool-panel" aria-label="Discount actions">
-          <button class="disc" data-disc="0.01" type="button">-1%</button>
-          <button class="disc" data-disc="0.03" type="button">-3%</button>
-          <button class="disc" data-disc="0.05" data-min-role="supervisor" type="button">-5%</button>
-          <button class="disc" data-disc="0.10" data-min-role="supervisor" type="button">-10%</button>
-          <button class="ok" id="btnClearDisc" type="button">Clear Discount</button>
-        </div>
-      </details>
 
     </div>
   </div>
@@ -112,9 +85,25 @@
         </div>
 
         <aside class="order-side panel" id="orderCart">
-          <div class="order-side-heading"><h3>Current order</h3><button class="cart-close" id="mobileCartClose" type="button" aria-label="Close current order">×</button></div>
+          <div class="order-side-heading">
+            <div><h3>Current order</h3><small id="currentOrderMeta">New order</small></div>
+            <button class="cart-close" id="mobileCartClose" type="button" aria-label="Close current order">×</button>
+          </div>
           <div class="rows" id="lines"></div>
           <div class="flow-action" id="orderFlowNav"></div>
+          <div class="order-discount-row">
+            <span><b>Discount</b><small id="currentDiscountLabel">No discount</small></span>
+            <details class="tool-menu discount-menu">
+              <summary class="chip">Add / Change</summary>
+              <div class="tool-panel" aria-label="Discount actions">
+                <button class="disc" data-disc="0.01" type="button">-1%</button>
+                <button class="disc" data-disc="0.03" type="button">-3%</button>
+                <button class="disc" data-disc="0.05" data-min-role="supervisor" type="button">-5%</button>
+                <button class="disc" data-disc="0.10" data-min-role="supervisor" type="button">-10%</button>
+                <button class="ok" id="btnClearDisc" type="button">Clear Discount</button>
+              </div>
+            </details>
+          </div>
           <div class="sumline"><span>Subtotal</span><b id="subtotal">0 GHS</b></div>
           <div class="sumline"><span>Discount</span><b id="discount">0 GHS</b></div>
           <div class="sumline"><span>Total</span><b id="total">0 GHS</b></div>
@@ -291,8 +280,8 @@
   <script src="./state.js?v=20"></script>
   <script src="./logic.js?v=14"></script>
   <script src="./packing.js?v=1"></script>
-  <script src="./ui.js?v=48"></script>
-  <script src="./main.js?v=22"></script>
+  <script src="./ui.js?v=49"></script>
+  <script src="./main.js?v=23"></script>
   <script>BK_ACCESS.init();</script>
 
   <!-- =============== Live-Sync (Variante B, Polling) =============== -->
