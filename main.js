@@ -6,10 +6,40 @@
   BK_IMAGES.load();
   BK_STOCK.load();
   BK_STATE.load();
-  BK_STATE.whenReady().then(function(){
+  let stateReady = false;
+  let entryHandled = false;
+  const entryMode = new URLSearchParams(window.location.search).get('start');
+
+  function handleOrderPageEntry(){
+    if(entryHandled || !stateReady || !BK_ACCESS.current()) return;
+    entryHandled = true;
     BK_UI.archiveCompletedSlots();
-    BK_UI.renderAll();
+    const {slots} = BK_STATE.getState();
+    document.body.classList.remove('app-loading');
+    if(slots.length){
+      history.replaceState(null, '', 'order.html');
+      BK_UI.renderAll();
+      return;
+    }
+    if(entryMode === 'walkin'){
+      history.replaceState(null, '', 'order.html');
+      if(BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot();
+      return;
+    }
+    if(entryMode === 'online'){
+      history.replaceState(null, '', 'order.html');
+      if(BK_ACCESS.guardNewSale()) BK_UI.openOnlineOrderDialog();
+      return;
+    }
+    window.location.replace('index.html');
+  }
+
+  document.addEventListener('bk-access-ready', handleOrderPageEntry);
+  BK_STATE.whenReady().then(function(){
+    stateReady = true;
+    handleOrderPageEntry();
   }).catch(function(error){
+    document.body.classList.remove('app-loading');
     console.error('Initial order number allocation failed:', error && error.message);
     if(window.BK_UI) BK_UI.infoDialog('A new order could not be created because no unique order number could be reserved. Check the internet connection and reload.');
   });
@@ -24,18 +54,16 @@
     });
   }
 
-  // Schutz gegen fehlerhafte Merge-Duplikate in index.html
+  // Schutz gegen fehlerhafte Merge-Duplikate in order.html
   removeDuplicateIds([
     'tabOrder','tabMake','tabPay','tabIssue',
-    'btnSummary','btnStockOverview','btnHistory','btnDailyReport','btnReceipt','btnPrices','btnProducts','btnImages','btnGroup','btnOnlineOrder',
-    'btnUndo','btnReset','btnClearDisc','btnClearStorage',
-    'btnAddSlot','btnRenameSlot','btnDeleteSlot','activeSlotLabel',
+    'btnStockOverview','btnHistory','btnDailyReport','btnReceipt','btnPrices','btnProducts','btnImages','btnOnlineOrder',
+    'btnClearDisc','btnClearStorage',
+    'btnAddSlot',
     'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalHistory','modalHistoryDetail','modalDailyReport','modalReceipt','modalStockOverview'
   ]);
 
   // Buttons
-  document.getElementById('btnUndo').onclick = ()=>{ BK_STATE.undo(); BK_UI.renderOrder(); BK_UI.renderMake(); BK_UI.refreshTotals(); };
-  document.getElementById('btnReset').onclick= ()=> BK_UI.clearAllWithConfirm();
   document.querySelectorAll('.disc').forEach(b=> b.onclick = ()=>{
     const rate = Number(b.dataset.disc);
     if(rate > 0.03 && !(window.BK_ACCESS && BK_ACCESS.hasRole('supervisor'))){
@@ -50,17 +78,9 @@
     BK_UI.clearStorageWithConfirm();
   };
 
-  document.getElementById('btnStartWalkin').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot(); };
   document.getElementById('btnAddSlot').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot(); };
-  document.getElementById('btnRenameSlot').onclick = ()=> BK_UI.renameActiveSlot();
-  document.getElementById('btnDeleteSlot').onclick = ()=> BK_UI.deleteActiveSlot();
 
   if(forceSlot){
-    ['btnRenameSlot', 'btnDeleteSlot'].forEach(id=>{
-      const el = document.getElementById(id);
-      el.classList.add('disabled');
-      el.onclick = ()=> BK_UI.infoDialog(`Slot management disabled while force-slot mode is active (${window.BK_SYNC_FORCE_SLOT}).`);
-    });
     const add = document.getElementById('btnAddSlot');
     add.classList.remove('disabled');
     add.onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot(); };
@@ -78,6 +98,7 @@
 
   // Tabs
   const showTab = (name)=>{
+    ['order','make','pay','issue'].forEach(tab=> document.body.classList.toggle(`workflow-${tab}`, tab === name));
     document.getElementById('tab-order').classList.toggle('hidden', name!=='order');
     document.getElementById('tab-make').classList.toggle('hidden',  name!=='make');
     document.getElementById('tab-pay').classList.toggle('hidden',   name!=='pay');
@@ -95,6 +116,7 @@
     BK_UI.refreshTotals();
   };
   document.getElementById('tabOrder').onclick = ()=> showTab('order');
+  document.getElementById('btnMakeBack').onclick = ()=> showTab('order');
   document.getElementById('tabMake').onclick  = ()=>{
     const state = BK_STATE.getState(); const slot = state.slots[state.active];
     if(slot && slot.items.length && !slot.sentToKitchen) BK_UI.continueOrderToKitchen(state.active); else showTab('make');
@@ -107,7 +129,6 @@
   });
 
   // Summary
-  document.getElementById('btnSummary').onclick = ()=> BK_UI.openSummary();
   document.getElementById('btnStockOverview').onclick = ()=> BK_UI.openStockOverview();
   document.getElementById('stockOverviewClose').onclick = ()=> BK_UI.closeStockOverview();
   document.getElementById('sumClose').onclick   = ()=> BK_UI.closeSummary();
@@ -141,7 +162,6 @@
   document.getElementById('rPrint').onclick     = ()=> BK_UI.printReceipt();
 
   // Group
-  document.getElementById('btnGroup').onclick = ()=> BK_UI.openGroup();
   document.querySelectorAll('.online-order-trigger').forEach(button=>{
     button.onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.openOnlineOrderDialog(); };
   });
@@ -158,6 +178,7 @@
 
 
   syncWorkflowA11y('order');
+  document.body.classList.add('workflow-order');
 
   // initial render
   BK_UI.renderAll();
