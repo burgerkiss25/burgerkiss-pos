@@ -26,6 +26,7 @@ test('kitchen tickets show concise operational details', () => {
   assert.match(renderMake, /Order #\$\{escapeHtml\(shortOrderNumber\(s\.orderNo\)\)\}/);
   assert.match(renderMake, /Packaging: \$\{escapeHtml\(packagingLabel\(s\)\)\}/);
   assert.match(renderMake, /`\$\{entry\.qty\}× \$\{entry\.name\}`/);
+  assert.match(renderMake, /menuEntryCount > 1/);
   assert.doesNotMatch(renderMake, /SINGLE ITEM \$\{\+\+singleNumber\}/);
   assert.doesNotMatch(renderMake, /appendChild\(packagingControl\(s, i, true\)\)/);
 });

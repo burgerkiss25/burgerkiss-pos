@@ -36,6 +36,7 @@ test('handover shows operational status and no prices in its checklist', () => {
   const renderIssue = ui.slice(ui.indexOf('function renderIssue()'), ui.indexOf('function goTab'));
   assert.match(renderIssue, /Items to hand over/);
   assert.match(renderIssue, /showPrices:false/);
+  assert.match(renderIssue, /displayTitle:entry\.menuGroupId && entry\.menuName \? entry\.menuName/);
   assert.match(renderIssue, /packagingLabel\(s\)/);
   assert.doesNotMatch(renderIssue, /packagingControl\(s, i, true\)/);
   assert.doesNotMatch(renderIssue, /ACTIVE ORDER|Active order/);

@@ -18,8 +18,8 @@
     { id:'menu_hamburger', name:'Hamburger Menu', baseId:'hamburger', menuPrice:120, defaultFries:'fries_standard', defaultDrink:'d_cola' },
     { id:'menu_double_burger', name:'Double Burger Menu', baseId:'double_burger', menuPrice:155, defaultFries:'fries_standard', defaultDrink:'d_cola' },
     { id:'menu_double_cheeseburger', name:'Double Cheeseburger Menu', baseId:'double_cheeseburger', menuPrice:170, defaultFries:'fries_standard', defaultDrink:'d_cola' },
-    { id:'menu_wings_6', name:'Wings 6 Menu', baseId:'wings_6', menuPrice:65, defaultFries:'fries_standard', defaultDrink:'d_cola', defaultWingsSauce:'x_sauce_chicken_wings' },
-    { id:'menu_wings_12', name:'Wings 12 Menu', baseId:'wings_12', menuPrice:110, defaultFries:'fries_standard', defaultDrink:'d_cola', defaultWingsSauce:'x_sauce_chicken_wings' }
+    { id:'menu_wings_6', name:'Wings 6 Menu', baseId:'wings_6', menuPrice:65, defaultFries:'fries_standard', defaultDrink:'d_cola', defaultWingsSauce:'i_sauce_chicken_wings' },
+    { id:'menu_wings_12', name:'Wings 12 Menu', baseId:'wings_12', menuPrice:110, defaultFries:'fries_standard', defaultDrink:'d_cola', defaultWingsSauce:'i_sauce_chicken_wings' }
   ];
 
   const STOCK_DEFAULT = {
@@ -55,6 +55,11 @@
       x_bacon: { bacon_slice: 1 },
       x_fried_egg: { egg: 1 },
       x_omelette: { egg: 2 },
+      i_sauce_ketchup: { ketchup: 20 },
+      i_sauce_mayonnaise: { mayonnaise: 20 },
+      i_sauce_chipotle: { mayonnaise: 15, chicken_burger_sauce: 5 },
+      i_sauce_dutch_special: { mayonnaise: 10, ketchup: 10, onion_diced: 5 },
+      i_sauce_chicken_wings: { chicken_wings_sauce: 20 },
       x_sauce_ketchup: { ketchup: 20 },
       x_sauce_mayonnaise: { mayonnaise: 20 },
       x_sauce_chipotle: { mayonnaise: 15, chicken_burger_sauce: 5 },
@@ -436,7 +441,7 @@
   }
 
   function productById(id){
-    return (BK_DATA.BASE || []).find(x=>x.id===id) || null;
+    return (BK_DATA.BASE || []).find(x=>x.id===id) || (BK_DATA.DEFAULT_BASE || []).find(x=>x.id===id) || null;
   }
 
   function optionLabel(id, fallback){
@@ -474,19 +479,25 @@
     return !!(product && ['wings_6','wings_12','wings_24'].includes(product.id));
   }
 
-  function sauceOptions(){
+  function includedSauceOptions(){
     return [
       {label:'No Sauce Wanted', value:''},
-      {label:'Ketchup', value:'x_sauce_ketchup'},
-      {label:'Mayonnaise', value:'x_sauce_mayonnaise'},
-      {label:'Chipotle', value:'x_sauce_chipotle'},
-      {label:'Dutch Special', value:'x_sauce_dutch_special'},
-      {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'}
+      {label:'Ketchup', value:'i_sauce_ketchup'},
+      {label:'Mayonnaise', value:'i_sauce_mayonnaise'},
+      {label:'Chipotle', value:'i_sauce_chipotle'},
+      {label:'Dutch Special', value:'i_sauce_dutch_special'},
+      {label:'Chicken Wings Sauce', value:'i_sauce_chicken_wings'}
     ];
   }
 
   function paidSauceOptions(){
-    return sauceOptions().filter(opt=>opt.value);
+    return [
+      {label:'Extra Ketchup', value:'x_sauce_ketchup'},
+      {label:'Extra Mayonnaise', value:'x_sauce_mayonnaise'},
+      {label:'Extra Chipotle', value:'x_sauce_chipotle'},
+      {label:'Extra Dutch Special', value:'x_sauce_dutch_special'},
+      {label:'Extra Chicken Wings Sauce', value:'x_sauce_chicken_wings'}
+    ];
   }
 
   function burgerExtraSections(product){
@@ -555,7 +566,7 @@
   async function addSingleProductWithModifiers(product, pendingNote){
     if(['fries_standard', 'fries_large', 'fries_family'].includes(product.id)){
       const picked = await openModifierSheet(`${product.name} options`, [
-        { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one free sauce for this fries item.', options:sauceOptions() },
+        { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one free sauce for this fries item.', options:includedSauceOptions() },
         { title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add several paid extra sauces.', options:paidSauceOptions() }
       ], { note: pendingNote });
       const extraSummary = describeQuantities(picked.extraSauce);
@@ -570,8 +581,8 @@
       const picked = await openModifierSheet(`${product.name} sauce`, [
         { title:'Included sauce', name:'wingsSauce', type:'radio', help:'Choose one included sauce for the wings.', options:[
           {label:'No Sauce Wanted', value:''},
-          {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'},
-          {label:'Chipotle', value:'x_sauce_chipotle'}
+          {label:'Chicken Wings Sauce', value:'i_sauce_chicken_wings'},
+          {label:'Chipotle', value:'i_sauce_chipotle'}
         ]},
         { title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add paid extra sauces.', options:paidSauceOptions() }
       ], { note: pendingNote });
@@ -586,7 +597,8 @@
     const menuPreset = preset || standardMenuPresetFor(product.id);
     const defaultFries = menuPreset.defaultFries || 'fries_standard';
     const defaultDrink = menuPreset.defaultDrink || 'd_cola';
-    const defaultWingsSauce = Object.prototype.hasOwnProperty.call(menuPreset, 'defaultWingsSauce') ? menuPreset.defaultWingsSauce : 'x_sauce_chicken_wings';
+    const configuredWingsSauce = Object.prototype.hasOwnProperty.call(menuPreset, 'defaultWingsSauce') ? menuPreset.defaultWingsSauce : 'i_sauce_chicken_wings';
+    const defaultWingsSauce = String(configuredWingsSauce || '').replace(/^x_sauce_/, 'i_sauce_');
     const friesOptions = [
       {label: optionLabel('fries_standard', 'Fries Standard'), value:'fries_standard', checked: defaultFries === 'fries_standard'},
       {label: `${optionLabel('fries_large', 'Fries Large')} · upgrade +${Math.max(0, BK_PRICES.getPrice('fries_large') - BK_DATA.MENU.included.fries)} GHS`, value:'fries_large', checked: defaultFries === 'fries_large'}
@@ -602,14 +614,14 @@
       }));
     const sections = [
       { title:'Menu fries', name:'menuFries', type:'radio', help:'Standard fries are included; large fries add the upgrade difference.', options:friesOptions },
-      { title:'Menu fries sauce', name:'menuFriesSauce', type:'radio', help:'Choose the included menu sauce. Ketchup is selected unless the customer asks for another sauce or no sauce.', options:sauceOptions().map(option=>Object.assign({}, option, {checked:option.value === 'x_sauce_ketchup'})) },
+      { title:'Menu fries sauce', name:'menuFriesSauce', type:'radio', help:'Choose the included menu sauce. Ketchup is selected unless the customer asks for another sauce or no sauce.', options:includedSauceOptions().map(option=>Object.assign({}, option, {checked:option.value === 'i_sauce_ketchup'})) },
       { title:'Menu drink', name:'menuDrink', type:'radio', help:'Choose the drink for this menu.', options:drinkOptions }
     ];
     if(isBurgerBase(product)) sections.push(...burgerExtraSections(product));
     if(isWingsBase(product)) sections.push({ title:'Included sauce', name:'wingsSauce', type:'radio', help:'Choose one included sauce for the wings.', options:[
       {label:'No Sauce Wanted', value:'', checked: defaultWingsSauce === ''},
-      {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings', checked: defaultWingsSauce === 'x_sauce_chicken_wings'},
-      {label:'Chipotle', value:'x_sauce_chipotle', checked: defaultWingsSauce === 'x_sauce_chipotle'}
+      {label:'Chicken Wings Sauce', value:'i_sauce_chicken_wings', checked: defaultWingsSauce === 'i_sauce_chicken_wings'},
+      {label:'Chipotle', value:'i_sauce_chipotle', checked: defaultWingsSauce === 'i_sauce_chipotle'}
     ]});
     sections.push({ title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add paid extra sauces.', options:paidSauceOptions() });
 
@@ -804,15 +816,6 @@
     return (entry.children || []).some(child=> child.linked && child.linked.prefix === 'menu');
   }
 
-  function childPrefixLabel(child){
-    const prefix = child && child.linked && child.linked.prefix;
-    if(prefix === 'menu') return 'Menu';
-    if(prefix === 'included') return 'Included';
-    if(prefix === 'extra') return 'Extra';
-    return '';
-  }
-
-
   function linkedGroupKey(productName, note, menuGroupId){
     return `${String(productName || '').trim()}|${baseCustomerNote(note)}|${menuGroupId || ''}`;
   }
@@ -825,21 +828,30 @@
     const standalone = [];
 
     BK_LOGIC.groupedLines(items).forEach(line=>{
+      const sourceItem = (items || []).find(item=>
+        item.itemId === line.id
+        && (item.note || '') === (line.note || '')
+        && (item.menuGroupId || '') === (line.menuGroupId || '')
+      );
+      const enrichedLine = Object.assign({}, line, {
+        menuName:sourceItem && sourceItem.menuName ? sourceItem.menuName : '',
+        menuRole:sourceItem && sourceItem.menuRole ? sourceItem.menuRole : ''
+      });
       const linked = parseLinkedModifierNote(line.note);
       if(linked){
-        linkedChildren.push(Object.assign({}, line, { linked }));
+        linkedChildren.push(Object.assign(enrichedLine, { linked }));
         return;
       }
 
-      const prod = BK_DATA.BASE.find(x=>x.id===line.id);
+      const prod = productById(line.id);
       const isModifierProduct = prod && (prod.cat === 'extra' || String(prod.id || '').startsWith('x_sauce_'));
       if(isModifierProduct){
-        standalone.push(line);
+        standalone.push(enrichedLine);
         return;
       }
 
-      const sourceItem = (items || []).find(item=>item.menuGroupId && item.menuGroupId === line.menuGroupId && item.menuRole === 'main');
-      const group = Object.assign({}, line, { children: [], menuName:sourceItem && sourceItem.menuName ? sourceItem.menuName : '' });
+      const menuMain = (items || []).find(item=>item.menuGroupId && item.menuGroupId === line.menuGroupId && item.menuRole === 'main');
+      const group = Object.assign({}, enrichedLine, { children: [], menuName:menuMain && menuMain.menuName ? menuMain.menuName : enrichedLine.menuName });
       const groupKey = linkedGroupKey(line.name, line.note, line.menuGroupId);
       groups.push(group);
       parentByKey.set(groupKey, group);
@@ -924,7 +936,7 @@
     const title = document.createElement('b');
     title.textContent = settings.displayTitle || `${entry.qty}x ${entry.name}`;
     titleWrap.appendChild(title);
-    splitEntryNoteLines(entry.note).forEach((line, idx)=>{
+    staffFacingNote(entry.note).forEach((line, idx)=>{
       const note = document.createElement('small');
       note.textContent = idx === 0 ? line : `↳ ${line}`;
       titleWrap.appendChild(note);
@@ -942,10 +954,10 @@
     (entry.children || []).forEach(child=>{
       const childLine = document.createElement('div');
       childLine.className = 'grouped-meal-child';
-      const linkedKind = child.linked && child.linked.kind;
-      const childRole = linkedKind === 'menu' ? 'included-sauce' : (linkedKind === 'extra' ? 'extra-sauce' : '');
+      const linkedKind = child.linked && child.linked.prefix;
+      const childRole = child.menuRole || (linkedKind === 'menu' || linkedKind === 'included' ? 'included-sauce' : (linkedKind === 'extra' ? 'extra-sauce' : ''));
       const childName = staffFacingItemName({name:child.name, role:childRole});
-      const childNote = linkedKind ? [] : splitEntryNoteLines(child.note);
+      const childNote = staffFacingNote(child.note);
       childLine.textContent = `↳ ${child.qty}x ${childName}${childNote.length ? ` · ${childNote[0]}` : ''}${showPrices ? ` · ${child.total} GHS` : ''}`;
       row.appendChild(childLine);
       childNote.slice(1).forEach(line=>{
@@ -1056,9 +1068,10 @@
       const detail = document.createElement('div');
       detail.className = 'cart-detail';
       const title = document.createElement('b');
-      title.textContent = prod ? prod.name : id;
+      title.textContent = entry.menuGroupId && entry.menuName ? entry.menuName : (prod ? prod.name : id);
       const meta = document.createElement('small');
-      meta.textContent = `× ${entry.qty}${note ? ` · ${note}` : ''}`;
+      const visibleNotes = staffFacingNote(note);
+      meta.textContent = `× ${entry.qty}${visibleNotes.length ? ` · ${visibleNotes.join(' · ')}` : ''}`;
       if(isMenuGroup){
         const badge = document.createElement('span');
         badge.className = 'cart-menu-badge';
@@ -1069,8 +1082,8 @@
       (entry.children || []).forEach(child=>{
         const childLine = document.createElement('small');
         childLine.className = `cart-child-line${child.linked && child.linked.prefix === 'menu' ? ' cart-menu-child' : ''}`;
-        const label = childPrefixLabel(child);
-        childLine.textContent = `↳ ${label ? `${label}: ` : ''}${child.name} × ${child.qty} · ${child.total} GHS`;
+        const childName = staffFacingItemName({name:child.name, role:child.menuRole || (child.linked && child.linked.prefix === 'extra' ? 'extra-sauce' : '')});
+        childLine.textContent = `↳ ${childName} × ${child.qty}${child.total ? ` · ${child.total} GHS` : ''}`;
         detail.appendChild(childLine);
       });
 
@@ -1301,9 +1314,11 @@
       box.appendChild(card);
       const list = card.querySelector(`#todo-${i}`);
       let menuNumber = 0;
-      groupedCartRows(s.items).forEach(entry=>{
+      const kitchenEntries = groupedCartRows(s.items);
+      const menuEntryCount = kitchenEntries.filter(entry=>entry.menuGroupId).length;
+      kitchenEntries.forEach(entry=>{
         const displayTitle = entry.menuGroupId
-          ? `MENU ${++menuNumber} — ${entry.menuName || `${entry.name} Menu`}`
+          ? `${menuEntryCount > 1 ? `MENU ${++menuNumber} — ` : ''}${entry.menuName || `${entry.name} Menu`}`
           : `${entry.qty}× ${entry.name}`;
         appendGroupedEntry(list, s, entry, i, {
           checkbox: true,
@@ -1518,7 +1533,11 @@
     checklist.appendChild(label);
     const grouped = groupedCartRows(s.items);
     if(grouped.length){
-      grouped.forEach(entry=> appendGroupedEntry(checklist, s, entry, active, { compact:true, showPrices:false }));
+      grouped.forEach(entry=> appendGroupedEntry(checklist, s, entry, active, {
+        compact:true,
+        showPrices:false,
+        displayTitle:entry.menuGroupId && entry.menuName ? entry.menuName : `${entry.qty}x ${entry.name}`
+      }));
     }else{
       const emptyLine = document.createElement('div');
       emptyLine.className = 'empty-state';
