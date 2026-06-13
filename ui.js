@@ -1,7 +1,9 @@
 // UI & Interaktionen – nutzt BK_STATE, BK_PRICES, BK_LOGIC
 (function(){
-  let currentCat = 'all';
+  const PRODUCT_CATEGORIES = ['burger', 'wings', 'fries', 'salad', 'drink'];
+  let currentCat = 'burger';
   let productQuery = '';
+  let productPage = 0;
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
   const CATEGORY_LABELS = { all:'All', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
@@ -193,6 +195,34 @@
     });
   }
 
+  function productsPerPage(){
+    if(window.innerWidth <= 700) return window.innerHeight <= 560 ? 6 : 4;
+    if(window.innerWidth <= 1180) return 6;
+    return 8;
+  }
+
+  function updateProductPager(totalItems, pageCount){
+    const categoryTitle = document.getElementById('productCategoryTitle');
+    const pageStatus = document.getElementById('productPageStatus');
+    const dots = document.getElementById('productPageDots');
+    const previous = document.getElementById('previousProductPage');
+    const next = document.getElementById('nextProductPage');
+    const controls = document.querySelector('.product-page-controls');
+    if(categoryTitle) categoryTitle.textContent = CATEGORY_LABELS[currentCat] || currentCat;
+    if(pageStatus) pageStatus.textContent = totalItems ? `${productPage + 1} / ${pageCount} · ${totalItems} products` : 'No products';
+    if(previous) previous.disabled = productPage <= 0;
+    if(next) next.disabled = productPage >= pageCount - 1;
+    if(controls) controls.classList.toggle('single-page', pageCount <= 1);
+    if(dots){
+      dots.innerHTML = '';
+      for(let index = 0; index < pageCount; index += 1){
+        const dot = document.createElement('span');
+        dot.className = index === productPage ? 'active' : '';
+        dots.appendChild(dot);
+      }
+    }
+  }
+
   function buildProducts(){
     const grid = document.getElementById('buttons');
     if(!grid) return;
@@ -202,8 +232,12 @@
     const query = productQuery.trim().toLowerCase();
     const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
     const items = base.filter(isFrontProduct)
-      .filter(it => currentCat === 'all' ? true : it.cat === currentCat)
+      .filter(it => it.cat === currentCat)
       .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true);
+    const pageSize = productsPerPage();
+    const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+    productPage = Math.min(productPage, pageCount - 1);
+    updateProductPager(items.length, pageCount);
     if(!items.length){
       const empty = document.createElement('div');
       empty.className = 'empty-state product-empty';
@@ -212,7 +246,7 @@
       grid.appendChild(empty);
       return;
     }
-    items.forEach(it=>{
+    items.slice(productPage * pageSize, (productPage + 1) * pageSize).forEach(it=>{
       const b = document.createElement('button');
       b.className = 'item';
       b.type = 'button';
@@ -236,6 +270,7 @@
       grid.appendChild(b);
     });
   }
+
 
   function openModifierSheet(title, sections, opts){
     const host = ensureDialogHost();
@@ -637,6 +672,7 @@
 
     const rerender = ()=>{
       productQuery = (input.value || '').trim();
+      productPage = 0;
       buildProducts();
     };
 
@@ -644,6 +680,7 @@
     clearBtn?.addEventListener('click', ()=>{
       input.value = '';
       productQuery = '';
+      productPage = 0;
       buildProducts();
       input.focus();
     });
@@ -651,12 +688,56 @@
   }
 
   function setCategory(cat){
-    currentCat = cat || 'all';
+    currentCat = PRODUCT_CATEGORIES.includes(cat) ? cat : 'burger';
+    productPage = 0;
     goTab('order');
     document.querySelectorAll('.catbar .tab').forEach(btn=>{
       btn.classList.toggle('active', btn.dataset.cat===currentCat);
     });
     buildProducts();
+  }
+
+  function bindCompactOrderNavigation(){
+    const pager = document.getElementById('productPager');
+    if(!pager || pager.dataset.bound === '1') return;
+    const moveCategory = direction=>{
+      const currentIndex = PRODUCT_CATEGORIES.indexOf(currentCat);
+      const nextIndex = (currentIndex + direction + PRODUCT_CATEGORIES.length) % PRODUCT_CATEGORIES.length;
+      setCategory(PRODUCT_CATEGORIES[nextIndex]);
+    };
+    document.getElementById('previousCategory')?.addEventListener('click', ()=> moveCategory(-1));
+    document.getElementById('nextCategory')?.addEventListener('click', ()=> moveCategory(1));
+    document.getElementById('previousProductPage')?.addEventListener('click', ()=>{
+      if(productPage <= 0) return;
+      productPage -= 1;
+      buildProducts();
+    });
+    document.getElementById('nextProductPage')?.addEventListener('click', ()=>{
+      productPage += 1;
+      buildProducts();
+    });
+    const cart = document.getElementById('orderCart');
+    const cartToggle = document.getElementById('mobileCartToggle');
+    const closeCart = ()=>{
+      cart?.classList.remove('mobile-open');
+      document.body.classList.remove('cart-drawer-open');
+      cartToggle?.setAttribute('aria-expanded', 'false');
+    };
+    cartToggle?.addEventListener('click', ()=>{
+      cart?.classList.add('mobile-open');
+      document.body.classList.add('cart-drawer-open');
+      cartToggle.setAttribute('aria-expanded', 'true');
+    });
+    document.getElementById('mobileCartClose')?.addEventListener('click', closeCart);
+    let touchStartX = 0;
+    pager.addEventListener('touchstart', event=>{ touchStartX = event.changedTouches[0].clientX; }, {passive:true});
+    pager.addEventListener('touchend', event=>{
+      const distance = event.changedTouches[0].clientX - touchStartX;
+      if(Math.abs(distance) < 70) return;
+      moveCategory(distance < 0 ? 1 : -1);
+    }, {passive:true});
+    window.addEventListener('resize', ()=> buildProducts());
+    pager.dataset.bound = '1';
   }
 
   function slotStatus(slot){
@@ -682,7 +763,7 @@
     if(!bar) return;
     bar.querySelectorAll('.slot-chip').forEach(n=>n.remove());
 
-    const controlIds = ['btnAddSlot', 'btnOnlineOrder', 'btnRenameSlot', 'btnDeleteSlot'];
+    const controlIds = ['btnAddSlot', 'btnOnlineOrder'];
     const ctl = controlIds
       .map(id => document.getElementById(id))
       .filter(Boolean)
@@ -913,12 +994,16 @@
   function renderOrder(){
     const {slots, active} = BK_STATE.getState();
     const lines = document.getElementById('lines'); lines.innerHTML='';
-    const welcome = document.getElementById('orderWelcome');
-    const layout = document.querySelector('#tab-order .order-layout');
-    if(welcome) welcome.classList.toggle('hidden', !!slots.length);
-    if(layout) layout.classList.toggle('hidden', !slots.length);
-    if(!slots.length){ setSlotTotals(0,0,0); return; }
+    if(!slots.length){
+      setSlotTotals(0,0,0);
+      const mobileCount = document.getElementById('mobileCartCount');
+      if(mobileCount) mobileCount.textContent = '0 items';
+      return;
+    }
     const s = slots[active];
+    const itemCount = (s.items || []).reduce((total, item)=> total + (Number(item.qty) || 0), 0);
+    const mobileCount = document.getElementById('mobileCartCount');
+    if(mobileCount) mobileCount.textContent = `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`;
     lines.appendChild(packagingControl(s, active, false));
 
     const entries = groupedCartRows(s.items);
@@ -1173,6 +1258,12 @@
     return { state:'in-progress', label:'In progress', complete, total, percent, detail:'Continue preparing the remaining items.' };
   }
 
+  function shortOrderNumber(orderNo){
+    const value = String(orderNo || '').trim();
+    const finalPart = value.split('-').pop();
+    return finalPart ? String(Number(finalPart) || finalPart) : value || '-';
+  }
+
   function renderMake(){
     const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('makeList');
@@ -1191,27 +1282,28 @@
       const card = document.createElement('div'); card.className='slot-card kitchen-order-card';
       card.innerHTML = `
         <div class="slot-head kitchen-order-head">
-          <div><span class="label">${isOnlineOrder(s) ? platformLabel(s.orderSource).toUpperCase() : s.name}</span> · ${isOnlineOrder(s) ? escapeHtml(s.externalOrderNo || '') + ' · ' : ''}#${s.orderNo || '-'} · In kitchen: ${formatAge(s.createdAt)}</div>
-          ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
+          <div class="kitchen-order-identity">
+            <strong>Order #${escapeHtml(shortOrderNumber(s.orderNo))}</strong>
+            <span>${escapeHtml(orderChannelText(s))} · waiting ${formatAge(s.createdAt)}</span>
+          </div>
+          <span class="kitchen-packaging">Packaging: ${escapeHtml(packagingLabel(s))}</span>
         </div>
         <div class="kitchen-progress ${progress.state}">
-          <div class="kitchen-progress-copy"><strong>${progress.label}</strong><span>${progress.complete} of ${progress.total} items prepared</span><small>${progress.detail}</small></div>
+          <div class="kitchen-progress-copy"><strong>${progress.label}</strong><span>${progress.complete} / ${progress.total} prepared</span></div>
           <div class="kitchen-progress-track" role="progressbar" aria-label="Kitchen progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="width:${progress.percent}%"></span></div>
           ${progress.state === 'complete' && !s.issued ? `<button class="workflow-next-button kitchen-next-action" type="button">${makeNext.label}</button>` : ''}
         </div>
         <div class="todo grouped-todo" id="todo-${i}"></div>`;
       const nextAction = card.querySelector('.kitchen-next-action');
       if(nextAction) nextAction.onclick = ()=> focusSlot(i, makeNext.target);
-      card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
       makeSlotCardSelectable(card, i, 'make', i === active);
       box.appendChild(card);
       const list = card.querySelector(`#todo-${i}`);
       let menuNumber = 0;
-      let singleNumber = 0;
       groupedCartRows(s.items).forEach(entry=>{
         const displayTitle = entry.menuGroupId
           ? `MENU ${++menuNumber} — ${entry.menuName || `${entry.name} Menu`}`
-          : `SINGLE ITEM ${++singleNumber} — ${entry.qty}x ${entry.name}`;
+          : `${entry.qty}× ${entry.name}`;
         appendGroupedEntry(list, s, entry, i, {
           checkbox: true,
           displayTitle,
@@ -1228,9 +1320,6 @@
         });
       });
     });
-    ensureFlowActions('makeList', [
-      { label:'⬅️ Back to Order', onClick:()=> goTab('order') }
-    ]);
   }
 
   function paymentDisplay(slot){
@@ -1448,6 +1537,7 @@
       infoDialog('This order is already issued and locked. Start a new order slot for further changes.');
       return;
     }
+    valid.forEach(tab=> document.body.classList.toggle(`workflow-${tab}`, tab === target));
 
     const sectionMap = {
       order: 'tab-order',
@@ -1632,7 +1722,10 @@
     const syncOnlineFields = ()=> document.getElementById('onlinePhoneRow').classList.toggle('hidden', platformInput.value !== 'whatsapp');
     platformInput.onchange = syncOnlineFields; syncOnlineFields();
     reference.focus();
-    document.getElementById('dlgCancel').onclick = closeDialog;
+    document.getElementById('dlgCancel').onclick = ()=>{
+      closeDialog();
+      if(!BK_STATE.getState().slots.length) window.location.replace('index.html');
+    };
     document.getElementById('dlgConfirm').onclick = ()=>{
       const platform = document.getElementById('onlinePlatform').value;
       const externalOrderNo = reference.value.trim();
@@ -2395,6 +2488,8 @@
     const c = activeSlot ? BK_LOGIC.computeSlot(activeSlot) : {subtotal:0, combos:0};
     setSlotTotals(c.subtotal, 0, c.subtotal);
     document.getElementById('grand').textContent = `${c.subtotal} GHS`;
+    const mobileTotal = document.getElementById('mobileCartTotal');
+    if(mobileTotal) mobileTotal.textContent = `${c.subtotal} GHS`;
     document.getElementById('combosPill').textContent = `Combos: ${c.combos || 0}`;
     document.getElementById('discountTag').textContent = g.discount>0 ? `Discount: ${Math.round(discountRate*100)}%` : 'No discount';
     document.getElementById('allSubtotal').textContent = `${g.grandSubtotal} GHS`;
@@ -2716,10 +2811,8 @@
 
   function renderAll(){
     bindProductSearch();
-    if(!document.querySelector('.catbar .tab.active')){
-      const first = document.querySelector('.catbar .tab[data-cat="all"]');
-      if(first) first.classList.add('active');
-    }
+    bindCompactOrderNavigation();
+    document.querySelectorAll('.catbar .tab[data-cat]').forEach(btn=> btn.classList.toggle('active', btn.dataset.cat === currentCat));
     buildProducts();
     renderSlotsBar();
     renderOrder();
