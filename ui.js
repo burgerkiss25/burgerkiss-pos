@@ -604,6 +604,13 @@
 
 
   async function addProductWithFlow(product){
+    const accessState = BK_STATE.getState();
+    const accessSlot = accessState.slots[accessState.active];
+    if(window.BK_ACCESS && !BK_ACCESS.guardNewSale(accessSlot)) return;
+    if(accessSlot && !accessSlot.createdBy && window.BK_ACCESS && BK_ACCESS.current()){
+      const activeAccess = BK_ACCESS.current();
+      BK_STATE.updateSlot(accessState.active, { createdBy:BK_ACCESS.actor(), businessDate:activeAccess.businessDate, shiftId:activeAccess.shiftId });
+    }
     const pendingNote = '';
     let added = false;
 
@@ -1172,6 +1179,10 @@
     refreshTotals();
     if(slot.pay === method) return;
     const isUnpaid = method === 'unpaid';
+    if(isUnpaid && slot.pay !== 'unpaid' && window.BK_ACCESS && !BK_ACCESS.hasRole('supervisor')){
+      infoDialog('A supervisor or owner is required to reverse a confirmed payment.');
+      return;
+    }
     const paymentName = method === 'momo' ? 'MoMo' : 'Cash';
     const title = isUnpaid ? 'Change payment status' : `Confirm ${paymentName} payment`;
     const message = isUnpaid
@@ -1427,6 +1438,7 @@
 
   function createFreshOrderSlot(slotName){
     return BK_STATE.allocateOrderNo().then(function(orderNo){
+      const access = window.BK_ACCESS && BK_ACCESS.current ? BK_ACCESS.current() : null;
       return {
         name: slotName,
         items: [],
@@ -1437,7 +1449,10 @@
         packMode: 'shared',
         packAsked: false,
         orderNo,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        createdBy: window.BK_ACCESS && BK_ACCESS.actor ? BK_ACCESS.actor() : null,
+        businessDate: access ? access.businessDate : '',
+        shiftId: access ? access.shiftId : ''
       };
     });
   }
@@ -1729,6 +1744,12 @@
       issued: !!slot.issued,
       createdAt: slot.createdAt || Date.now(),
       closedAt: Date.now(),
+      businessDate: slot.businessDate || (window.BK_ACCESS && BK_ACCESS.current ? (BK_ACCESS.current() || {}).businessDate : ''),
+      shiftId: slot.shiftId || '',
+      createdBy: slot.createdBy || null,
+      paidBy: slot.paidBy || null,
+      paidAt: slot.paidAt || 0,
+      issuedBy: slot.issuedBy || null,
       subtotal: c.subtotal,
       discountRate,
       discount,
@@ -1945,7 +1966,7 @@
       const stockResult = window.BK_STOCK && typeof BK_STOCK.consumeSlot === 'function'
         ? BK_STOCK.consumeSlot(latestSlot)
         : null;
-      pushHistory(slotSnapshot({...latestSlot, issued:true}));
+      pushHistory(slotSnapshot({...latestSlot, issued:true, issuedBy:window.BK_ACCESS && BK_ACCESS.actor ? BK_ACCESS.actor() : null}));
       const nextState = BK_STATE.getState();
       nextState.slots.splice(i, 1);
       nextState.active = Math.min(i, Math.max(0, nextState.slots.length - 1));
@@ -2137,7 +2158,7 @@
     target.status = 'voided';
     target.voidReason = cleanReason;
     target.voidedAt = Date.now();
-    target.voidedBy = window.BK_TERMINAL_NAME || window.BK_SYNC_FORCE_SLOT || 'POS terminal';
+    target.voidedBy = window.BK_ACCESS && BK_ACCESS.actor ? BK_ACCESS.actor() : (window.BK_TERMINAL_NAME || window.BK_SYNC_FORCE_SLOT || 'POS terminal');
     saveHistory(history);
     saveHistoryRemote(target);
     const state = BK_STATE.getState();
@@ -2522,6 +2543,10 @@
     if(!slots.length) return;
     const slot = slots[active];
     const protectedOrder = slot.issued || slot.pay !== 'unpaid';
+    if(protectedOrder && window.BK_ACCESS && !BK_ACCESS.hasRole('supervisor')){
+      infoDialog('A supervisor or owner is required to void a paid or issued order.');
+      return;
+    }
     const title = protectedOrder ? 'Void and remove order' : 'Delete draft order';
     const message = protectedOrder
       ? `${slot.name} is paid or issued. It cannot be deleted without a permanent void record.`

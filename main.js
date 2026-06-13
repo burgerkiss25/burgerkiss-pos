@@ -37,11 +37,21 @@
   // Buttons
   document.getElementById('btnUndo').onclick = ()=>{ BK_STATE.undo(); BK_UI.renderOrder(); BK_UI.renderMake(); BK_UI.refreshTotals(); };
   document.getElementById('btnReset').onclick= ()=> BK_UI.clearAllWithConfirm();
-  document.querySelectorAll('.disc').forEach(b=> b.onclick = ()=>{ BK_STATE.setDiscount(Number(b.dataset.disc)); BK_UI.refreshTotals(); });
+  document.querySelectorAll('.disc').forEach(b=> b.onclick = ()=>{
+    const rate = Number(b.dataset.disc);
+    if(rate > 0.03 && !(window.BK_ACCESS && BK_ACCESS.hasRole('supervisor'))){
+      BK_UI.infoDialog('A supervisor or owner is required for discounts above 3%.');
+      return;
+    }
+    BK_STATE.setDiscount(rate); BK_UI.refreshTotals();
+  });
   document.getElementById('btnClearDisc').onclick = ()=>{ BK_STATE.setDiscount(0); BK_UI.refreshTotals(); };
-  document.getElementById('btnClearStorage').onclick = ()=> BK_UI.clearStorageWithConfirm();
+  document.getElementById('btnClearStorage').onclick = ()=>{
+    if(window.BK_ACCESS && !BK_ACCESS.can('maintenance')) return BK_UI.infoDialog('Owner access is required.');
+    BK_UI.clearStorageWithConfirm();
+  };
 
-  document.getElementById('btnAddSlot').onclick = ()=> BK_UI.addNewOrderSlot();
+  document.getElementById('btnAddSlot').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot(); };
   document.getElementById('btnRenameSlot').onclick = ()=> BK_UI.renameActiveSlot();
   document.getElementById('btnDeleteSlot').onclick = ()=> BK_UI.deleteActiveSlot();
 
@@ -53,7 +63,7 @@
     });
     const add = document.getElementById('btnAddSlot');
     add.classList.remove('disabled');
-    add.onclick = ()=> BK_UI.addNewOrderSlot();
+    add.onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot(); };
   }
 
   const syncWorkflowA11y = (name)=>{
@@ -103,12 +113,18 @@
   document.getElementById('hToday').onclick     = ()=> BK_UI.filterHistoryToday();
   document.getElementById('hClear').onclick     = ()=> BK_UI.clearHistoryFilters();
   document.getElementById('hSearch').oninput    = (e)=> BK_UI.filterHistoryText(e.target.value);
-  document.getElementById('hExportJson').onclick= ()=> BK_UI.exportHistoryJson();
-  document.getElementById('hExportCsv').onclick = ()=> BK_UI.exportHistoryCsv();
+  document.getElementById('hExportJson').onclick= ()=>{ if(!window.BK_ACCESS || BK_ACCESS.can('history_export')) BK_UI.exportHistoryJson(); };
+  document.getElementById('hExportCsv').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.can('history_export')) BK_UI.exportHistoryCsv(); };
   document.getElementById('hdClose').onclick     = ()=> BK_UI.closeHistoryOrder();
   document.getElementById('hdReprint').onclick   = ()=> BK_UI.reprintHistoryOrder();
-  document.getElementById('hdVoid').onclick      = ()=> BK_UI.voidSelectedHistoryOrder();
-  document.getElementById('btnDailyReport').onclick = ()=> BK_UI.openDailyReport();
+  document.getElementById('hdVoid').onclick      = ()=>{
+    if(window.BK_ACCESS && !BK_ACCESS.can('void_order')) return BK_UI.infoDialog('A supervisor or owner is required to void an order.');
+    BK_UI.voidSelectedHistoryOrder();
+  };
+  document.getElementById('btnDailyReport').onclick = ()=>{
+    if(window.BK_ACCESS && !BK_ACCESS.can('daily_report')) return BK_UI.infoDialog('A supervisor or owner is required to open the daily report.');
+    BK_UI.openDailyReport();
+  };
   document.getElementById('reportDate').onchange = ()=> BK_UI.renderDailyReport();
   document.getElementById('reportExport').onclick = ()=> BK_UI.exportDailyReportCsv();
   document.getElementById('reportPrint').onclick = ()=> BK_UI.printDailyReport();
@@ -123,7 +139,9 @@
 
   // Group
   document.getElementById('btnGroup').onclick = ()=> BK_UI.openGroup();
-  document.getElementById('btnOnlineOrder').onclick = ()=> BK_UI.openOnlineOrderDialog();
+  document.querySelectorAll('.online-order-trigger').forEach(button=>{
+    button.onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.openOnlineOrderDialog(); };
+  });
   document.getElementById('gClose').onclick   = ()=> BK_UI.closeGroup();
   document.getElementById('gMake').onclick    = ()=> BK_UI.groupMakeReceipt();
   document.getElementById('gPaid').onclick    = ()=> BK_UI.groupMarkPaid();

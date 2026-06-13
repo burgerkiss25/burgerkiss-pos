@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – POS</title>
-  <link rel="stylesheet" href="./style.css?v=43" />
+  <link rel="stylesheet" href="./style.css?v=44" />
 
   <!-- POS-Konfiguration aus externer Datei -->
   <script src="./firebase-config.js?v=2"></script>
@@ -28,6 +28,8 @@
         <button id="tabIssue" class="workflow-step"><span class="step-no">4</span><span>Issue</span></button>
       </nav>
 
+      <div class="staff-session" id="staffSession" aria-live="polite"></div>
+
       <div class="totals" aria-live="polite">
         <div class="total-label">Grand total</div>
         <h1 id="grand">0 GHS</h1>
@@ -43,13 +45,13 @@
           <button class="x" id="btnSummary">Summary</button>
           <button class="x" id="btnStockOverview">Stock <span class="stock-alert-badge hidden" id="stockAlertBadge">0</span></button>
           <button class="x" id="btnHistory">History</button>
-          <button class="x" id="btnDailyReport">Daily Report</button>
+          <button class="x" id="btnDailyReport" data-permission="daily_report">Daily Report</button>
           <button class="x" id="btnReceipt">Receipt</button>
           <button class="x" id="btnGroup">Group Ticket</button>
-          <button class="x online-order-trigger" id="btnOnlineOrder">+ Online Order</button>
+          <button class="x online-order-trigger" id="btnOnlineOrderMenu">+ Online Order</button>
           <button class="x danger-link" id="btnReset">Reset Order</button>
-          <button class="x" id="btnClearStorage">Clear Storage</button>
-          <a class="x admin-link" href="admin.html">Admin</a>
+          <button class="x" id="btnClearStorage" data-permission="maintenance">Clear Storage</button>
+          <a class="x admin-link" href="admin.html" data-permission="admin">Admin</a>
         </div>
       </details>
     </header>
@@ -70,8 +72,8 @@
         <div class="tool-panel" aria-label="Discount actions">
           <button class="disc" data-disc="0.01" type="button">-1%</button>
           <button class="disc" data-disc="0.03" type="button">-3%</button>
-          <button class="disc" data-disc="0.05" type="button">-5%</button>
-          <button class="disc" data-disc="0.10" type="button">-10%</button>
+          <button class="disc" data-disc="0.05" data-min-role="supervisor" type="button">-5%</button>
+          <button class="disc" data-disc="0.10" data-min-role="supervisor" type="button">-10%</button>
           <button class="ok" id="btnClearDisc" type="button">Clear Discount</button>
         </div>
       </details>
@@ -174,8 +176,8 @@
           <input id="hSearch" placeholder="Search order / platform reference" style="min-width:220px;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:8px" />
           <button class="x" id="hToday">Today</button>
           <button class="x" id="hClear">Clear Filters</button>
-          <button class="x" id="hExportJson">Export JSON</button>
-          <button class="x" id="hExportCsv">Export CSV</button>
+          <button class="x" id="hExportJson" data-permission="history_export">Export JSON</button>
+          <button class="x" id="hExportCsv" data-permission="history_export">Export CSV</button>
           <button class="x" id="hClose">Close</button>
         </div>
       </header>
@@ -190,7 +192,7 @@
         <b id="historyDetailTitle">Order details</b>
         <div>
           <button class="x" id="hdReprint">Reprint Receipt</button>
-          <button class="x danger-link" id="hdVoid">Void Order</button>
+          <button class="x danger-link" id="hdVoid" data-permission="void_order">Void Order</button>
           <button class="x" id="hdClose">Close</button>
         </div>
       </header>
@@ -268,6 +270,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
   <!-- ====================== App-Skripte ====================== -->
+  <script src="./access.js?v=1"></script>
   <script src="./data.js?v=13"></script>
   <script src="./prices.js?v=14"></script>
   <script src="./products.js?v=14"></script>
@@ -276,10 +279,11 @@
   <script src="./stock_data.js?v=13"></script>
   <script src="./stock_utils.js?v=15"></script>
   <script src="./stock.js?v=18"></script>
-  <script src="./state.js?v=18"></script>
+  <script src="./state.js?v=19"></script>
   <script src="./logic.js?v=14"></script>
-  <script src="./ui.js?v=43"></script>
-  <script src="./main.js?v=19"></script>
+  <script src="./ui.js?v=44"></script>
+  <script src="./main.js?v=20"></script>
+  <script>BK_ACCESS.init();</script>
 
   <!-- =============== Live-Sync (Variante B, Polling) =============== -->
   <script src="./sync_poll.js?v=13"></script>
