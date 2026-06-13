@@ -1038,7 +1038,7 @@
   }
 
   function renderOrder(){
-    const {slots, active} = BK_STATE.getState();
+    const {slots, active, discountRate} = BK_STATE.getState();
     const lines = document.getElementById('lines'); lines.innerHTML='';
     const orderMeta = document.getElementById('currentOrderMeta');
     if(!slots.length){
@@ -1416,7 +1416,7 @@
   }
 
   function renderPay(){
-    const {slots, active} = BK_STATE.getState();
+    const {slots, active, discountRate} = BK_STATE.getState();
     const box = document.getElementById('payList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
     box.querySelectorAll('.empty-state').forEach(n=>n.remove());
