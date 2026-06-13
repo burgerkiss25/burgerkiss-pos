@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – POS</title>
-  <link rel="stylesheet" href="./style.css?v=48" />
+  <link rel="stylesheet" href="./style.css?v=49" />
 
   <!-- POS-Konfiguration aus externer Datei -->
   <script src="./firebase-config.js?v=2"></script>
@@ -129,8 +129,14 @@
     <!-- MAKE -->
     <section id="tab-make" class="hidden">
       <div id="makeList" class="panel">
-        <h3>Preparation – mark items as done</h3>
-        <div class="flow-action" id="makeFlowNav"></div>
+        <div class="kitchen-page-head">
+          <button class="x kitchen-back" id="btnMakeBack" type="button">← Order</button>
+          <div>
+            <p class="eyebrow">Step 2 of 4</p>
+            <h2>Kitchen</h2>
+            <small>Mark each prepared item as done.</small>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -285,8 +291,8 @@
   <script src="./state.js?v=20"></script>
   <script src="./logic.js?v=14"></script>
   <script src="./packing.js?v=1"></script>
-  <script src="./ui.js?v=47"></script>
-  <script src="./main.js?v=21"></script>
+  <script src="./ui.js?v=48"></script>
+  <script src="./main.js?v=22"></script>
   <script>BK_ACCESS.init();</script>
 
   <!-- =============== Live-Sync (Variante B, Polling) =============== -->

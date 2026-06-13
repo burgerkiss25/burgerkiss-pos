@@ -1258,6 +1258,12 @@
     return { state:'in-progress', label:'In progress', complete, total, percent, detail:'Continue preparing the remaining items.' };
   }
 
+  function shortOrderNumber(orderNo){
+    const value = String(orderNo || '').trim();
+    const finalPart = value.split('-').pop();
+    return finalPart ? String(Number(finalPart) || finalPart) : value || '-';
+  }
+
   function renderMake(){
     const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('makeList');
@@ -1276,27 +1282,28 @@
       const card = document.createElement('div'); card.className='slot-card kitchen-order-card';
       card.innerHTML = `
         <div class="slot-head kitchen-order-head">
-          <div><span class="label">${isOnlineOrder(s) ? platformLabel(s.orderSource).toUpperCase() : s.name}</span> · ${isOnlineOrder(s) ? escapeHtml(s.externalOrderNo || '') + ' · ' : ''}#${s.orderNo || '-'} · In kitchen: ${formatAge(s.createdAt)}</div>
-          ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
+          <div class="kitchen-order-identity">
+            <strong>Order #${escapeHtml(shortOrderNumber(s.orderNo))}</strong>
+            <span>${escapeHtml(orderChannelText(s))} · waiting ${formatAge(s.createdAt)}</span>
+          </div>
+          <span class="kitchen-packaging">Packaging: ${escapeHtml(packagingLabel(s))}</span>
         </div>
         <div class="kitchen-progress ${progress.state}">
-          <div class="kitchen-progress-copy"><strong>${progress.label}</strong><span>${progress.complete} of ${progress.total} items prepared</span><small>${progress.detail}</small></div>
+          <div class="kitchen-progress-copy"><strong>${progress.label}</strong><span>${progress.complete} / ${progress.total} prepared</span></div>
           <div class="kitchen-progress-track" role="progressbar" aria-label="Kitchen progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="width:${progress.percent}%"></span></div>
           ${progress.state === 'complete' && !s.issued ? `<button class="workflow-next-button kitchen-next-action" type="button">${makeNext.label}</button>` : ''}
         </div>
         <div class="todo grouped-todo" id="todo-${i}"></div>`;
       const nextAction = card.querySelector('.kitchen-next-action');
       if(nextAction) nextAction.onclick = ()=> focusSlot(i, makeNext.target);
-      card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
       makeSlotCardSelectable(card, i, 'make', i === active);
       box.appendChild(card);
       const list = card.querySelector(`#todo-${i}`);
       let menuNumber = 0;
-      let singleNumber = 0;
       groupedCartRows(s.items).forEach(entry=>{
         const displayTitle = entry.menuGroupId
           ? `MENU ${++menuNumber} — ${entry.menuName || `${entry.name} Menu`}`
-          : `SINGLE ITEM ${++singleNumber} — ${entry.qty}x ${entry.name}`;
+          : `${entry.qty}× ${entry.name}`;
         appendGroupedEntry(list, s, entry, i, {
           checkbox: true,
           displayTitle,
@@ -1313,9 +1320,6 @@
         });
       });
     });
-    ensureFlowActions('makeList', [
-      { label:'⬅️ Back to Order', onClick:()=> goTab('order') }
-    ]);
   }
 
   function paymentDisplay(slot){
@@ -1533,6 +1537,7 @@
       infoDialog('This order is already issued and locked. Start a new order slot for further changes.');
       return;
     }
+    valid.forEach(tab=> document.body.classList.toggle(`workflow-${tab}`, tab === target));
 
     const sectionMap = {
       order: 'tab-order',

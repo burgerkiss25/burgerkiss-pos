@@ -99,6 +99,7 @@
 
   // Tabs
   const showTab = (name)=>{
+    ['order','make','pay','issue'].forEach(tab=> document.body.classList.toggle(`workflow-${tab}`, tab === name));
     document.getElementById('tab-order').classList.toggle('hidden', name!=='order');
     document.getElementById('tab-make').classList.toggle('hidden',  name!=='make');
     document.getElementById('tab-pay').classList.toggle('hidden',   name!=='pay');
@@ -116,6 +117,7 @@
     BK_UI.refreshTotals();
   };
   document.getElementById('tabOrder').onclick = ()=> showTab('order');
+  document.getElementById('btnMakeBack').onclick = ()=> showTab('order');
   document.getElementById('tabMake').onclick  = ()=>{
     const state = BK_STATE.getState(); const slot = state.slots[state.active];
     if(slot && slot.items.length && !slot.sentToKitchen) BK_UI.continueOrderToKitchen(state.active); else showTab('make');
@@ -179,6 +181,7 @@
 
 
   syncWorkflowA11y('order');
+  document.body.classList.add('workflow-order');
 
   // initial render
   BK_UI.renderAll();
