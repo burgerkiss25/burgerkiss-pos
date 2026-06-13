@@ -51,8 +51,18 @@
     return out;
   }
 
+  function withSystemProducts(rows){
+    const clean = Array.isArray(rows) ? rows.slice() : [];
+    const ids = new Set(clean.map(row=>row.id));
+    (window.BK_DATA.DEFAULT_BASE || []).forEach(product=>{
+      if(!String(product.id || '').startsWith('i_sauce_') || ids.has(product.id)) return;
+      clean.push({id:product.id, name:product.name, price:0, cat:product.cat});
+    });
+    return clean;
+  }
+
   function applyRows(rows){
-    const clean = sanitizeRows(rows);
+    const clean = withSystemProducts(sanitizeRows(rows));
     if(!clean.length) return false;
     window.BK_DATA.BASE = clean;
     try{ localStorage.setItem(KEY, JSON.stringify(clean)); }catch(e){}

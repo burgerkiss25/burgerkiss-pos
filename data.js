@@ -27,6 +27,12 @@ window.BK_DATA = {
     {id:'x_fried_egg', name:'Fried Egg', price:20, cat:'extra'},
     {id:'x_omelette',  name:'Omelette',  price:30, cat:'extra'},
 
+    {id:'i_sauce_ketchup', name:'Ketchup', price:0, cat:'sauce', sauce_type:'s_ketchup'},
+    {id:'i_sauce_mayonnaise', name:'Mayonnaise', price:0, cat:'sauce', sauce_type:'s_mayonnaise'},
+    {id:'i_sauce_chipotle', name:'Chipotle', price:0, cat:'sauce', sauce_type:'s_chipotle'},
+    {id:'i_sauce_dutch_special', name:'Dutch Special', price:0, cat:'sauce', sauce_type:'s_dutch_special'},
+    {id:'i_sauce_chicken_wings', name:'Chicken Wings Sauce', price:0, cat:'sauce', sauce_type:'s_chicken_wings'},
+
     {id:'x_sauce_ketchup', name:'Extra Ketchup', price:5, cat:'sauce', sauce_type:'s_ketchup'},
     {id:'x_sauce_mayonnaise', name:'Extra Mayonnaise', price:5, cat:'sauce', sauce_type:'s_mayonnaise'},
     {id:'x_sauce_chipotle', name:'Extra Chipotle', price:5, cat:'sauce', sauce_type:'s_chipotle'},

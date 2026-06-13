@@ -4,7 +4,9 @@
     return JSON.stringify([itemId, note || '', menuGroupId || '']);
   }
   function isIncludedSauce(itemId, note){
-    return String(note || '').toLowerCase().startsWith('included') && String(itemId || '').startsWith('x_sauce_');
+    const normalizedNote = String(note || '').toLowerCase();
+    return String(itemId || '').startsWith('i_sauce_')
+      || ((normalizedNote.startsWith('included') || normalizedNote.startsWith('menu for')) && String(itemId || '').startsWith('x_sauce_'));
   }
   function parseItemKey(key){
     try{
@@ -99,7 +101,7 @@
     const counts = groupCounts(items);
     return Object.entries(counts).map(([key,qty])=>{
       const [id, note='', menuGroupId=''] = parseItemKey(key);
-      const p = BK_DATA.BASE.find(x=>x.id===id);
+      const p = BK_DATA.BASE.find(x=>x.id===id) || (BK_DATA.DEFAULT_BASE || []).find(x=>x.id===id);
       const unit = isIncludedSauce(id, note) ? 0 : BK_PRICES.getPrice(id);
       return { id, note, menuGroupId, qty, name: p ? p.name : id, total: qty*unit, key };
     });

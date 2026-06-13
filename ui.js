@@ -1,7 +1,9 @@
 // UI & Interaktionen – nutzt BK_STATE, BK_PRICES, BK_LOGIC
 (function(){
-  let currentCat = 'all';
+  const PRODUCT_CATEGORIES = ['burger', 'wings', 'fries', 'salad', 'drink'];
+  let currentCat = 'burger';
   let productQuery = '';
+  let productPage = 0;
   let groupSel = new Set();
   const HISTORY_KEY = 'bk_order_history_v1';
   const CATEGORY_LABELS = { all:'All', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
@@ -16,8 +18,8 @@
     { id:'menu_hamburger', name:'Hamburger Menu', baseId:'hamburger', menuPrice:120, defaultFries:'fries_standard', defaultDrink:'d_cola' },
     { id:'menu_double_burger', name:'Double Burger Menu', baseId:'double_burger', menuPrice:155, defaultFries:'fries_standard', defaultDrink:'d_cola' },
     { id:'menu_double_cheeseburger', name:'Double Cheeseburger Menu', baseId:'double_cheeseburger', menuPrice:170, defaultFries:'fries_standard', defaultDrink:'d_cola' },
-    { id:'menu_wings_6', name:'Wings 6 Menu', baseId:'wings_6', menuPrice:65, defaultFries:'fries_standard', defaultDrink:'d_cola', defaultWingsSauce:'x_sauce_chicken_wings' },
-    { id:'menu_wings_12', name:'Wings 12 Menu', baseId:'wings_12', menuPrice:110, defaultFries:'fries_standard', defaultDrink:'d_cola', defaultWingsSauce:'x_sauce_chicken_wings' }
+    { id:'menu_wings_6', name:'Wings 6 Menu', baseId:'wings_6', menuPrice:65, defaultFries:'fries_standard', defaultDrink:'d_cola', defaultWingsSauce:'i_sauce_chicken_wings' },
+    { id:'menu_wings_12', name:'Wings 12 Menu', baseId:'wings_12', menuPrice:110, defaultFries:'fries_standard', defaultDrink:'d_cola', defaultWingsSauce:'i_sauce_chicken_wings' }
   ];
 
   const STOCK_DEFAULT = {
@@ -53,6 +55,11 @@
       x_bacon: { bacon_slice: 1 },
       x_fried_egg: { egg: 1 },
       x_omelette: { egg: 2 },
+      i_sauce_ketchup: { ketchup: 20 },
+      i_sauce_mayonnaise: { mayonnaise: 20 },
+      i_sauce_chipotle: { mayonnaise: 15, chicken_burger_sauce: 5 },
+      i_sauce_dutch_special: { mayonnaise: 10, ketchup: 10, onion_diced: 5 },
+      i_sauce_chicken_wings: { chicken_wings_sauce: 20 },
       x_sauce_ketchup: { ketchup: 20 },
       x_sauce_mayonnaise: { mayonnaise: 20 },
       x_sauce_chipotle: { mayonnaise: 15, chicken_burger_sauce: 5 },
@@ -137,6 +144,49 @@
     });
   }
 
+  function requestDiscountApproval(rate){
+    const st = BK_STATE.getState();
+    const slot = st.slots[st.active];
+    if(!slot || !slot.items.length){
+      infoDialog('Add products before requesting a discount.');
+      return;
+    }
+    if(slot.sentToKitchen || slot.issued){
+      infoDialog('Discounts can only be approved while the order is still being taken.');
+      return;
+    }
+    const requestedRate = Math.max(0, Number(rate) || 0);
+    const host = ensureDialogHost();
+    document.getElementById('appDialogTitle').textContent = requestedRate ? `Owner approval: ${Math.round(requestedRate * 100)}% discount` : 'Owner approval: remove discount';
+    document.getElementById('appDialogBody').innerHTML = `
+      <p>The employee remains signed in. Mr Asamoah must enter the owner PIN to approve this change for Order #${escapeHtml(shortOrderNumber(slot.orderNo))}.</p>
+      <label class="dialog-label">Owner PIN<input id="discountOwnerPin" class="dialog-field" type="password" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off"></label>
+      <div id="discountApprovalError" class="field-error" aria-live="polite"></div>
+      <div class="dialog-actions"><button class="x" id="dlgCancel" type="button">Cancel</button><button class="x modifier-primary" id="dlgConfirm" type="button">Approve</button></div>`;
+    host.classList.add('open');
+    const pin = document.getElementById('discountOwnerPin');
+    pin.focus();
+    document.getElementById('dlgCancel').onclick = closeDialog;
+    document.getElementById('dlgConfirm').onclick = async ()=>{
+      const button = document.getElementById('dlgConfirm');
+      button.disabled = true;
+      const approval = window.BK_ACCESS && BK_ACCESS.authorizeOwnerPin
+        ? await BK_ACCESS.authorizeOwnerPin(pin.value)
+        : null;
+      if(!approval){
+        document.getElementById('discountApprovalError').textContent = 'Owner PIN incorrect. Discount was not changed.';
+        button.disabled = false;
+        pin.select();
+        return;
+      }
+      BK_STATE.setDiscount(requestedRate, approval);
+      closeDialog();
+      renderOrder();
+      renderPay();
+      refreshTotals();
+    };
+  }
+
   function handoverChecklistDialog(title, message){
     return new Promise(resolve=>{
       const host = ensureDialogHost();
@@ -193,6 +243,34 @@
     });
   }
 
+  function productsPerPage(){
+    if(window.innerWidth <= 700) return window.innerHeight <= 560 ? 6 : 4;
+    if(window.innerWidth <= 1180) return 6;
+    return 8;
+  }
+
+  function updateProductPager(totalItems, pageCount){
+    const categoryTitle = document.getElementById('productCategoryTitle');
+    const pageStatus = document.getElementById('productPageStatus');
+    const dots = document.getElementById('productPageDots');
+    const previous = document.getElementById('previousProductPage');
+    const next = document.getElementById('nextProductPage');
+    const controls = document.querySelector('.product-page-controls');
+    if(categoryTitle) categoryTitle.textContent = CATEGORY_LABELS[currentCat] || currentCat;
+    if(pageStatus) pageStatus.textContent = totalItems ? `${productPage + 1} / ${pageCount} · ${totalItems} products` : 'No products';
+    if(previous) previous.disabled = productPage <= 0;
+    if(next) next.disabled = productPage >= pageCount - 1;
+    if(controls) controls.classList.toggle('single-page', pageCount <= 1);
+    if(dots){
+      dots.innerHTML = '';
+      for(let index = 0; index < pageCount; index += 1){
+        const dot = document.createElement('span');
+        dot.className = index === productPage ? 'active' : '';
+        dots.appendChild(dot);
+      }
+    }
+  }
+
   function buildProducts(){
     const grid = document.getElementById('buttons');
     if(!grid) return;
@@ -202,8 +280,12 @@
     const query = productQuery.trim().toLowerCase();
     const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
     const items = base.filter(isFrontProduct)
-      .filter(it => currentCat === 'all' ? true : it.cat === currentCat)
+      .filter(it => it.cat === currentCat)
       .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true);
+    const pageSize = productsPerPage();
+    const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+    productPage = Math.min(productPage, pageCount - 1);
+    updateProductPager(items.length, pageCount);
     if(!items.length){
       const empty = document.createElement('div');
       empty.className = 'empty-state product-empty';
@@ -212,7 +294,7 @@
       grid.appendChild(empty);
       return;
     }
-    items.forEach(it=>{
+    items.slice(productPage * pageSize, (productPage + 1) * pageSize).forEach(it=>{
       const b = document.createElement('button');
       b.className = 'item';
       b.type = 'button';
@@ -236,6 +318,7 @@
       grid.appendChild(b);
     });
   }
+
 
   function openModifierSheet(title, sections, opts){
     const host = ensureDialogHost();
@@ -401,7 +484,7 @@
   }
 
   function productById(id){
-    return (BK_DATA.BASE || []).find(x=>x.id===id) || null;
+    return (BK_DATA.BASE || []).find(x=>x.id===id) || (BK_DATA.DEFAULT_BASE || []).find(x=>x.id===id) || null;
   }
 
   function optionLabel(id, fallback){
@@ -439,19 +522,25 @@
     return !!(product && ['wings_6','wings_12','wings_24'].includes(product.id));
   }
 
-  function sauceOptions(){
+  function includedSauceOptions(){
     return [
       {label:'No Sauce Wanted', value:''},
-      {label:'Ketchup', value:'x_sauce_ketchup'},
-      {label:'Mayonnaise', value:'x_sauce_mayonnaise'},
-      {label:'Chipotle', value:'x_sauce_chipotle'},
-      {label:'Dutch Special', value:'x_sauce_dutch_special'},
-      {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'}
+      {label:'Ketchup', value:'i_sauce_ketchup'},
+      {label:'Mayonnaise', value:'i_sauce_mayonnaise'},
+      {label:'Chipotle', value:'i_sauce_chipotle'},
+      {label:'Dutch Special', value:'i_sauce_dutch_special'},
+      {label:'Chicken Wings Sauce', value:'i_sauce_chicken_wings'}
     ];
   }
 
   function paidSauceOptions(){
-    return sauceOptions().filter(opt=>opt.value);
+    return [
+      {label:'Extra Ketchup', value:'x_sauce_ketchup'},
+      {label:'Extra Mayonnaise', value:'x_sauce_mayonnaise'},
+      {label:'Extra Chipotle', value:'x_sauce_chipotle'},
+      {label:'Extra Dutch Special', value:'x_sauce_dutch_special'},
+      {label:'Extra Chicken Wings Sauce', value:'x_sauce_chicken_wings'}
+    ];
   }
 
   function burgerExtraSections(product){
@@ -473,18 +562,14 @@
   }
 
   function addBurgerExtras(product, picked, meta){
-    const burgerSummary = describeQuantities([...(picked.burgerExtras || []), ...(picked.eggExtras || [])]);
-    const itemNote = joinNotes(picked.itemNote, burgerSummary ? `Add-ons: ${burgerSummary}` : '');
-    BK_STATE.addItem(product.id, itemNote, meta);
+    BK_STATE.addItem(product.id, picked.itemNote, meta);
     const addonNote = modifierLinkNote('for', product.name, picked.itemNote);
     addQuantities(picked.burgerExtras, addonNote, meta && Object.assign({}, meta, {menuRole:'addon'}));
     addQuantities(picked.eggExtras, addonNote, meta && Object.assign({}, meta, {menuRole:'addon'}));
   }
 
   function addWingsExtras(product, picked, meta){
-    const extraSummary = describeQuantities(picked.extraSauce);
-    const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
-    BK_STATE.addItem(product.id, itemNote, meta);
+    BK_STATE.addItem(product.id, picked.itemNote, meta);
     if(picked.wingsSauce) BK_STATE.addItem(picked.wingsSauce, modifierLinkNote('included', product.name, picked.itemNote), meta && Object.assign({}, meta, {menuRole:'sauce'}));
     addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote), meta && Object.assign({}, meta, {menuRole:'sauce'}));
   }
@@ -520,12 +605,10 @@
   async function addSingleProductWithModifiers(product, pendingNote){
     if(['fries_standard', 'fries_large', 'fries_family'].includes(product.id)){
       const picked = await openModifierSheet(`${product.name} options`, [
-        { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one free sauce for this fries item.', options:sauceOptions() },
+        { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one free sauce for this fries item.', options:includedSauceOptions() },
         { title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add several paid extra sauces.', options:paidSauceOptions() }
       ], { note: pendingNote });
-      const extraSummary = describeQuantities(picked.extraSauce);
-      const itemNote = joinNotes(picked.itemNote, extraSummary ? `Extra sauces: ${extraSummary}` : '');
-      BK_STATE.addItem(product.id, itemNote);
+      BK_STATE.addItem(product.id, picked.itemNote);
       if(picked.includedSauce) BK_STATE.addItem(picked.includedSauce, modifierLinkNote('included', product.name, picked.itemNote));
       addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
     }else if(isBurgerBase(product)){
@@ -535,8 +618,8 @@
       const picked = await openModifierSheet(`${product.name} sauce`, [
         { title:'Included sauce', name:'wingsSauce', type:'radio', help:'Choose one included sauce for the wings.', options:[
           {label:'No Sauce Wanted', value:''},
-          {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings'},
-          {label:'Chipotle', value:'x_sauce_chipotle'}
+          {label:'Chicken Wings Sauce', value:'i_sauce_chicken_wings'},
+          {label:'Chipotle', value:'i_sauce_chipotle'}
         ]},
         { title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add paid extra sauces.', options:paidSauceOptions() }
       ], { note: pendingNote });
@@ -551,7 +634,8 @@
     const menuPreset = preset || standardMenuPresetFor(product.id);
     const defaultFries = menuPreset.defaultFries || 'fries_standard';
     const defaultDrink = menuPreset.defaultDrink || 'd_cola';
-    const defaultWingsSauce = Object.prototype.hasOwnProperty.call(menuPreset, 'defaultWingsSauce') ? menuPreset.defaultWingsSauce : 'x_sauce_chicken_wings';
+    const configuredWingsSauce = Object.prototype.hasOwnProperty.call(menuPreset, 'defaultWingsSauce') ? menuPreset.defaultWingsSauce : 'i_sauce_chicken_wings';
+    const defaultWingsSauce = String(configuredWingsSauce || '').replace(/^x_sauce_/, 'i_sauce_');
     const friesOptions = [
       {label: optionLabel('fries_standard', 'Fries Standard'), value:'fries_standard', checked: defaultFries === 'fries_standard'},
       {label: `${optionLabel('fries_large', 'Fries Large')} · upgrade +${Math.max(0, BK_PRICES.getPrice('fries_large') - BK_DATA.MENU.included.fries)} GHS`, value:'fries_large', checked: defaultFries === 'fries_large'}
@@ -567,14 +651,14 @@
       }));
     const sections = [
       { title:'Menu fries', name:'menuFries', type:'radio', help:'Standard fries are included; large fries add the upgrade difference.', options:friesOptions },
-      { title:'Menu fries sauce', name:'menuFriesSauce', type:'radio', help:'Choose the included menu sauce. Ketchup is selected unless the customer asks for another sauce or no sauce.', options:sauceOptions().map(option=>Object.assign({}, option, {checked:option.value === 'x_sauce_ketchup'})) },
+      { title:'Menu fries sauce', name:'menuFriesSauce', type:'radio', help:'Choose the included menu sauce. Ketchup is selected unless the customer asks for another sauce or no sauce.', options:includedSauceOptions().map(option=>Object.assign({}, option, {checked:option.value === 'i_sauce_ketchup'})) },
       { title:'Menu drink', name:'menuDrink', type:'radio', help:'Choose the drink for this menu.', options:drinkOptions }
     ];
     if(isBurgerBase(product)) sections.push(...burgerExtraSections(product));
     if(isWingsBase(product)) sections.push({ title:'Included sauce', name:'wingsSauce', type:'radio', help:'Choose one included sauce for the wings.', options:[
       {label:'No Sauce Wanted', value:'', checked: defaultWingsSauce === ''},
-      {label:'Chicken Wings Sauce', value:'x_sauce_chicken_wings', checked: defaultWingsSauce === 'x_sauce_chicken_wings'},
-      {label:'Chipotle', value:'x_sauce_chipotle', checked: defaultWingsSauce === 'x_sauce_chipotle'}
+      {label:'Chicken Wings Sauce', value:'i_sauce_chicken_wings', checked: defaultWingsSauce === 'i_sauce_chicken_wings'},
+      {label:'Chipotle', value:'i_sauce_chipotle', checked: defaultWingsSauce === 'i_sauce_chipotle'}
     ]});
     sections.push({ title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add paid extra sauces.', options:paidSauceOptions() });
 
@@ -637,6 +721,7 @@
 
     const rerender = ()=>{
       productQuery = (input.value || '').trim();
+      productPage = 0;
       buildProducts();
     };
 
@@ -644,6 +729,7 @@
     clearBtn?.addEventListener('click', ()=>{
       input.value = '';
       productQuery = '';
+      productPage = 0;
       buildProducts();
       input.focus();
     });
@@ -651,7 +737,8 @@
   }
 
   function setCategory(cat){
-    currentCat = cat || 'all';
+    currentCat = PRODUCT_CATEGORIES.includes(cat) ? cat : 'burger';
+    productPage = 0;
     goTab('order');
     document.querySelectorAll('.catbar .tab').forEach(btn=>{
       btn.classList.toggle('active', btn.dataset.cat===currentCat);
@@ -659,12 +746,56 @@
     buildProducts();
   }
 
+  function bindCompactOrderNavigation(){
+    const pager = document.getElementById('productPager');
+    if(!pager || pager.dataset.bound === '1') return;
+    const moveCategory = direction=>{
+      const currentIndex = PRODUCT_CATEGORIES.indexOf(currentCat);
+      const nextIndex = (currentIndex + direction + PRODUCT_CATEGORIES.length) % PRODUCT_CATEGORIES.length;
+      setCategory(PRODUCT_CATEGORIES[nextIndex]);
+    };
+    document.getElementById('previousCategory')?.addEventListener('click', ()=> moveCategory(-1));
+    document.getElementById('nextCategory')?.addEventListener('click', ()=> moveCategory(1));
+    document.getElementById('previousProductPage')?.addEventListener('click', ()=>{
+      if(productPage <= 0) return;
+      productPage -= 1;
+      buildProducts();
+    });
+    document.getElementById('nextProductPage')?.addEventListener('click', ()=>{
+      productPage += 1;
+      buildProducts();
+    });
+    const cart = document.getElementById('orderCart');
+    const cartToggle = document.getElementById('mobileCartToggle');
+    const closeCart = ()=>{
+      cart?.classList.remove('mobile-open');
+      document.body.classList.remove('cart-drawer-open');
+      cartToggle?.setAttribute('aria-expanded', 'false');
+    };
+    cartToggle?.addEventListener('click', ()=>{
+      cart?.classList.add('mobile-open');
+      document.body.classList.add('cart-drawer-open');
+      cartToggle.setAttribute('aria-expanded', 'true');
+    });
+    document.getElementById('mobileCartClose')?.addEventListener('click', closeCart);
+    let touchStartX = 0;
+    pager.addEventListener('touchstart', event=>{ touchStartX = event.changedTouches[0].clientX; }, {passive:true});
+    pager.addEventListener('touchend', event=>{
+      const distance = event.changedTouches[0].clientX - touchStartX;
+      if(Math.abs(distance) < 70) return;
+      moveCategory(distance < 0 ? 1 : -1);
+    }, {passive:true});
+    window.addEventListener('resize', ()=> buildProducts());
+    pager.dataset.bound = '1';
+  }
+
   function slotStatus(slot){
     const progress = kitchenProgress(slot);
     const progressText = `${progress.complete}/${progress.total} prepared`;
     if(slot.voided) return { state:'voided', label:'Voided', detail:'Order cancelled and retained for audit', shortDetail:'Voided' };
     if(slot.issued) return { state:'issued', label:'Issued', detail:'Handover completed', shortDetail:progressText };
-    if(progress.total === 0) return { state:'draft', label:'Draft', detail:'No products added', shortDetail:'Empty' };
+    if(progress.total === 0) return { state:'draft', label:'New', detail:'No products added yet', shortDetail:'Empty' };
+    if(!slot.sentToKitchen) return { state:'draft', label:'In progress', detail:'Products are still being selected', shortDetail:`${progress.total} item${progress.total === 1 ? '' : 's'}` };
     if(progress.complete === progress.total && slot.pay === 'unpaid') return { state:'payment', label:'Payment due', detail:`Kitchen complete · ${progressText}`, shortDetail:progressText };
     if(progress.complete === progress.total) return { state:'ready', label:'Ready', detail:`Paid · ${progressText}`, shortDetail:progressText };
     return { state:'kitchen', label:'Kitchen', detail:progressText, shortDetail:progressText };
@@ -673,16 +804,10 @@
   function renderSlotsBar(){
     const {slots, active} = BK_STATE.getState();
     const bar = document.getElementById('slotsBar');
-    const activeLabel = document.getElementById('activeSlotLabel');
-    const activeSlot = slots[active];
-    if(activeLabel){
-      const activeStatus = activeSlot ? slotStatus(activeSlot) : null;
-      activeLabel.textContent = activeSlot ? `${activeSlot.name} · #${activeSlot.orderNo || '-'} · ${orderChannelText(activeSlot)} · ${activeStatus.label}` : 'No active order';
-    }
     if(!bar) return;
     bar.querySelectorAll('.slot-chip').forEach(n=>n.remove());
 
-    const controlIds = ['btnAddSlot', 'btnOnlineOrder', 'btnRenameSlot', 'btnDeleteSlot'];
+    const controlIds = ['btnAddSlot', 'btnOnlineOrder'];
     const ctl = controlIds
       .map(id => document.getElementById(id))
       .filter(Boolean)
@@ -696,7 +821,9 @@
       el.setAttribute('aria-label', `${s.name}, order ${s.orderNo || 'not assigned'}, ${status.label}, ${status.detail}`);
       if(i === active) el.setAttribute('aria-current', 'true');
       el.title = `${status.label} · ${status.detail}`;
-      el.innerHTML = `<span class="status-dot" aria-hidden="true"></span><span class="slot-chip-order"><b>${isOnlineOrder(s) ? platformLabel(s.orderSource).toUpperCase() : s.name}</b><small>${isOnlineOrder(s) ? escapeHtml(s.externalOrderNo || s.orderNo || '-') : `#${s.orderNo || '-'}`}</small></span><span class="slot-chip-status">${status.label}</span><span class="slot-chip-progress">${status.shortDetail}</span>`;
+      const orderLabel = isOnlineOrder(s) ? platformLabel(s.orderSource).toUpperCase() : `Order #${shortOrderNumber(s.orderNo)}`;
+      const orderDetail = isOnlineOrder(s) ? escapeHtml(s.externalOrderNo || shortOrderNumber(s.orderNo)) : 'Walk-in';
+      el.innerHTML = `<span class="status-dot" aria-hidden="true"></span><span class="slot-chip-order"><b>${orderLabel}</b><small>${orderDetail}</small></span><span class="slot-chip-status">${status.label}</span><span class="slot-chip-progress">${status.shortDetail}</span>`;
       el.onclick = ()=> focusSlot(i, currentWorkflowTab());
       bar.appendChild(el);
     });
@@ -726,15 +853,6 @@
     return (entry.children || []).some(child=> child.linked && child.linked.prefix === 'menu');
   }
 
-  function childPrefixLabel(child){
-    const prefix = child && child.linked && child.linked.prefix;
-    if(prefix === 'menu') return 'Menu';
-    if(prefix === 'included') return 'Included';
-    if(prefix === 'extra') return 'Extra';
-    return '';
-  }
-
-
   function linkedGroupKey(productName, note, menuGroupId){
     return `${String(productName || '').trim()}|${baseCustomerNote(note)}|${menuGroupId || ''}`;
   }
@@ -747,21 +865,30 @@
     const standalone = [];
 
     BK_LOGIC.groupedLines(items).forEach(line=>{
+      const sourceItem = (items || []).find(item=>
+        item.itemId === line.id
+        && (item.note || '') === (line.note || '')
+        && (item.menuGroupId || '') === (line.menuGroupId || '')
+      );
+      const enrichedLine = Object.assign({}, line, {
+        menuName:sourceItem && sourceItem.menuName ? sourceItem.menuName : '',
+        menuRole:sourceItem && sourceItem.menuRole ? sourceItem.menuRole : ''
+      });
       const linked = parseLinkedModifierNote(line.note);
       if(linked){
-        linkedChildren.push(Object.assign({}, line, { linked }));
+        linkedChildren.push(Object.assign(enrichedLine, { linked }));
         return;
       }
 
-      const prod = BK_DATA.BASE.find(x=>x.id===line.id);
+      const prod = productById(line.id);
       const isModifierProduct = prod && (prod.cat === 'extra' || String(prod.id || '').startsWith('x_sauce_'));
       if(isModifierProduct){
-        standalone.push(line);
+        standalone.push(enrichedLine);
         return;
       }
 
-      const sourceItem = (items || []).find(item=>item.menuGroupId && item.menuGroupId === line.menuGroupId && item.menuRole === 'main');
-      const group = Object.assign({}, line, { children: [], menuName:sourceItem && sourceItem.menuName ? sourceItem.menuName : '' });
+      const menuMain = (items || []).find(item=>item.menuGroupId && item.menuGroupId === line.menuGroupId && item.menuRole === 'main');
+      const group = Object.assign({}, enrichedLine, { children: [], menuName:menuMain && menuMain.menuName ? menuMain.menuName : enrichedLine.menuName });
       const groupKey = linkedGroupKey(line.name, line.note, line.menuGroupId);
       groups.push(group);
       parentByKey.set(groupKey, group);
@@ -846,7 +973,7 @@
     const title = document.createElement('b');
     title.textContent = settings.displayTitle || `${entry.qty}x ${entry.name}`;
     titleWrap.appendChild(title);
-    splitEntryNoteLines(entry.note).forEach((line, idx)=>{
+    staffFacingNote(entry.note).forEach((line, idx)=>{
       const note = document.createElement('small');
       note.textContent = idx === 0 ? line : `↳ ${line}`;
       titleWrap.appendChild(note);
@@ -864,10 +991,10 @@
     (entry.children || []).forEach(child=>{
       const childLine = document.createElement('div');
       childLine.className = 'grouped-meal-child';
-      const linkedKind = child.linked && child.linked.kind;
-      const childRole = linkedKind === 'menu' ? 'included-sauce' : (linkedKind === 'extra' ? 'extra-sauce' : '');
+      const linkedKind = child.linked && child.linked.prefix;
+      const childRole = child.menuRole || (linkedKind === 'menu' || linkedKind === 'included' ? 'included-sauce' : (linkedKind === 'extra' ? 'extra-sauce' : ''));
       const childName = staffFacingItemName({name:child.name, role:childRole});
-      const childNote = linkedKind ? [] : splitEntryNoteLines(child.note);
+      const childNote = staffFacingNote(child.note);
       childLine.textContent = `↳ ${child.qty}x ${childName}${childNote.length ? ` · ${childNote[0]}` : ''}${showPrices ? ` · ${child.total} GHS` : ''}`;
       row.appendChild(childLine);
       childNote.slice(1).forEach(line=>{
@@ -913,14 +1040,19 @@
   function renderOrder(){
     const {slots, active} = BK_STATE.getState();
     const lines = document.getElementById('lines'); lines.innerHTML='';
-    const welcome = document.getElementById('orderWelcome');
-    const layout = document.querySelector('#tab-order .order-layout');
-    if(welcome) welcome.classList.toggle('hidden', !!slots.length);
-    if(layout) layout.classList.toggle('hidden', !slots.length);
-    if(!slots.length){ setSlotTotals(0,0,0); return; }
+    const orderMeta = document.getElementById('currentOrderMeta');
+    if(!slots.length){
+      setSlotTotals(0,0,0);
+      if(orderMeta) orderMeta.textContent = 'New order';
+      const mobileCount = document.getElementById('mobileCartCount');
+      if(mobileCount) mobileCount.textContent = '0 items';
+      return;
+    }
     const s = slots[active];
-    lines.appendChild(packagingControl(s, active, false));
-
+    if(orderMeta) orderMeta.textContent = `Order #${shortOrderNumber(s.orderNo)} · ${orderChannelText(s)}`;
+    const itemCount = (s.items || []).reduce((total, item)=> total + (Number(item.qty) || 0), 0);
+    const mobileCount = document.getElementById('mobileCartCount');
+    if(mobileCount) mobileCount.textContent = `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`;
     const entries = groupedCartRows(s.items);
     if(entries.length===0){
       const row = document.createElement('div');
@@ -971,9 +1103,10 @@
       const detail = document.createElement('div');
       detail.className = 'cart-detail';
       const title = document.createElement('b');
-      title.textContent = prod ? prod.name : id;
+      title.textContent = entry.menuGroupId && entry.menuName ? entry.menuName : (prod ? prod.name : id);
       const meta = document.createElement('small');
-      meta.textContent = `× ${entry.qty}${note ? ` · ${note}` : ''}`;
+      const visibleNotes = staffFacingNote(note);
+      meta.textContent = `× ${entry.qty}${visibleNotes.length ? ` · ${visibleNotes.join(' · ')}` : ''}`;
       if(isMenuGroup){
         const badge = document.createElement('span');
         badge.className = 'cart-menu-badge';
@@ -984,8 +1117,8 @@
       (entry.children || []).forEach(child=>{
         const childLine = document.createElement('small');
         childLine.className = `cart-child-line${child.linked && child.linked.prefix === 'menu' ? ' cart-menu-child' : ''}`;
-        const label = childPrefixLabel(child);
-        childLine.textContent = `↳ ${label ? `${label}: ` : ''}${child.name} × ${child.qty} · ${child.total} GHS`;
+        const childName = staffFacingItemName({name:child.name, role:child.menuRole || (child.linked && child.linked.prefix === 'extra' ? 'extra-sauce' : '')});
+        childLine.textContent = `↳ ${childName} × ${child.qty}${child.total ? ` · ${child.total} GHS` : ''}`;
         detail.appendChild(childLine);
       });
 
@@ -1009,7 +1142,8 @@
     });
 
     const c = BK_LOGIC.computeSlot(s);
-    setSlotTotals(c.subtotal, 0, c.subtotal);
+    const activeDiscount = Math.round(c.subtotal * (s.discountRate || 0));
+    setSlotTotals(c.subtotal, activeDiscount, c.subtotal - activeDiscount);
     const orderNext = workflowNextState('order', s);
     renderWorkflowNext('orderFlowNav', Object.assign({}, orderNext, {onClick:()=>continueOrderToKitchen(active)}));
   }
@@ -1173,6 +1307,12 @@
     return { state:'in-progress', label:'In progress', complete, total, percent, detail:'Continue preparing the remaining items.' };
   }
 
+  function shortOrderNumber(orderNo){
+    const value = String(orderNo || '').trim();
+    const finalPart = value.split('-').pop();
+    return finalPart ? String(Number(finalPart) || finalPart) : value || '-';
+  }
+
   function renderMake(){
     const {slots, active} = BK_STATE.getState();
     const box = document.getElementById('makeList');
@@ -1191,27 +1331,30 @@
       const card = document.createElement('div'); card.className='slot-card kitchen-order-card';
       card.innerHTML = `
         <div class="slot-head kitchen-order-head">
-          <div><span class="label">${isOnlineOrder(s) ? platformLabel(s.orderSource).toUpperCase() : s.name}</span> · ${isOnlineOrder(s) ? escapeHtml(s.externalOrderNo || '') + ' · ' : ''}#${s.orderNo || '-'} · In kitchen: ${formatAge(s.createdAt)}</div>
-          ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
+          <div class="kitchen-order-identity">
+            <strong>Order #${escapeHtml(shortOrderNumber(s.orderNo))}</strong>
+            <span>${escapeHtml(orderChannelText(s))} · waiting ${formatAge(s.createdAt)}</span>
+          </div>
+          <span class="kitchen-packaging">Packaging: ${escapeHtml(packagingLabel(s))}</span>
         </div>
         <div class="kitchen-progress ${progress.state}">
-          <div class="kitchen-progress-copy"><strong>${progress.label}</strong><span>${progress.complete} of ${progress.total} items prepared</span><small>${progress.detail}</small></div>
+          <div class="kitchen-progress-copy"><strong>${progress.label}</strong><span>${progress.complete} / ${progress.total} prepared</span></div>
           <div class="kitchen-progress-track" role="progressbar" aria-label="Kitchen progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="width:${progress.percent}%"></span></div>
           ${progress.state === 'complete' && !s.issued ? `<button class="workflow-next-button kitchen-next-action" type="button">${makeNext.label}</button>` : ''}
         </div>
         <div class="todo grouped-todo" id="todo-${i}"></div>`;
       const nextAction = card.querySelector('.kitchen-next-action');
       if(nextAction) nextAction.onclick = ()=> focusSlot(i, makeNext.target);
-      card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
       makeSlotCardSelectable(card, i, 'make', i === active);
       box.appendChild(card);
       const list = card.querySelector(`#todo-${i}`);
       let menuNumber = 0;
-      let singleNumber = 0;
-      groupedCartRows(s.items).forEach(entry=>{
+      const kitchenEntries = groupedCartRows(s.items);
+      const menuEntryCount = kitchenEntries.filter(entry=>entry.menuGroupId).length;
+      kitchenEntries.forEach(entry=>{
         const displayTitle = entry.menuGroupId
-          ? `MENU ${++menuNumber} — ${entry.menuName || `${entry.name} Menu`}`
-          : `SINGLE ITEM ${++singleNumber} — ${entry.qty}x ${entry.name}`;
+          ? `${menuEntryCount > 1 ? `MENU ${++menuNumber} — ` : ''}${entry.menuName || `${entry.name} Menu`}`
+          : `${entry.qty}× ${entry.name}`;
         appendGroupedEntry(list, s, entry, i, {
           checkbox: true,
           displayTitle,
@@ -1228,9 +1371,6 @@
         });
       });
     });
-    ensureFlowActions('makeList', [
-      { label:'⬅️ Back to Order', onClick:()=> goTab('order') }
-    ]);
   }
 
   function paymentDisplay(slot){
@@ -1280,45 +1420,49 @@
     const box = document.getElementById('payList');
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
     box.querySelectorAll('.empty-state').forEach(n=>n.remove());
-    if(!slots.length){
+    const s = slots[active];
+    if(!s){
       const empty = document.createElement('div');
       empty.className = 'empty-state';
       empty.textContent = 'No active orders to pay.';
       box.appendChild(empty);
       return;
     }
-    slots.forEach((s,i)=>{
-      const c = BK_LOGIC.computeSlot(s);
-      const payment = paymentDisplay(s);
-      const payNext = workflowNextState('pay', s);
-      const paymentDisabled = s.issued || !Array.isArray(s.items) || s.items.length === 0;
-      const card = document.createElement('div'); card.className='slot-card';
-      card.dataset.paymentSlot = String(i);
-      card.innerHTML = `
-        <div class="slot-head">
-          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · ${c.subtotal} GHS</div>
-          <div class="pay-status">${i === active ? '<span class="active-order-badge">Active order</span>' : ''}</div>
-        </div>
-        <div class="payment-panel ${payment.state}">
-          <div class="payment-summary"><strong>${payment.label}</strong><small>${payment.detail}</small></div>
-          ${isPrepaidPlatform(s) ? `<div class="online-paid-lock"><b>${platformLabel(s.orderSource)} payment recorded</b><small>No additional payment step is required.</small></div>` : `<div class="payment-methods" role="group" aria-label="Payment method for ${s.name}">
-            <button class="payment-method ${s.pay === 'unpaid' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'unpaid');">Unpaid</button>
-            <button class="payment-method ${s.pay === 'cash' ? 'selected' : ''}" ${(paymentDisabled || (isWhatsapp(s) && s.fulfilment === 'delivery')) ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'cash');">Cash</button>
-            <button class="payment-method ${s.pay === 'momo' ? 'selected' : ''}" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${i},'momo');">MoMo</button>
-          </div>`}
-        </div>
-        <div class="workflow-next ${payNext.state}">
-          <div class="workflow-next-copy"><strong>${payNext.title}</strong><small>${payNext.detail}</small></div>
-          <button type="button" class="workflow-next-button payment-next-action" ${payNext.disabled ? 'disabled' : ''}>${payNext.label}</button>
-        </div>`;
-      const paymentNext = card.querySelector('.payment-next-action');
-      paymentNext.onclick = ()=> continueFromPayment(i);
-      makeSlotCardSelectable(card, i, 'pay', i === active);
-      box.appendChild(card);
-    });
-    ensureFlowActions('payList', [
-      { label:'⬅️ Back to Make', onClick:()=> goTab('make') }
-    ]);
+    const c = BK_LOGIC.computeSlot(s);
+    const discount = Math.round(c.subtotal * (s.discountRate || 0));
+    const amountDue = c.subtotal - discount;
+    const payment = paymentDisplay(s);
+    const payNext = workflowNextState('pay', s);
+    const paymentDisabled = s.issued || !Array.isArray(s.items) || s.items.length === 0;
+    const canReversePayment = !isPrepaidPlatform(s) && s.pay !== 'unpaid' && !s.issued;
+    const card = document.createElement('div'); card.className='slot-card workflow-order-card';
+    card.dataset.paymentSlot = String(active);
+    card.innerHTML = `
+      <div class="workflow-order-identity">
+        <div><strong>Order #${escapeHtml(shortOrderNumber(s.orderNo))}</strong><span>${escapeHtml(orderChannelText(s))}</span></div>
+        <div class="amount-due"><small>Amount due</small><strong>${amountDue} GHS</strong></div>
+      </div>
+      <div class="payment-totals" aria-label="Payment total">
+        <span>Subtotal <b>${c.subtotal} GHS</b></span>
+        <span>Discount <b>-${discount} GHS</b></span>
+      </div>
+      <div class="payment-panel ${payment.state}">
+        <div class="payment-summary"><strong>${payment.label}</strong><small>${payment.detail}</small></div>
+        ${isPrepaidPlatform(s)
+          ? `<div class="online-paid-lock"><b>${platformLabel(s.orderSource)} payment recorded</b><small>No additional payment step is required.</small></div>`
+          : s.pay === 'unpaid'
+            ? `<div class="payment-methods" role="group" aria-label="Payment method for Order ${escapeHtml(shortOrderNumber(s.orderNo))}">
+                <button class="payment-method" ${(paymentDisabled || (isWhatsapp(s) && s.fulfilment === 'delivery')) ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${active},'cash');">Cash</button>
+                <button class="payment-method" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${active},'momo');">MoMo</button>
+              </div>`
+            : `<button class="x change-payment-action" type="button">Change payment</button>`}
+        <button type="button" class="workflow-next-button payment-next-action" ${payNext.disabled ? 'disabled' : ''}>${payNext.label}</button>
+      </div>`;
+    const paymentNext = card.querySelector('.payment-next-action');
+    paymentNext.onclick = ()=> continueFromPayment(active);
+    const changePayment = card.querySelector('.change-payment-action');
+    if(changePayment && canReversePayment) changePayment.onclick = ()=>requestSlotPayment(active, 'unpaid');
+    box.appendChild(card);
   }
 
   function continueFromPayment(slotIndex, navigate){
@@ -1384,58 +1528,59 @@
     if(!box) return;
     box.querySelectorAll('.slot-card').forEach(n=>n.remove());
     box.querySelectorAll('.empty-state').forEach(n=>n.remove());
-    if(!slots.length){
+    const s = slots[active];
+    if(!s){
       const empty = document.createElement('div');
       empty.className = 'empty-state';
       empty.textContent = 'No orders waiting for handover.';
       box.appendChild(empty);
       return;
     }
-    slots.forEach((s,i)=>{
-      const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
-      const readiness = issueReadiness(s);
-      const card = document.createElement('div'); card.className='slot-card';
-      card.innerHTML = `
-        <div class="slot-head">
-          <div><span class="label">${s.name}</span> · #${s.orderNo || '-'} · Payment: ${s.pay.toUpperCase()} · Kitchen: ${allDone ? 'DONE' : 'OPEN'} · Elapsed: ${formatAge(s.createdAt)}</div>
-          <div class="pay-status">
-            ${i === active ? '<span class="active-order-badge">Active order</span>' : ''}
+    const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
+    const readiness = issueReadiness(s);
+    const card = document.createElement('div'); card.className='slot-card workflow-order-card';
+    card.innerHTML = `
+        <div class="workflow-order-identity handover-identity">
+          <div><strong>Order #${escapeHtml(shortOrderNumber(s.orderNo))}</strong><span>${escapeHtml(orderChannelText(s))} · waiting ${formatAge(s.createdAt)}</span></div>
+          <div class="handover-statuses" aria-label="Order completion status">
+            <span class="${s.pay !== 'unpaid' ? 'complete' : 'pending'}">${s.pay !== 'unpaid' ? '✓' : '○'} ${escapeHtml(paymentLabel(s.pay))}</span>
+            <span class="${allDone ? 'complete' : 'pending'}">${allDone ? '✓' : '○'} Kitchen ${allDone ? 'complete' : 'open'}</span>
           </div>
         </div>
+        <div class="handover-packaging"><small>Packaging</small><strong>${escapeHtml(packagingLabel(s))}</strong></div>
         <div class="workflow-next issue-readiness ${readiness.state}">
           <div class="workflow-next-copy"><strong>${readiness.label}</strong><small>${readiness.detail}</small></div>
           <div class="issue-action-group"><button class="workflow-next-button issue-next-action" ${readiness.disabled ? 'disabled' : ''}>${readiness.action}</button>${readiness.state === 'ready' && isOnlineOrder(s) && s.finalChannel !== 'direct' ? `<button class="x rider-missed-action" type="button">Rider Did Not Pick Up</button>` : ''}</div>
         </div>`;
-      const riderMissedButton = card.querySelector('.rider-missed-action');
-      if(riderMissedButton) riderMissedButton.onclick = ()=>convertOnlineOrder(i);
-      const actionButton = card.querySelector('.issue-next-action');
-      actionButton.onclick = ()=>{
-        if(readiness.disabled) return;
-        if(readiness.state === 'ready') markIssued(i);
-        else focusSlot(i, readiness.target);
-      };
-      card.querySelector('.slot-head').appendChild(packagingControl(s, i, true));
-      const checklist = document.createElement('div');
-      checklist.className = 'issue-checklist';
-      const label = document.createElement('small');
-      label.textContent = 'Final check:';
-      checklist.appendChild(label);
-      const grouped = groupedCartRows(s.items);
-      if(grouped.length){
-        grouped.forEach(entry=> appendGroupedEntry(checklist, s, entry, i, { compact:true }));
-      }else{
-        const emptyLine = document.createElement('div');
-        emptyLine.className = 'empty-state';
-        emptyLine.textContent = 'No items';
-        checklist.appendChild(emptyLine);
-      }
-      card.appendChild(checklist);
-      makeSlotCardSelectable(card, i, 'issue', i === active);
-      box.appendChild(card);
-    });
-    ensureFlowActions('issueList', [
-      { label:'⬅️ Back to Payment', onClick:()=> goTab('pay') }
-    ]);
+    const riderMissedButton = card.querySelector('.rider-missed-action');
+    if(riderMissedButton) riderMissedButton.onclick = ()=>convertOnlineOrder(active);
+    const actionButton = card.querySelector('.issue-next-action');
+    actionButton.onclick = ()=>{
+      if(readiness.disabled) return;
+      if(readiness.state === 'ready') markIssued(active);
+      else focusSlot(active, readiness.target);
+    };
+    const checklist = document.createElement('div');
+    checklist.className = 'issue-checklist';
+    const label = document.createElement('strong');
+    label.className = 'issue-checklist-title';
+    label.textContent = 'Items to hand over';
+    checklist.appendChild(label);
+    const grouped = groupedCartRows(s.items);
+    if(grouped.length){
+      grouped.forEach(entry=> appendGroupedEntry(checklist, s, entry, active, {
+        compact:true,
+        showPrices:false,
+        displayTitle:entry.menuGroupId && entry.menuName ? entry.menuName : `${entry.qty}x ${entry.name}`
+      }));
+    }else{
+      const emptyLine = document.createElement('div');
+      emptyLine.className = 'empty-state';
+      emptyLine.textContent = 'No items';
+      checklist.appendChild(emptyLine);
+    }
+    card.appendChild(checklist);
+    box.appendChild(card);
   }
 
 
@@ -1448,6 +1593,7 @@
       infoDialog('This order is already issued and locked. Start a new order slot for further changes.');
       return;
     }
+    valid.forEach(tab=> document.body.classList.toggle(`workflow-${tab}`, tab === target));
 
     const sectionMap = {
       order: 'tab-order',
@@ -1586,8 +1732,12 @@
   function addNewOrderSlot(){
     const st = BK_STATE.getState();
     const slot = st.slots[st.active];
-    if(slot && slot.items.length>0 && slot.pay === 'unpaid'){
-      infoDialog('Please confirm payment first, then use + Slot to start the next order.');
+    if(slot && slot.items.length === 0){
+      goTab('order');
+      return;
+    }
+    if(slot && slot.items.length > 0 && !slot.sentToKitchen){
+      infoDialog('Finish the current order intake and send it to Kitchen before starting another order.');
       return;
     }
     BK_STATE.addSlot().then(function(){
@@ -1632,7 +1782,10 @@
     const syncOnlineFields = ()=> document.getElementById('onlinePhoneRow').classList.toggle('hidden', platformInput.value !== 'whatsapp');
     platformInput.onchange = syncOnlineFields; syncOnlineFields();
     reference.focus();
-    document.getElementById('dlgCancel').onclick = closeDialog;
+    document.getElementById('dlgCancel').onclick = ()=>{
+      closeDialog();
+      if(!BK_STATE.getState().slots.length) window.location.replace('index.html');
+    };
     document.getElementById('dlgConfirm').onclick = ()=>{
       const platform = document.getElementById('onlinePlatform').value;
       const externalOrderNo = reference.value.trim();
@@ -1734,6 +1887,8 @@
       subtotal: Number(entry.subtotal) || 0,
       discountRate: Math.max(0, Number(entry.discountRate) || 0),
       discount: Math.max(0, Number(entry.discount) || 0),
+      discountApprovedBy: (entry.discountApprovedBy && typeof entry.discountApprovedBy === 'object') ? entry.discountApprovedBy : null,
+      discountApprovedAt: Number(entry.discountApprovedAt) || 0,
       total: Number.isFinite(Number(entry.total)) ? Number(entry.total) : Math.max(0, (Number(entry.subtotal) || 0) - (Number(entry.discount) || 0)),
       combos: Number(entry.combos) || 0,
       packMode: entry.packMode === 'split' ? 'split' : 'shared',
@@ -1816,7 +1971,7 @@
   }
   function slotSnapshot(slot){
     const c = BK_LOGIC.computeSlot(slot);
-    const discountRate = Math.max(0, Number(BK_STATE.getState().discountRate) || 0);
+    const discountRate = Math.max(0, Number(slot.discountRate) || 0);
     const discount = Math.round(c.subtotal * discountRate);
     return {
       id: String(slot.orderNo || `ORD-${Date.now()}`).replace(/[^a-zA-Z0-9_\-]/g, '_'),
@@ -1840,6 +1995,8 @@
       createdBy: slot.createdBy || null,
       paidBy: slot.paidBy || null,
       paidAt: slot.paidAt || 0,
+      discountApprovedBy: slot.discountApprovedBy || null,
+      discountApprovedAt: slot.discountApprovedAt || 0,
       issuedBy: slot.issuedBy || null,
       riderType: slot.riderType || '',
       deliveryStatus: slot.deliveryStatus || '',
@@ -2076,6 +2233,11 @@
       nextState.slots.splice(i, 1);
       nextState.active = Math.min(i, Math.max(0, nextState.slots.length - 1));
       BK_STATE.setState(nextState);
+      if(!nextState.slots.length){
+        const flush = BK_STATE.flushRemote ? BK_STATE.flushRemote() : Promise.resolve(true);
+        flush.finally(()=>window.location.replace('index.html'));
+        return;
+      }
       const finish = ()=>{
         renderAll();
         renderStock();
@@ -2083,7 +2245,6 @@
         infoDialog(`Order completed and archived. It is now available only in History.${suffix}`);
       };
       finish();
-      if(!nextState.slots.length) goTab('order');
     });
   }
 
@@ -2389,17 +2550,16 @@
   }
 
   function refreshTotals(){
-    const {slots, discountRate, active} = BK_STATE.getState();
-    const g = BK_LOGIC.computeAll(slots, discountRate);
+    const {slots, active} = BK_STATE.getState();
     const activeSlot = slots[active];
     const c = activeSlot ? BK_LOGIC.computeSlot(activeSlot) : {subtotal:0, combos:0};
-    setSlotTotals(c.subtotal, 0, c.subtotal);
-    document.getElementById('grand').textContent = `${c.subtotal} GHS`;
-    document.getElementById('combosPill').textContent = `Combos: ${c.combos || 0}`;
-    document.getElementById('discountTag').textContent = g.discount>0 ? `Discount: ${Math.round(discountRate*100)}%` : 'No discount';
-    document.getElementById('allSubtotal').textContent = `${g.grandSubtotal} GHS`;
-    document.getElementById('allDiscount').textContent = `-${g.discount} GHS`;
-    document.getElementById('allGrand').textContent = `${g.grand} GHS`;
+    const activeRate = activeSlot ? Number(activeSlot.discountRate) || 0 : 0;
+    const activeDiscount = Math.round(c.subtotal * activeRate);
+    setSlotTotals(c.subtotal, activeDiscount, c.subtotal - activeDiscount);
+    const mobileTotal = document.getElementById('mobileCartTotal');
+    if(mobileTotal) mobileTotal.textContent = `${c.subtotal - activeDiscount} GHS`;
+    const discountLabel = document.getElementById('currentDiscountLabel');
+    if(discountLabel) discountLabel.textContent = activeDiscount > 0 ? `${Math.round(activeRate * 100)}% · -${activeDiscount} GHS · owner approved` : 'No discount';
     renderStock();
   }
 
@@ -2507,14 +2667,14 @@
   function openSummary(){
     const st = BK_STATE.getState();
     if(!st.slots.length){ infoDialog('No active order. Create a new order first.'); return; }
-    const {slots, active, discountRate} = BK_STATE.getState();
+    const {slots, active} = BK_STATE.getState();
     const s = slots[active]; const c = BK_LOGIC.computeSlot(s);
     document.getElementById('sumTitle').textContent = `Summary – ${s.name}`;
     const body = document.getElementById('sumBody');
     body.innerHTML = htmlGroupedRows(s.items) +
       `<div class="sumline"><span>Slot Subtotal</span><b>${c.subtotal} GHS</b></div>
        <div style="padding:8px 0;color:#9aa3ad;font-size:12px">
-         Combos in slot: <b>${c.combos}</b> · Global Discount: ${Math.round((discountRate||0)*100)}%
+         Combos in slot: <b>${c.combos}</b> · Order Discount: ${Math.round((s.discountRate||0)*100)}%
        </div>`;
     document.getElementById('modalSummary').classList.add('open');
   }
@@ -2530,20 +2690,20 @@
   }
 
   function openReceipt(indices){
-    const {slots, discountRate} = BK_STATE.getState();
+    const {slots} = BK_STATE.getState();
     const idxs = Array.isArray(indices)? indices : [BK_STATE.getState().active];
-    let subtotal=0, combos=0;
+    let subtotal=0, discount=0, combos=0;
     const sections = idxs.map(i=>{
       const s=slots[i]; const c=BK_LOGIC.computeSlot(s);
       subtotal += c.subtotal; combos += c.combos;
+      discount += Math.round(c.subtotal * (Number(s.discountRate) || 0));
       return receiptSectionHtml(s);
     }).join('');
-    const discount = Math.round(subtotal * (discountRate||0));
     const total = subtotal - discount;
     const html = `
       <div style="line-height:1.35">
         <div><b>BurgerKiss – Order</b></div>
-        <div style="color:#9aa3ad">Combos: ${combos} · Discount: ${Math.round((discountRate||0)*100)}%</div>
+        <div style="color:#9aa3ad">Combos: ${combos} · Approved order discounts included</div>
         <hr style="border:0;border-top:1px solid #2a2f39;margin:8px 0">
         ${sections}
         <div class="sumline"><span>Subtotal</span><b>${subtotal} GHS</b></div>
@@ -2716,10 +2876,8 @@
 
   function renderAll(){
     bindProductSearch();
-    if(!document.querySelector('.catbar .tab.active')){
-      const first = document.querySelector('.catbar .tab[data-cat="all"]');
-      if(first) first.classList.add('active');
-    }
+    bindCompactOrderNavigation();
+    document.querySelectorAll('.catbar .tab[data-cat]').forEach(btn=> btn.classList.toggle('active', btn.dataset.cat === currentCat));
     buildProducts();
     renderSlotsBar();
     renderOrder();
@@ -2745,6 +2903,6 @@
     openGroup, closeGroup, toggleGroup, groupMakeReceipt, groupMarkPaid, openOnlineOrderDialog, convertOnlineOrder,
     setCategory,
     renameActiveSlot, deleteActiveSlot, clearAllWithConfirm, clearStorageWithConfirm,
-    infoDialog, confirmDialog, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment, requestSlotPayment, continueFromPayment, choosePackaging, continueOrderToKitchen
+    infoDialog, confirmDialog, requestDiscountApproval, startNextOrder, quickStartNext, addNewOrderSlot, markIssued, goTab, focusSlot, setSlotPayment, requestSlotPayment, continueFromPayment, choosePackaging, continueOrderToKitchen
   };
 })();
