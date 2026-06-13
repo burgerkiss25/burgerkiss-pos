@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – POS</title>
-  <link rel="stylesheet" href="./style.css?v=45" />
+  <link rel="stylesheet" href="./style.css?v=46" />
 
   <!-- POS-Konfiguration aus externer Datei -->
   <script src="./firebase-config.js?v=2"></script>
@@ -57,12 +57,8 @@
     </header>
 
     <div class="hud-rows compact-actions">
-      <div class="toolbar order-tools" aria-label="Order actions">
-        <button class="ghost" id="btnUndo" type="button">Undo</button>
-      </div>
-
-      <div class="toolbar slot-tools" id="slotsBar" aria-label="Order slots">
-        <!-- Slot-Verwaltung: wird im Force-Slot-Modus in main.js deaktiviert -->
+      <div class="toolbar slot-tools" id="slotsBar" aria-label="Open orders">
+        <!-- Open orders remain available while legacy slot-management controls stay hidden. -->
         <button class="chip primary-chip" id="btnAddSlot" type="button">+ Slot</button>
         <button class="chip online-order-trigger" id="btnOnlineOrder" type="button">+ Online Order</button>
       </div>
@@ -78,24 +74,18 @@
         </div>
       </details>
 
-      <details class="tool-menu slot-menu">
-        <summary class="chip">Manage Slot</summary>
-        <div class="tool-panel" aria-label="Slot management actions">
-          <button class="chip" id="btnRenameSlot" type="button">Rename</button>
-          <button class="chip danger-soft" id="btnDeleteSlot" type="button">Delete</button>
-        </div>
-      </details>
     </div>
   </div>
 
   <!-- Kategorien -->
   <div class="catbar" aria-label="Product categories">
-    <button class="tab active" data-cat="all">All</button>
-    <button class="tab" data-cat="burger">Burgers</button>
+    <button class="category-arrow" id="previousCategory" type="button" aria-label="Previous product category">‹</button>
+    <button class="tab active" data-cat="burger">Burgers</button>
     <button class="tab" data-cat="wings">Wings</button>
     <button class="tab" data-cat="fries">Fries</button>
     <button class="tab" data-cat="salad">Salads</button>
     <button class="tab" data-cat="drink">Drinks</button>
+    <button class="category-arrow" id="nextCategory" type="button" aria-label="Next product category">›</button>
     <div class="search-wrap">
       <span aria-hidden="true">⌕</span>
       <input id="productSearch" class="product-search" placeholder="Search products" aria-label="Search products" />
@@ -115,18 +105,31 @@
         <div class="order-welcome-actions"><button class="workflow-next-button" id="btnStartWalkin" type="button">Walk-in Order</button><button class="workflow-next-button online-order-trigger" id="btnStartOnline" type="button">Online Order</button></div>
       </div>
       <div class="order-layout">
-        <div class="order-main">
+        <div class="order-main" id="productPager">
+          <div class="product-page-heading">
+            <div><span class="eyebrow">Product category</span><h2 id="productCategoryTitle">Burgers</h2></div>
+            <span class="page-status" id="productPageStatus" aria-live="polite"></span>
+          </div>
           <div class="grid" id="buttons"></div>
+          <div class="product-page-controls" aria-label="Product pages">
+            <button class="page-button" id="previousProductPage" type="button">‹ Previous</button>
+            <div class="page-dots" id="productPageDots" aria-hidden="true"></div>
+            <button class="page-button" id="nextProductPage" type="button">Next ›</button>
+          </div>
         </div>
 
-        <aside class="order-side panel">
-          <h3>Current items (active slot)</h3>
+        <aside class="order-side panel" id="orderCart">
+          <div class="order-side-heading"><h3>Current order</h3><button class="cart-close" id="mobileCartClose" type="button" aria-label="Close current order">×</button></div>
           <div class="rows" id="lines"></div>
           <div class="flow-action" id="orderFlowNav"></div>
           <div class="sumline"><span>Subtotal</span><b id="subtotal">0 GHS</b></div>
           <div class="sumline"><span>Discount</span><b id="discount">0 GHS</b></div>
           <div class="sumline"><span>Total</span><b id="total">0 GHS</b></div>
         </aside>
+        <button class="mobile-cart-toggle" id="mobileCartToggle" type="button" aria-controls="orderCart" aria-expanded="false">
+          <span><b id="mobileCartCount">0 items</b><small>View current order</small></span>
+          <strong id="mobileCartTotal">0 GHS</strong>
+        </button>
       </div>
     </section>
 
