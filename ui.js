@@ -2171,6 +2171,10 @@
       nextState.slots.splice(i, 1);
       nextState.active = Math.min(i, Math.max(0, nextState.slots.length - 1));
       BK_STATE.setState(nextState);
+      if(!nextState.slots.length){
+        window.location.replace('index.html');
+        return;
+      }
       const finish = ()=>{
         renderAll();
         renderStock();
@@ -2178,7 +2182,6 @@
         infoDialog(`Order completed and archived. It is now available only in History.${suffix}`);
       };
       finish();
-      if(!nextState.slots.length) goTab('order');
     });
   }
 
