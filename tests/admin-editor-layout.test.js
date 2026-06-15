@@ -16,7 +16,7 @@ assert.match(html, /admin-editor-workspace/);
 assert.match(products, /categoryOrder/);
 assert.match(products, /draggable="true"/);
 assert.match(products, /admin-category-group/);
-assert.match(products, /Drag products to set their POS order/);
+assert.match(products, /Drag or use the arrow buttons to set POS order/);
 assert.match(ui, /sort\(\(a,b\)=>Number\(a\.categoryOrder/);
 assert.match(prices, /Prices follow the same category and display order/);
 assert.match(menus, /admin-menu-card/);

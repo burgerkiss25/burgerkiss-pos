@@ -139,7 +139,11 @@
   function rowHtml(p){
     return `
       <div class="admin-data-row product-editor-row" data-prod-row draggable="true">
-        <button class="drag-handle" type="button" aria-label="Drag ${esc(p.name || 'new product')} to reorder" title="Drag to reorder">⠿</button>
+        <div class="product-order-controls">
+          <button class="drag-handle" type="button" aria-label="Drag ${esc(p.name || 'new product')} to reorder" title="Drag to reorder">⠿</button>
+          <button type="button" data-move="-1" aria-label="Move ${esc(p.name || 'new product')} up" title="Move up">↑</button>
+          <button type="button" data-move="1" aria-label="Move ${esc(p.name || 'new product')} down" title="Move down">↓</button>
+        </div>
         <label><span>Product name</span><input data-field="name" placeholder="Product name" value="${esc(p.name)}"></label>
         <label><span>Price</span><span class="currency-field"><input data-field="price" type="number" step="1" min="0" placeholder="0" value="${Number.isFinite(p.price)?p.price:''}"><b>GHS</b></span></label>
         <label><span>Category</span><select data-field="cat">${categoryOptions(p.cat)}</select></label>
@@ -161,8 +165,40 @@
     });
     body.querySelectorAll('select[data-field="cat"]').forEach(select=>{
       select.onchange = ()=>{
+        const row = select.closest('[data-prod-row]');
+        const rowIndex = Array.from(body.querySelectorAll('[data-prod-row]')).indexOf(row);
+        const id = normalizeId(row.querySelector('[data-field="id"]').value);
+        const rows = collectRows();
+        const changed = rows[rowIndex];
+        if(changed){
+          const targetOrders = rows.filter(product=>product !== changed && product.cat === changed.cat).map(product=>Number(product.categoryOrder || 0));
+          changed.categoryOrder = (targetOrders.length ? Math.max(...targetOrders) : 0) + 10;
+        }
+        DRAFT = rows;
+        renderRows();
+        const moved = Array.from(body.querySelectorAll('[data-prod-row]')).find(productRow=>normalizeId(productRow.querySelector('[data-field="id"]').value) === id);
+        if(moved){
+          moved.scrollIntoView({block:'nearest'});
+          moved.querySelector('[data-field="cat"]').focus();
+        }
+      };
+    });
+    body.querySelectorAll('button[data-move]').forEach(button=>{
+      button.onclick = ()=>{
+        const row = button.closest('[data-prod-row]');
+        const rows = Array.from(row.parentElement.querySelectorAll('[data-prod-row]'));
+        const index = rows.indexOf(row);
+        const nextIndex = index + Number(button.dataset.move);
+        if(nextIndex < 0 || nextIndex >= rows.length) return;
+        if(nextIndex < index) row.parentElement.insertBefore(row, rows[nextIndex]);
+        else row.parentElement.insertBefore(row, rows[nextIndex].nextSibling);
+        const category = row.closest('[data-category]') && row.closest('[data-category]').dataset.category;
         DRAFT = collectRows();
         renderRows();
+        const group = body.querySelector(`[data-category="${category}"]`);
+        const movedRows = group ? group.querySelectorAll('[data-prod-row]') : [];
+        const moved = movedRows[nextIndex];
+        if(moved) moved.querySelector(`button[data-move="${button.dataset.move}"]`).focus();
       };
     });
     let dragged = null;
@@ -192,12 +228,12 @@
       const rows = DRAFT.filter(row=>row.cat === cat).sort((a,b)=>Number(a.categoryOrder||0)-Number(b.categoryOrder||0));
       if(!rows.length) return '';
       return `<section class="admin-category-group" data-category="${cat}">
-        <header><div><h4>${label}</h4><small>${rows.length} product${rows.length === 1 ? '' : 's'}</small></div><span>Drag products to set their POS order</span></header>
+        <header><div><h4>${label}</h4><small>${rows.length} product${rows.length === 1 ? '' : 's'}</small></div><span>Drag or use the arrow buttons to set POS order</span></header>
         <div class="admin-column-labels product-column-labels"><span></span><span>Product</span><span>Price</span><span>Category</span><span>Details</span><span>Action</span></div>
         <div class="admin-category-rows">${rows.map(rowHtml).join('')}</div>
       </section>`;
     }).join('');
-    body.innerHTML = `<div class="admin-editor-intro"><div><h4>Products and display order</h4><p>Products are grouped by category. Drag a product within its category to change its order in the POS.</p></div><span class="admin-count-badge">${DRAFT.length} products</span></div>${grouped}`;
+    body.innerHTML = `<div class="admin-editor-intro"><div><h4>Products and display order</h4><p>Change a category to move a product into the correct group. Drag products or use the arrow buttons to control their order in the POS.</p></div><span class="admin-count-badge">${DRAFT.length} products</span></div>${grouped}`;
     bindRowEvents(body);
   }
 
