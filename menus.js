@@ -26,6 +26,8 @@
   function products(){ return Array.isArray(window.BK_DATA && BK_DATA.BASE) ? BK_DATA.BASE : []; }
   function productExists(id){ return products().some(p=>p.id===id); }
   function productName(id){ const p = products().find(x=>x.id===id); return p ? p.name : id; }
+  function productCategory(id){ const p = products().find(x=>x.id===id); return p && p.cat ? p.cat : 'other'; }
+  function productOrder(id){ const p = products().find(x=>x.id===id); return Number(p && p.categoryOrder || 0); }
   function frontProducts(){ return products().filter(p=>p && p.cat !== 'extra' && !String(p.id || '').startsWith('x_sauce_')); }
   function byCat(cat){ return products().filter(p=>p && p.cat === cat); }
   function sauces(){ return products().filter(p=>p && (p.cat === 'sauce' || String(p.id || '').startsWith('x_sauce_'))); }
@@ -114,18 +116,18 @@
   }
   function rowHtml(m){
     return `
-      <div class="row" data-menu-row>
-        <span class="left menu-editor-grid">
-          <input data-field="id" placeholder="menu id" value="${esc(m.id)}">
-          <input data-field="name" placeholder="Menu name" value="${esc(m.name)}">
-          <input data-field="menuPrice" type="number" step="1" min="0" placeholder="Menu price" value="${Number(m.menuPrice) || ''}">
-          <select data-field="baseId">${optionHtml(frontProducts(), m.baseId, false)}</select>
-          <select data-field="defaultFries">${optionHtml(byCat('fries'), m.defaultFries, true)}</select>
-          <select data-field="defaultDrink">${optionHtml(byCat('drink'), m.defaultDrink, true)}</select>
-          <select data-field="defaultWingsSauce">${optionHtml(sauces(), m.defaultWingsSauce, true)}</select>
-        </span>
-        <button class="mini" data-remove>Delete</button>
-      </div>`;
+      <article class="admin-menu-card" data-menu-row>
+        <div class="admin-menu-card-heading"><div><h4>${esc(m.name || 'New menu')}</h4><small>Based on ${esc(productName(m.baseId))}</small></div><button class="mini admin-row-danger" data-remove>Delete menu</button></div>
+        <div class="admin-form-grid">
+          <label><span>Menu name</span><input data-field="name" placeholder="Menu name" value="${esc(m.name)}"></label>
+          <label><span>Menu price</span><span class="currency-field"><input data-field="menuPrice" type="number" step="1" min="0" placeholder="0" value="${Number(m.menuPrice) || ''}"><b>GHS</b></span></label>
+          <label><span>Base product</span><select data-field="baseId">${optionHtml(frontProducts(), m.baseId, false)}</select></label>
+          <label><span>Default fries</span><select data-field="defaultFries">${optionHtml(byCat('fries'), m.defaultFries, true)}</select></label>
+          <label><span>Default drink</span><select data-field="defaultDrink">${optionHtml(byCat('drink'), m.defaultDrink, true)}</select></label>
+          <label><span>Default wing sauce</span><select data-field="defaultWingsSauce">${optionHtml(sauces(), m.defaultWingsSauce, true)}</select></label>
+        </div>
+        <details class="admin-advanced"><summary>Technical details</summary><label><span>Menu ID</span><input data-field="id" placeholder="menu_id" value="${esc(m.id)}"></label></details>
+      </article>`;
   }
   function bindRowEvents(body){
     body.querySelectorAll('button[data-remove]').forEach(btn=>{
@@ -135,11 +137,24 @@
   function renderRows(){
     const body = document.getElementById('menusBody');
     if(!body) return;
+    const categoryLabels = {burger:'Burgers',wings:'Wings',fries:'Fries',salad:'Salads',drink:'Drinks',other:'Other'};
+    const categories = Array.from(new Set(DRAFT.map(menu=>productCategory(menu.baseId))));
+    const grouped = categories.map(category=>{
+      const rows = DRAFT
+        .filter(menu=>productCategory(menu.baseId) === category)
+        .sort((a,b)=>productOrder(a.baseId)-productOrder(b.baseId));
+      const label = categoryLabels[category] || category.replace(/(^|_)([a-z])/g,(_,space,letter)=>`${space ? ' ' : ''}${letter.toUpperCase()}`);
+      return `<section class="admin-category-group" data-menu-category="${esc(category)}">
+        <header><div><h4>${esc(label)}</h4><small>${rows.length} ${rows.length === 1 ? 'menu' : 'menus'}</small></div><span>Follows product order</span></header>
+        <div class="admin-menu-grid">${rows.map(rowHtml).join('')}</div>
+      </section>`;
+    }).join('');
     body.innerHTML = `
       <div class="stock-editor-intro">
-        <div><h4>Standard menus</h4><p>Each row configures the menu price and default choices shown after staff select Menu on a main product.</p></div>
+        <div><h4>Standard menus</h4><p>Menus are grouped by their base product category and follow the display order managed in Products.</p></div><span class="admin-count-badge">${DRAFT.length} menus</span>
       </div>
-    ` + DRAFT.map(rowHtml).join('');
+      ${grouped || '<div class="empty-state">No menus configured.</div>'}
+    `;
     bindRowEvents(body);
   }
   function openEditor(){ DRAFT = clone(MENUS); renderRows(); document.getElementById('modalMenus').classList.add('open'); }
@@ -184,10 +199,9 @@
     applyRows(rows);
     saveRemoteSoon();
     closeEditor();
-    alert(remoteEnabled() ? 'Menus saved online.' : 'Menus saved locally.');
+    return true;
   }
   function reset(){
-    if(!confirm('Reset menu presets to defaults?')) return;
     localStorage.removeItem(KEY);
     MENUS = clone(DEFAULT_MENUS);
     DRAFT = clone(MENUS);

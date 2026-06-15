@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – Admin Editors</title>
-  <link rel="stylesheet" href="./style.css?v=45" />
+  <link rel="stylesheet" href="./style.css?v=63" />
   <script src="./firebase-config.js?v=2"></script>
 </head>
 <body class="admin-page">
@@ -20,43 +20,63 @@
       </div>
       <nav class="admin-actions" aria-label="Admin editor navigation">
         <a class="x" href="order.html">← Back to POS</a>
-        <button class="x" id="btnPrices" type="button">Edit Prices</button>
-        <button class="x" id="btnProducts" type="button">Edit Products</button>
-        <button class="x" id="btnMenus" type="button">Edit Menus</button>
-        <button class="x" id="btnImages" type="button">Edit Images</button>
-        <button class="x" id="btnStock" type="button">Edit Stock</button>
-        <button class="x" id="btnIngredients" type="button">Edit Ingredients</button>
-        <button class="x" id="btnRecipes" type="button">Edit Product Recipes</button>
-        <button class="x" id="btnAddons" type="button">Edit Add-ons</button>
-        <button class="x" id="btnPackagingRules" type="button">Packaging Rules</button>
       </nav>
     </header>
   </div>
 
   <div class="wrap">
-    <section>
-      <div class="panel">
-        <h3>Editor area</h3>
-        <p class="muted-copy">Use the buttons above to open Price/Product/Image/Stock editors.</p>
-      </div>
-      <div class="panel" id="adminDbStatusPanel">
-        <div class="slot-head">
-          <div><span class="label">Online DB Status</span> · Firebase Realtime Database</div>
-          <button class="x" id="btnRefreshDbStatus" type="button">Refresh</button>
+    <section class="admin-dashboard" aria-labelledby="adminDashboardTitle">
+      <div class="admin-dashboard-heading">
+        <div>
+          <div class="eyebrow">Management workspace</div>
+          <h2 id="adminDashboardTitle">Choose an editor</h2>
+          <p>Manage the catalog, stock operations, and service rules from one place.</p>
         </div>
-        <div class="rows" id="adminDbStatusBody">
-          <div class="empty-state">Checking Firebase status...</div>
+      </div>
+
+      <div class="admin-editor-groups admin-workspace-groups">
+        <article class="admin-editor-group">
+          <div class="admin-group-heading">
+            <span class="admin-group-icon" aria-hidden="true">01</span>
+            <div><h3>Business workspaces</h3><p>Open one workspace for each day-to-day management task.</p></div>
+          </div>
+          <div class="admin-editor-grid">
+            <button class="admin-editor-card" id="btnCatalog" type="button"><span class="admin-card-icon" aria-hidden="true">P</span><span><b>Products</b><small>Products, prices, images, recipes, and add-ons</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+            <button class="admin-editor-card" id="btnMenus" type="button"><span class="admin-card-icon" aria-hidden="true">M</span><span><b>Menus</b><small>Menu contents, prices, and default choices</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+            <button class="admin-editor-card" id="btnInventory" type="button"><span class="admin-card-icon" aria-hidden="true">IN</span><span><b>Inventory</b><small>Stock overview, ingredients, and transfers</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+            <button class="admin-editor-card" id="btnOperations" type="button"><span class="admin-card-icon" aria-hidden="true">O</span><span><b>Operations</b><small>Packaging and service rules</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+          </div>
+        </article>
+      </div>
+
+      <div class="panel" id="adminDbStatusPanel">
+        <div class="admin-status-heading">
+          <div>
+            <div class="eyebrow">System health</div>
+            <h2>Online database</h2>
+            <p id="adminDbStatusSummary">Checking Firebase status...</p>
+          </div>
+          <button class="x" id="btnRefreshDbStatus" type="button">Refresh status</button>
+        </div>
+        <div class="admin-status-table-wrap">
+          <table class="admin-status-table">
+            <thead><tr><th scope="col">Area</th><th scope="col">Status</th><th scope="col">Last activity</th><th scope="col"><span class="sr-only">Details</span></th></tr></thead>
+            <tbody id="adminDbStatusBody"><tr><td colspan="4" class="empty-state">Checking Firebase status...</td></tr></tbody>
+          </table>
         </div>
       </div>
     </section>
   </div>
 
-  <div class="modal" id="modalPrices"><div class="sheet"><header><b>Edit Prices</b><div><button class="x" id="pSave">Save</button><button class="x" id="pReset">Reset</button><button class="x" id="pClose">Close</button></div></header><div class="body" id="pricesBody"></div></div></div>
-  <div class="modal" id="modalProducts"><div class="sheet"><header><b>Edit Products</b><div><button class="x" id="prodAdd">+ Add</button><button class="x" id="prodSave">Save</button><button class="x" id="prodReset">Reset</button><button class="x" id="prodClose">Close</button></div></header><div class="body" id="productsBody"></div></div></div>
-  <div class="modal" id="modalMenus"><div class="sheet"><header><b>Edit Menus</b><div><button class="x" id="menuAdd">+ Add</button><button class="x" id="menuSave">Save</button><button class="x" id="menuReset">Reset</button><button class="x" id="menuClose">Close</button></div></header><div class="body" id="menusBody"></div></div></div>
-  <div class="modal" id="modalImages"><div class="sheet"><header><b>Edit Images</b><div><button class="x" id="iSave">Save</button><button class="x" id="iReset">Reset</button><button class="x" id="iClose">Close</button></div></header><div class="body" id="imagesBody"></div></div></div>
-  <div class="modal" id="modalStock"><div class="sheet"><header><b id="stockModalTitle">Edit Stock</b><div><button class="x" id="sSave">Save</button><button class="x" id="sReset">Reset</button><button class="x" id="sClose">Close</button></div></header><div class="body" id="stockBody"></div></div></div>
-  <div class="modal" id="modalPackagingRules"><div class="sheet"><header><b>Packaging Rules</b><div><button class="x" id="packSave">Save</button><button class="x" id="packReset">Reset</button><button class="x" id="packClose">Close</button></div></header><div class="body" id="packagingRulesBody"></div></div></div>
+  <div class="modal admin-editor-modal admin-editor-workspace" id="modalCatalog" role="dialog" aria-modal="true" aria-labelledby="catalogModalTitle"><div class="sheet">
+    <header><div><b id="catalogModalTitle">Product catalog</b><small id="catalogModalDescription">Edit product details, prices, images, recipes, and add-ons in one place</small></div><div><button class="x" id="catalogAdd" type="button">Add product</button><button class="x admin-reset" id="catalogReset" type="button">Reset catalog to defaults</button><button class="x" id="catalogClose" type="button">Close workspace</button><button class="x admin-primary" id="catalogSave" type="button">Save all changes</button></div></header>
+    <div class="body catalog-workspace-body" id="catalogBody"></div>
+  </div></div>
+  <div class="modal admin-editor-modal admin-editor-wide" id="modalMenus"><div class="sheet"><header><div><b>Menus</b><small>Configure menu products, prices, and defaults</small></div><div><button class="x" id="menuAdd">Add menu</button><button class="x admin-reset" id="menuReset">Reset to defaults</button><button class="x" id="menuClose">Cancel</button><button class="x admin-primary" id="menuSave">Save changes</button></div></header><div class="body" id="menusBody"></div></div></div>
+  <div class="modal admin-editor-modal admin-editor-workspace" id="modalStock" role="dialog" aria-modal="true" aria-labelledby="stockModalTitle"><div class="sheet"><nav class="admin-workspace-nav" aria-label="Inventory workspace"><button id="btnStock" type="button">Overview</button><button id="btnIngredients" type="button">Ingredients</button></nav><header><div><b id="stockModalTitle">Stock overview</b><small id="stockModalDescription">Review inventory levels, locations, and transfers</small></div><div><button class="x admin-reset" id="sReset">Reset stock to defaults</button><button class="x" id="sClose">Close workspace</button><button class="x admin-primary" id="sSave">Save changes</button></div></header><div class="body" id="stockBody"></div></div></div>
+  <div class="modal admin-editor-modal" id="modalPackagingRules"><div class="sheet"><header><div><b>Packaging rules</b><small>Configure bag mappings and order-size thresholds</small></div><div><button class="x admin-reset" id="packReset">Reset to defaults</button><button class="x" id="packClose">Cancel</button><button class="x admin-primary" id="packSave">Save changes</button></div></header><div class="body" id="packagingRulesBody"></div></div></div>
+  <div class="admin-toast-region" id="adminToastRegion" aria-live="polite" aria-atomic="true"></div>
+  <div class="modal admin-confirm-modal" id="adminConfirmModal" role="dialog" aria-modal="true" aria-labelledby="adminConfirmTitle" aria-describedby="adminConfirmMessage"><div class="admin-confirm-card"><div class="eyebrow">Please confirm</div><h2 id="adminConfirmTitle">Discard changes?</h2><p id="adminConfirmMessage">This action cannot be undone.</p><div class="admin-confirm-actions"><button class="x" id="adminConfirmCancel" type="button">Keep editing</button><button class="x admin-danger" id="adminConfirmAccept" type="button">Discard changes</button></div></div></div>
 
   <script>
     if(!window.FIREBASE_CONFIG){
@@ -71,13 +91,14 @@
 
   <script src="./access.js?v=2"></script>
   <script src="./data.js?v=13"></script>
-  <script src="./prices.js?v=14"></script>
-  <script src="./products.js?v=14"></script>
-  <script src="./menus.js?v=2"></script>
-  <script src="./images.js?v=18"></script>
+  <script src="./prices.js?v=17"></script>
+  <script src="./products.js?v=19"></script>
+  <script src="./menus.js?v=4"></script>
+  <script src="./images.js?v=23"></script>
   <script src="./stock_data.js?v=13"></script>
   <script src="./stock_utils.js?v=15"></script>
-  <script src="./stock.js?v=18"></script>
+  <script src="./stock.js?v=24"></script>
+  <script src="./catalog.js?v=4"></script>
   <script src="./state.js?v=20"></script>
   <script src="./logic.js?v=14"></script>
   <script src="./packing.js?v=1"></script>
@@ -90,7 +111,7 @@
       }
       if(document.querySelector('script[data-admin-boot]')) return;
       const script = document.createElement('script');
-      script.src = 'admin.js?v=2';
+      script.src = 'admin.js?v=8';
       script.dataset.adminBoot = 'true';
       document.body.appendChild(script);
     });
