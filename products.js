@@ -53,8 +53,13 @@
       used.add(id);
       const fallbackOrder = (categoryCounts[cat] || 0) * 10 + 10;
       const categoryOrder = Number.isFinite(Number(r && r.categoryOrder)) ? Number(r.categoryOrder) : fallbackOrder;
+      const active = r && r.active !== false;
       categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
-      out.push({id, name, price, cat, categoryOrder});
+      out.push({
+        id, name, price, cat, categoryOrder, active,
+        archivedAt:active ? null : Number(r && r.archivedAt) || Date.now(),
+        archivedBy:active ? null : String((r && r.archivedBy) || '')
+      });
     });
     return out;
   }
@@ -65,7 +70,7 @@
     (window.BK_DATA.DEFAULT_BASE || []).forEach(product=>{
       if(!String(product.id || '').startsWith('i_sauce_') || ids.has(product.id)) return;
       const sameCategory = clean.filter(row=>row.cat === product.cat);
-      clean.push({id:product.id, name:product.name, price:0, cat:product.cat, categoryOrder:(sameCategory.length + 1) * 10});
+      clean.push({id:product.id, name:product.name, price:0, cat:product.cat, categoryOrder:(sameCategory.length + 1) * 10, active:true, archivedAt:null, archivedBy:null});
     });
     return clean;
   }

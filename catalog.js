@@ -8,7 +8,7 @@
   let initialIds = [];
   let baseline = new Map();
   let search = '';
-  let filter = 'all';
+  let filter = 'active';
   let saving = false;
   let history = [];
   const HISTORY_KEY = 'bk_catalog_history_v1';
@@ -45,6 +45,9 @@
       cat:product.cat,
       price:BK_PRICES.getPrice(product.id),
       categoryOrder:Number(product.categoryOrder || 0),
+      active:product.active !== false,
+      archivedAt:product.archivedAt || null,
+      archivedBy:product.archivedBy || null,
       image:BK_IMAGES.get(product.id),
       recipe:BK_STOCK.getRecipe(product.id)
     }));
@@ -87,7 +90,7 @@
     const stockPaths = BK_STOCK.stockPaths();
     updatePath(updates, stockPaths.recipes, {map:recipes, ts});
     const addonRecipes = {};
-    DRAFT.filter(item=>item.cat === 'extra' || item.cat === 'sauce').forEach(item=>{ addonRecipes[item.id] = recipes[item.id] || {}; });
+    DRAFT.filter(item=>item.active !== false && (item.cat === 'extra' || item.cat === 'sauce')).forEach(item=>{ addonRecipes[item.id] = recipes[item.id] || {}; });
     updatePath(updates, stockPaths.addons, {map:addonRecipes, ts});
     updatePath(updates, '/pos/catalog/meta', {updatedAt:ts, source:'admin-product-catalog'});
     if(auditEvent) updatePath(updates, `/pos/catalog/history/${auditEvent.id}`, auditEvent);
@@ -113,7 +116,10 @@
       [['name','name'],['price','price'],['category','cat'],['image','image'],['recipe','recipe'],['display order','categoryOrder'],['product ID','id']].forEach(([label,key])=>{
         if(JSON.stringify(before[key]) !== JSON.stringify(item[key])) fields.push({field:label, before:auditValue(key,before[key]), after:auditValue(key,item[key])});
       });
-      if(fields.length) changes.push({productId:item.id, productName:item.name, action:'updated', fields});
+      const action = before.active !== false && item.active === false ? 'archived'
+        : before.active === false && item.active !== false ? 'restored'
+          : 'updated';
+      if(fields.length || action !== 'updated') changes.push({productId:item.id, productName:item.name, action, fields});
     });
     removedIds.forEach(id=>{
       const before = baseline.get(id);
@@ -145,6 +151,8 @@
     }).join('')}</div>`;
   }
   function matchesFilter(item){
+    if(filter === 'active') return item.active !== false;
+    if(filter === 'archived') return item.active === false;
     if(filter === 'missing-image') return !item.image;
     if(filter === 'missing-recipe') return !Object.keys(item.recipe || {}).length;
     if(filter === 'modified') return Boolean(changeState(item));
@@ -175,19 +183,19 @@
     const image = item.image
       ? `<img src="${esc(item.image)}" alt="${esc(item.name)}">`
       : '<span>No image</span>';
-    return `<article class="catalog-product-card ${state ? 'catalog-product-changed' : ''}" data-catalog-product data-index="${index}">
+    return `<article class="catalog-product-card ${state ? 'catalog-product-changed' : ''} ${item.active === false ? 'catalog-product-archived' : ''}" data-catalog-product data-index="${index}">
       <div class="catalog-product-summary">
         <div class="catalog-order-controls"><button type="button" data-move="-1" aria-label="Move ${esc(item.name)} up">↑</button><button type="button" data-move="1" aria-label="Move ${esc(item.name)} down">↓</button></div>
         <div class="catalog-product-image">${image}</div>
         <div class="catalog-product-main"><input data-field="name" aria-label="Product name" value="${esc(item.name)}"><small>${esc(item.id)}</small></div>
         <label><span>Price</span><span class="currency-field"><input data-field="price" type="number" min="0" step="1" value="${item.price}"><b>GHS</b></span></label>
         <label><span>Category</span><select data-field="cat">${categoryOptions(item.cat)}</select></label>
-        <div class="catalog-product-status">${state ? `<span class="catalog-change-badge">${state}</span>` : ''}<span class="admin-count-badge">${recipeCount} ingredient${recipeCount === 1 ? '' : 's'}</span><small>${item.image ? 'Image ready' : 'Image missing'}</small></div>
+        <div class="catalog-product-status">${item.active === false ? '<span class="catalog-archive-badge">Archived</span>' : ''}${state ? `<span class="catalog-change-badge">${state}</span>` : ''}<span class="admin-count-badge">${recipeCount} ingredient${recipeCount === 1 ? '' : 's'}</span><small>${item.image ? 'Image ready' : 'Image missing'}</small></div>
         <details class="catalog-product-details"><summary>Edit details</summary>
           <div class="catalog-detail-grid">
             <section><h5>Image</h5><div class="catalog-detail-image">${image}</div><label class="x admin-upload-button">Replace image<input class="sr-only" type="file" accept="image/*" data-image-file></label><button class="mini" type="button" data-image-remove>Remove image</button></section>
             <section><h5>Recipe</h5><div class="recipe-ingredient-list" data-recipe-list>${recipeChips(item,index)}</div><div class="recipe-add-row"><select data-recipe-ingredient>${ingredientOptions()}</select><input data-recipe-quantity type="number" min="0.25" step="0.25" value="1"><button class="x" type="button" data-recipe-add>Add ingredient</button></div></section>
-            <section><h5>Technical details</h5><label><span>Product ID</span><input data-field="id" value="${esc(item.id)}"><small class="catalog-field-error" data-error-for="id"></small></label><h5>History</h5>${productHistory(item)}<button class="mini admin-row-danger" type="button" data-delete-product>Delete product</button></section>
+            <section><h5>Technical details</h5><label><span>Product ID</span><input data-field="id" value="${esc(item.id)}"><small class="catalog-field-error" data-error-for="id"></small></label><h5>History</h5>${productHistory(item)}<button class="mini ${item.active === false ? '' : 'admin-row-danger'}" type="button" data-archive-product>${item.active === false ? 'Restore product' : 'Archive product'}</button></section>
           </div>
         </details>
         <div class="catalog-row-error" role="alert"></div>
@@ -205,7 +213,7 @@
       return `<details class="admin-category-group catalog-category" open><summary><span><b>${label}</b><small>${items.length} product${items.length === 1 ? '' : 's'}</small></span></summary><div class="catalog-category-products">${items.map(({item,index})=>productCard(item,index)).join('')}</div></details>`;
     }).join('');
     const modified = changedCount();
-    body.innerHTML = `<div class="catalog-toolbar"><label><span class="sr-only">Search products</span><input id="catalogSearch" type="search" placeholder="Search products..." value="${esc(search)}"></label><select id="catalogFilter" aria-label="Filter products"><option value="all">All products</option><option value="modified">Modified</option><option value="missing-image">Missing image</option><option value="missing-recipe">Missing recipe</option></select><span class="admin-count-badge">${modified ? `${modified} changed` : `${DRAFT.length} products`}</span></div>${groups || '<div class="empty-state">No matching products.</div>'}`;
+    body.innerHTML = `<div class="catalog-toolbar"><label><span class="sr-only">Search products</span><input id="catalogSearch" type="search" placeholder="Search products..." value="${esc(search)}"></label><select id="catalogFilter" aria-label="Filter products"><option value="active">Active products</option><option value="archived">Archived products</option><option value="all">All products</option><option value="modified">Modified</option><option value="missing-image">Missing image</option><option value="missing-recipe">Missing recipe</option></select><span class="admin-count-badge">${modified ? `${modified} changed` : `${DRAFT.length} products`}</span></div>${groups || '<div class="empty-state">No matching products.</div>'}`;
     body.querySelector('#catalogFilter').value = filter;
     bind();
     updateSaveButton();
@@ -278,9 +286,16 @@
         updateRecipeDisplay(card,item,index);
         updateSaveButton();
       };
-      card.querySelector('[data-delete-product]').onclick = ()=>{
+      card.querySelector('[data-archive-product]').onclick = ()=>{
         collectDraft();
-        DRAFT.splice(index,1);
+        if(!baseline.has(item.originalId)){
+          DRAFT.splice(index,1);
+        }else{
+          item.active = item.active === false;
+          item.archivedAt = item.active ? null : Date.now();
+          const actor = window.BK_ACCESS && BK_ACCESS.actor ? BK_ACCESS.actor() : null;
+          item.archivedBy = item.active ? null : (actor && actor.id || 'unknown');
+        }
         render();
       };
       card.querySelectorAll('[data-move]').forEach(button=>{
@@ -325,8 +340,8 @@
     const category = 'extra';
     const count = DRAFT.filter(item=>item.cat === category).length;
     const id = `new_product_${Date.now()}`;
-    DRAFT.push({id,originalId:id,name:'New product',cat:category,price:0,categoryOrder:(count+1)*10,image:'',recipe:{}});
-    filter = 'all';
+    DRAFT.push({id,originalId:id,name:'New product',cat:category,price:0,categoryOrder:(count+1)*10,active:true,archivedAt:null,archivedBy:null,image:'',recipe:{}});
+    filter = 'active';
     render();
     const cards = document.querySelectorAll('#catalogBody [data-catalog-product]');
     const card = cards[cards.length-1];
@@ -364,7 +379,7 @@
       }
       ids.add(item.id);
     }
-    const rows = DRAFT.map(item=>({id:item.id,name:item.name,price:item.price,cat:item.cat,categoryOrder:item.categoryOrder}));
+    const rows = DRAFT.map(item=>({id:item.id,name:item.name,price:item.price,cat:item.cat,categoryOrder:item.categoryOrder,active:item.active !== false,archivedAt:item.archivedAt,archivedBy:item.archivedBy}));
     const prices = Object.fromEntries(DRAFT.map(item=>[item.id,item.price]));
     const recipes = Object.fromEntries(DRAFT.map(item=>[item.id,item.recipe]));
     const currentIds = new Set(DRAFT.map(item=>item.id));

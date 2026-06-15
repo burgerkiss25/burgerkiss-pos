@@ -22,6 +22,6 @@ assert.match(products, /options && options\.localOnly/);
 assert.match(prices, /function getMap/);
 assert.match(images, /function getMap/);
 assert.match(stock, /function getRecipes/);
-assert.match(html, /catalog\.js\?v=5/);
+assert.match(html, /catalog\.js\?v=6/);
 
 console.log('Atomic catalog save checks passed.');

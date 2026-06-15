@@ -28,9 +28,9 @@
   function productName(id){ const p = products().find(x=>x.id===id); return p ? p.name : id; }
   function productCategory(id){ const p = products().find(x=>x.id===id); return p && p.cat ? p.cat : 'other'; }
   function productOrder(id){ const p = products().find(x=>x.id===id); return Number(p && p.categoryOrder || 0); }
-  function frontProducts(){ return products().filter(p=>p && p.cat !== 'extra' && !String(p.id || '').startsWith('x_sauce_')); }
-  function byCat(cat){ return products().filter(p=>p && p.cat === cat); }
-  function sauces(){ return products().filter(p=>p && (p.cat === 'sauce' || String(p.id || '').startsWith('x_sauce_'))); }
+  function frontProducts(){ return products().filter(p=>p && p.active !== false && p.cat !== 'extra' && !String(p.id || '').startsWith('x_sauce_')); }
+  function byCat(cat){ return products().filter(p=>p && p.active !== false && p.cat === cat); }
+  function sauces(){ return products().filter(p=>p && p.active !== false && (p.cat === 'sauce' || String(p.id || '').startsWith('x_sauce_'))); }
 
   function remoteEnabled(){ return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database); }
   function remotePath(){ return (window.BK_MENUS_PATH || DEFAULT_REMOTE_PATH).replace(/\/+$/,''); }
