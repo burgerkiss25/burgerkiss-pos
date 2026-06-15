@@ -26,6 +26,8 @@
   function products(){ return Array.isArray(window.BK_DATA && BK_DATA.BASE) ? BK_DATA.BASE : []; }
   function productExists(id){ return products().some(p=>p.id===id); }
   function productName(id){ const p = products().find(x=>x.id===id); return p ? p.name : id; }
+  function productCategory(id){ const p = products().find(x=>x.id===id); return p && p.cat ? p.cat : 'other'; }
+  function productOrder(id){ const p = products().find(x=>x.id===id); return Number(p && p.categoryOrder || 0); }
   function frontProducts(){ return products().filter(p=>p && p.cat !== 'extra' && !String(p.id || '').startsWith('x_sauce_')); }
   function byCat(cat){ return products().filter(p=>p && p.cat === cat); }
   function sauces(){ return products().filter(p=>p && (p.cat === 'sauce' || String(p.id || '').startsWith('x_sauce_'))); }
@@ -135,11 +137,23 @@
   function renderRows(){
     const body = document.getElementById('menusBody');
     if(!body) return;
+    const categoryLabels = {burger:'Burgers',wings:'Wings',fries:'Fries',salad:'Salads',drink:'Drinks',other:'Other'};
+    const categories = Array.from(new Set(DRAFT.map(menu=>productCategory(menu.baseId))));
+    const grouped = categories.map(category=>{
+      const rows = DRAFT
+        .filter(menu=>productCategory(menu.baseId) === category)
+        .sort((a,b)=>productOrder(a.baseId)-productOrder(b.baseId));
+      const label = categoryLabels[category] || category.replace(/(^|_)([a-z])/g,(_,space,letter)=>`${space ? ' ' : ''}${letter.toUpperCase()}`);
+      return `<section class="admin-category-group" data-menu-category="${esc(category)}">
+        <header><div><h4>${esc(label)}</h4><small>${rows.length} ${rows.length === 1 ? 'menu' : 'menus'}</small></div><span>Follows product order</span></header>
+        <div class="admin-menu-grid">${rows.map(rowHtml).join('')}</div>
+      </section>`;
+    }).join('');
     body.innerHTML = `
       <div class="stock-editor-intro">
-        <div><h4>Standard menus</h4><p>Configure the main product, selling price, and default choices for each menu.</p></div><span class="admin-count-badge">${DRAFT.length} menus</span>
+        <div><h4>Standard menus</h4><p>Menus are grouped by their base product category and follow the display order managed in Products.</p></div><span class="admin-count-badge">${DRAFT.length} menus</span>
       </div>
-      <div class="admin-menu-grid">${DRAFT.map(rowHtml).join('')}</div>
+      ${grouped || '<div class="empty-state">No menus configured.</div>'}
     `;
     bindRowEvents(body);
   }

@@ -297,12 +297,20 @@
 
   function renderRows(){
     const body = document.getElementById('imagesBody');
-    body.innerHTML = '<div class="admin-editor-intro"><div><h4>Product images</h4><p>Upload or replace the image shown on product buttons. Images follow the product display order.</p></div></div><div class="admin-image-grid"></div>';
-    const grid = body.querySelector('.admin-image-grid');
-    BK_DATA.BASE.slice().sort((a,b)=>{
-      if(a.cat !== b.cat) return String(a.cat).localeCompare(String(b.cat));
-      return Number(a.categoryOrder||0)-Number(b.categoryOrder||0);
-    }).forEach(it=>{
+    const categoryLabels = {burger:'Burgers',wings:'Wings',fries:'Fries',salad:'Salads',drink:'Drinks',extra:'Add-ons',sauce:'Sauces'};
+    const products = BK_DATA.BASE.slice();
+    const categories = Array.from(new Set(products.map(product=>product.cat || 'other')));
+    body.innerHTML = `<div class="admin-editor-intro"><div><h4>Product images</h4><p>Images are grouped by product category and follow the display order managed in Products.</p></div><span class="admin-count-badge">${products.length} products</span></div><div id="adminImageCategories"></div>`;
+    const categoriesWrap = body.querySelector('#adminImageCategories');
+    categories.forEach(category=>{
+      const items = products.filter(product=>(product.cat || 'other') === category).sort((a,b)=>Number(a.categoryOrder||0)-Number(b.categoryOrder||0));
+      const section = document.createElement('section');
+      section.className = 'admin-category-group';
+      section.dataset.imageCategory = category;
+      const label = categoryLabels[category] || String(category).replace(/(^|_)([a-z])/g,(_,space,letter)=>`${space ? ' ' : ''}${letter.toUpperCase()}`);
+      section.innerHTML = `<header><div><h4>${label}</h4><small>${items.length} ${items.length === 1 ? 'product' : 'products'}</small></div><span>Follows product order</span></header><div class="admin-image-grid"></div>`;
+      const grid = section.querySelector('.admin-image-grid');
+      items.forEach(it=>{
       const row = document.createElement('div');
       row.className = 'admin-image-card';
       const src = DRAFT[it.id] || '';
@@ -313,6 +321,8 @@
         <small id="img-status-${it.id}" class="muted"></small>
       `;
       grid.appendChild(row);
+      });
+      categoriesWrap.appendChild(section);
     });
     hydrateVisiblePreviews(body);
 

@@ -466,6 +466,23 @@
   }
   function bindIngredientActions(body){ body.querySelectorAll('[data-remove]').forEach(btn=>{ btn.onclick = ()=>{ const row = btn.closest('[data-ing-row]'); if(row) row.remove(); }; }); }
 
+  function ingredientCategoryLabel(category){
+    return String(category || 'general').replace(/(^|[_-])([a-z])/g,(_,separator,letter)=>`${separator ? ' ' : ''}${letter.toUpperCase()}`);
+  }
+  function renderIngredientGroups(body){
+    const entries = Object.entries(INGREDIENTS);
+    const categories = Array.from(new Set(entries.map(([, def])=>String(def.category || 'general')))).sort();
+    body.innerHTML = categories.map(category=>{
+      const rows = entries
+        .filter(([, def])=>String(def.category || 'general') === category)
+        .sort(([, a],[, b])=>String(a.name || '').localeCompare(String(b.name || '')));
+      return `<section class="admin-category-group" data-ingredient-category="${category}">
+        <header><div><h4>${ingredientCategoryLabel(category)}</h4><small>${rows.length} ${rows.length === 1 ? 'ingredient' : 'ingredients'}</small></div><span>Sorted by name</span></header>
+        <div class="stock-ingredient-category">${rows.map(([id, def])=>ingredientRowHtml(id, def)).join('')}</div>
+      </section>`;
+    }).join('');
+  }
+
 
   function readIngredientsFromEditor(body){
     if(!body || !body.querySelector('[data-ing-row]')) return null;
@@ -630,10 +647,19 @@
     `;
     if(showIngredients){
       const ingWrap = document.getElementById('stockIngredients');
-      ingWrap.innerHTML = Object.entries(INGREDIENTS).map(([id, def])=> ingredientRowHtml(id, def)).join('');
+      renderIngredientGroups(ingWrap);
       bindIngredientActions(ingWrap);
       if(showTransfers) bindTransferActions(body);
-      document.getElementById('sAddIngredient').onclick = ()=>{ ingWrap.insertAdjacentHTML('beforeend', ingredientRowHtml('', {name:'', category:'general', unit:'', track_stock:true, stock_location:'both', current_stock_storage:0, current_stock_foodtruck:0, moq_storage:0, moq_foodtruck:0})); bindIngredientActions(ingWrap); };
+      document.getElementById('sAddIngredient').onclick = ()=>{
+        let generalGroup = ingWrap.querySelector('[data-ingredient-category="general"] .stock-ingredient-category');
+        if(!generalGroup){
+          ingWrap.insertAdjacentHTML('beforeend', '<section class="admin-category-group" data-ingredient-category="general"><header><div><h4>General</h4><small>New ingredient</small></div></header><div class="stock-ingredient-category"></div></section>');
+          generalGroup = ingWrap.querySelector('[data-ingredient-category="general"] .stock-ingredient-category');
+        }
+        generalGroup.insertAdjacentHTML('beforeend', ingredientRowHtml('', {name:'', category:'general', unit:'', track_stock:true, stock_location:'both', current_stock_storage:0, current_stock_foodtruck:0, moq_storage:0, moq_foodtruck:0}));
+        bindIngredientActions(ingWrap);
+        generalGroup.lastElementChild.querySelector('[data-field="name"]').focus();
+      };
     }
     if(showRecipes){
       const recipeWrap = document.getElementById('stockRecipes');
