@@ -386,21 +386,31 @@
   }
 
   function recipeRowHtml(p, ingredientOptions){
-    return `<div class="row" data-recipe-row>
-      <span class="left" style="display:grid;grid-template-columns:1.1fr 1fr;gap:8px;flex:1">
-        <span><b>${p.name}</b> <small>(${p.id})</small></span>
-        <div>
-          <input data-product-id="${p.id}" data-recipe-input placeholder="ingredient_id:qty, ingredient_id2:qty" value="${recipeToText(RECIPES[p.id] || {})}">
-          <div style="display:grid;grid-template-columns:1fr 100px auto;gap:6px;margin-top:6px">
+    const recipe = RECIPES[p.id] || {};
+    const ingredients = Object.entries(recipe).map(([id, qty])=>{
+      const def = INGREDIENTS[id] || {};
+      return `<span class="recipe-ingredient-chip"><b>${def.name || id}</b><span>${qty} ${def.unit || ''}</span><button type="button" data-recipe-remove="${id}" aria-label="Remove ${def.name || id}">×</button></span>`;
+    }).join('');
+    return `<article class="admin-recipe-card" data-recipe-row>
+      <header><div><h4>${p.name}</h4><small>${p.id}</small></div><span class="admin-count-badge">${Object.keys(recipe).length} ingredients</span></header>
+      <div class="recipe-ingredient-list" data-recipe-list>${ingredients || '<span class="admin-empty-inline">No ingredients configured</span>'}</div>
+      <div class="recipe-add-row">
             <select data-recipe-ing>${ingredientOptions}</select>
             <input data-recipe-qty type="number" min="0.25" step="0.25" value="1">
-            <button class="mini" data-recipe-add>+ Add</button>
-          </div>
-        </div>
-      </span>
-    </div>`;
+            <button class="x" type="button" data-recipe-add>Add ingredient</button>
+      </div>
+      <details class="admin-advanced"><summary>Advanced raw recipe</summary><input data-product-id="${p.id}" data-recipe-input placeholder="ingredient_id:qty, ingredient_id2:qty" value="${recipeToText(recipe)}"></details>
+    </article>`;
   }
   function bindRecipeBuilder(body){
+    const refreshCard = row=>{
+      const input = row.querySelector('[data-recipe-input]');
+      const product = {id:input.dataset.productId, name:row.querySelector('h4').textContent};
+      const replacement = document.createElement('div');
+      replacement.innerHTML = recipeRowHtml(product, row.querySelector('[data-recipe-ing]').innerHTML);
+      row.replaceWith(replacement.firstElementChild);
+      bindRecipeBuilder(body);
+    };
     body.querySelectorAll('[data-recipe-row]').forEach(row=>{
       const addBtn = row.querySelector('[data-recipe-add]');
       if(!addBtn) return;
@@ -412,7 +422,17 @@
         const parsed = parseRecipeText(input.value);
         parsed[ing] = qty;
         input.value = recipeToText(parsed);
+        refreshCard(row);
       };
+      row.querySelectorAll('[data-recipe-remove]').forEach(button=>{
+        button.onclick = ()=>{
+          const input = row.querySelector('[data-recipe-input]');
+          const parsed = parseRecipeText(input.value);
+          delete parsed[button.dataset.recipeRemove];
+          input.value = recipeToText(parsed);
+          refreshCard(row);
+        };
+      });
     });
   }
   function bindIngredientActions(body){ body.querySelectorAll('[data-remove]').forEach(btn=>{ btn.onclick = ()=>{ const row = btn.closest('[data-ing-row]'); if(row) row.remove(); }; }); }
@@ -463,7 +483,7 @@
     ).join('');
     return `<section class="stock-transfer-panel">
       <div class="stock-transfer-copy">
-        <h4>Transfer / Auffüllen</h4>
+        <h4>Transfer / Replenishment</h4>
         <p>Moves stock from BurgerKiss Store to BurgerKiss Block Factory and syncs both location inventory records.</p>
       </div>
       <div class="stock-transfer-form">
@@ -576,7 +596,7 @@
       ${transferPanelHtml()}
       <div id="stockIngredients" class="stock-ingredients-list"></div>` : ''}
       ${(showIngredients && showRecipes) ? '<hr style="border:0;border-top:1px solid #2a2f39;margin:16px 0">' : ''}
-      ${showRecipes ? `<h4 style="margin:4px 0 8px">${mode === 'addons' ? 'Add-on Recipes' : 'Product Recipes'}</h4><div style="font-size:12px;color:#9aa3ad;margin-bottom:8px">Format: ingredient_id:qty, ingredient_id2:qty</div><div id="stockRecipes"></div>` : ''}
+      ${showRecipes ? `<div class="admin-editor-intro"><div><h4>${mode === 'addons' ? 'Add-on recipes' : 'Product recipes'}</h4><p>Choose ingredients and quantities. Technical recipe text remains available under Advanced.</p></div></div><div id="stockRecipes"></div>` : ''}
     `;
     if(showIngredients){
       const ingWrap = document.getElementById('stockIngredients');
@@ -588,7 +608,11 @@
     if(showRecipes){
       const recipeWrap = document.getElementById('stockRecipes');
       const ingredientOptions = Object.entries(INGREDIENTS).map(([id, def])=> `<option value="${id}">${def.name || id} (${id})</option>`).join('');
-      recipeWrap.innerHTML = recipeProducts.map(p=> recipeRowHtml(p, ingredientOptions)).join('');
+      const categoryLabels = {burger:'Burgers',wings:'Wings',fries:'Fries',salad:'Salads',drink:'Drinks',extra:'Add-ons',sauce:'Sauces'};
+      recipeWrap.innerHTML = Object.entries(categoryLabels).map(([cat,label])=>{
+        const rows = recipeProducts.filter(product=>product.cat === cat).sort((a,b)=>Number(a.categoryOrder||0)-Number(b.categoryOrder||0));
+        return rows.length ? `<section class="admin-category-group"><header><div><h4>${label}</h4><small>${rows.length} recipes</small></div></header><div class="admin-recipe-grid">${rows.map(p=>recipeRowHtml(p, ingredientOptions)).join('')}</div></section>` : '';
+      }).join('');
       bindRecipeBuilder(recipeWrap);
     }
     document.getElementById('modalStock').classList.add('open');
@@ -606,5 +630,5 @@
     INGREDIENTS = syncAllIngredientStock(ingNext); RECIPES = recipeNext; persist(); persistRemoteSoon(); closeEditor(); return true;
   }
 
-  window.BK_STOCK = { KEY, TRANSFERS_KEY, MOVEMENTS_KEY, load, loadRemoteOnce, reset, getSnapshot, getIngredients, getUsageForSlot, consumeSlot, openEditor, closeEditor, saveEditor, remoteEnabled, stockPaths };
+  window.BK_STOCK = { KEY, TRANSFERS_KEY, MOVEMENTS_KEY, load, loadRemoteOnce, reset, getSnapshot, getIngredients, getUsageForSlot, consumeSlot, openEditor, closeEditor, save:saveEditor, saveEditor, remoteEnabled, stockPaths };
 })();
