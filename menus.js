@@ -114,18 +114,18 @@
   }
   function rowHtml(m){
     return `
-      <div class="row" data-menu-row>
-        <span class="left menu-editor-grid">
-          <input data-field="id" placeholder="menu id" value="${esc(m.id)}">
-          <input data-field="name" placeholder="Menu name" value="${esc(m.name)}">
-          <input data-field="menuPrice" type="number" step="1" min="0" placeholder="Menu price" value="${Number(m.menuPrice) || ''}">
-          <select data-field="baseId">${optionHtml(frontProducts(), m.baseId, false)}</select>
-          <select data-field="defaultFries">${optionHtml(byCat('fries'), m.defaultFries, true)}</select>
-          <select data-field="defaultDrink">${optionHtml(byCat('drink'), m.defaultDrink, true)}</select>
-          <select data-field="defaultWingsSauce">${optionHtml(sauces(), m.defaultWingsSauce, true)}</select>
-        </span>
-        <button class="mini" data-remove>Delete</button>
-      </div>`;
+      <article class="admin-menu-card" data-menu-row>
+        <div class="admin-menu-card-heading"><div><h4>${esc(m.name || 'New menu')}</h4><small>Based on ${esc(productName(m.baseId))}</small></div><button class="mini admin-row-danger" data-remove>Delete menu</button></div>
+        <div class="admin-form-grid">
+          <label><span>Menu name</span><input data-field="name" placeholder="Menu name" value="${esc(m.name)}"></label>
+          <label><span>Menu price</span><span class="currency-field"><input data-field="menuPrice" type="number" step="1" min="0" placeholder="0" value="${Number(m.menuPrice) || ''}"><b>GHS</b></span></label>
+          <label><span>Base product</span><select data-field="baseId">${optionHtml(frontProducts(), m.baseId, false)}</select></label>
+          <label><span>Default fries</span><select data-field="defaultFries">${optionHtml(byCat('fries'), m.defaultFries, true)}</select></label>
+          <label><span>Default drink</span><select data-field="defaultDrink">${optionHtml(byCat('drink'), m.defaultDrink, true)}</select></label>
+          <label><span>Default wing sauce</span><select data-field="defaultWingsSauce">${optionHtml(sauces(), m.defaultWingsSauce, true)}</select></label>
+        </div>
+        <details class="admin-advanced"><summary>Technical details</summary><label><span>Menu ID</span><input data-field="id" placeholder="menu_id" value="${esc(m.id)}"></label></details>
+      </article>`;
   }
   function bindRowEvents(body){
     body.querySelectorAll('button[data-remove]').forEach(btn=>{
@@ -137,9 +137,10 @@
     if(!body) return;
     body.innerHTML = `
       <div class="stock-editor-intro">
-        <div><h4>Standard menus</h4><p>Each row configures the menu price and default choices shown after staff select Menu on a main product.</p></div>
+        <div><h4>Standard menus</h4><p>Configure the main product, selling price, and default choices for each menu.</p></div><span class="admin-count-badge">${DRAFT.length} menus</span>
       </div>
-    ` + DRAFT.map(rowHtml).join('');
+      <div class="admin-menu-grid">${DRAFT.map(rowHtml).join('')}</div>
+    `;
     bindRowEvents(body);
   }
   function openEditor(){ DRAFT = clone(MENUS); renderRows(); document.getElementById('modalMenus').classList.add('open'); }
@@ -184,10 +185,9 @@
     applyRows(rows);
     saveRemoteSoon();
     closeEditor();
-    alert(remoteEnabled() ? 'Menus saved online.' : 'Menus saved locally.');
+    return true;
   }
   function reset(){
-    if(!confirm('Reset menu presets to defaults?')) return;
     localStorage.removeItem(KEY);
     MENUS = clone(DEFAULT_MENUS);
     DRAFT = clone(MENUS);

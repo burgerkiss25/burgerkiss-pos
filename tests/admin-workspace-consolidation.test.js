@@ -1,0 +1,23 @@
+const assert = require('assert');
+const fs = require('fs');
+
+const html = fs.readFileSync('admin.html', 'utf8');
+const admin = fs.readFileSync('admin.js', 'utf8');
+const css = fs.readFileSync('style.css', 'utf8');
+
+assert.strictEqual((html.match(/class="admin-editor-card"/g) || []).length, 4);
+assert.match(html, /id="btnCatalog"/);
+assert.match(html, /id="btnInventory"/);
+assert.match(html, /id="btnOperations"/);
+assert.match(html, /aria-label="Product workspace"/);
+assert.match(html, /class="active" type="button">Products<\/button><button id="btnPrices"/);
+assert.match(html, />Prices<\/button><button id="btnImages"/);
+assert.match(html, />Images<\/button><button id="btnRecipes"/);
+assert.match(html, />Recipes<\/button><button id="btnAddons"/);
+assert.match(admin, /function closeWorkspaceModals/);
+assert.match(admin, /function openProductsWorkspace/);
+assert.match(admin, /function openPricesWorkspace/);
+assert.match(admin, /function openImagesWorkspace/);
+assert.match(css, /\.admin-workspace-nav/);
+
+console.log('Admin workspace consolidation checks passed.');

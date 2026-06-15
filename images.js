@@ -297,23 +297,22 @@
 
   function renderRows(){
     const body = document.getElementById('imagesBody');
-    body.innerHTML = '';
-    BK_DATA.BASE.forEach(it=>{
+    body.innerHTML = '<div class="admin-editor-intro"><div><h4>Product images</h4><p>Upload or replace the image shown on product buttons. Images follow the product display order.</p></div></div><div class="admin-image-grid"></div>';
+    const grid = body.querySelector('.admin-image-grid');
+    BK_DATA.BASE.slice().sort((a,b)=>{
+      if(a.cat !== b.cat) return String(a.cat).localeCompare(String(b.cat));
+      return Number(a.categoryOrder||0)-Number(b.categoryOrder||0);
+    }).forEach(it=>{
       const row = document.createElement('div');
-      row.className = 'row';
+      row.className = 'admin-image-card';
       const src = DRAFT[it.id] || '';
       row.innerHTML = `
-        <span class="left">
-          <b>${it.name}</b> <small>(${it.cat})</small>
-        </span>
-        <span class="left">
-          <img class="img-preview ${src ? '' : 'hidden'}" id="img-prev-${it.id}" data-preview-id="${it.id}" loading="lazy" alt="${it.name}">
-          <input type="file" accept="image/*" data-img-id="${it.id}">
-          <small id="img-status-${it.id}" class="muted"></small>
-          <button class="mini" data-remove-id="${it.id}">Remove</button>
-        </span>
+        <div class="admin-image-preview"><img class="img-preview ${src ? '' : 'hidden'}" id="img-prev-${it.id}" data-preview-id="${it.id}" loading="lazy" alt="${it.name}"><span class="${src ? 'hidden' : ''}" data-empty-image>No image</span></div>
+        <div class="admin-image-copy"><b>${it.name}</b><small>${it.cat} · ${it.id}</small></div>
+        <div class="admin-image-actions"><label class="x admin-upload-button">Choose image<input class="sr-only" type="file" accept="image/*" data-img-id="${it.id}"></label><button class="mini" data-remove-id="${it.id}">Remove</button></div>
+        <small id="img-status-${it.id}" class="muted"></small>
       `;
-      body.appendChild(row);
+      grid.appendChild(row);
     });
     hydrateVisiblePreviews(body);
 
@@ -331,7 +330,7 @@
           DIRTY.add(id);
           REMOVED.delete(id);
           const prev = document.getElementById(`img-prev-${id}`);
-          if(prev){ prev.src = DRAFT[id]; prev.classList.remove('hidden'); }
+          if(prev){ prev.src = DRAFT[id]; prev.classList.remove('hidden'); const empty=prev.parentElement.querySelector('[data-empty-image]'); if(empty) empty.classList.add('hidden'); }
           if(status) status.textContent = 'Ready';
         }).catch(e=>{
           console.warn('image processing failed:', e && e.message);
@@ -353,7 +352,7 @@
         REMOVED.add(id);
         const prev = document.getElementById(`img-prev-${id}`);
         const status = document.getElementById(`img-status-${id}`);
-        if(prev){ prev.src = ''; prev.classList.add('hidden'); }
+        if(prev){ prev.src = ''; prev.classList.add('hidden'); const empty=prev.parentElement.querySelector('[data-empty-image]'); if(empty) empty.classList.remove('hidden'); }
         if(status) status.textContent = 'Removed';
       };
     });
@@ -405,7 +404,6 @@
   }
 
   function reset(){
-    if(!confirm('Reset all edited images?')) return;
     MAP = {};
     DRAFT = {};
     DIRTY = new Set();
