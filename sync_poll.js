@@ -1,6 +1,6 @@
-// sync_poll.js – BurgerKiss POS Live-Sync (Variante B: 1 Slot gespiegelt)
-// Polling-basiert: stabil & simpel. Mit BK_SYNC_FORCE_SLOT = 'SN1' arbeiten alle
-// Geräte auf demselben Slot (volle Spiegelung).
+// sync_poll.js – BurgerKiss POS live sync (variant B: one mirrored slot)
+// Polling-based: stable and simple. With BK_SYNC_FORCE_SLOT = 'SN1', all
+// devices use the same slot with full mirroring.
 
 (function(){
   if (window.BK_SYNC_ENABLED === false || window.BK_LEGACY_SLOT_SYNC_ENABLED !== true) return;
