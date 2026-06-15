@@ -10,8 +10,18 @@
   let search = '';
   let filter = 'all';
   let saving = false;
+  let history = [];
+  const HISTORY_KEY = 'bk_catalog_history_v1';
 
   function clone(value){ return JSON.parse(JSON.stringify(value)); }
+  function readHistory(){
+    try{ history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }catch(error){ history = []; }
+    if(!Array.isArray(history)) history = [];
+  }
+  function persistHistory(){
+    history = history.slice(-200);
+    try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); }catch(error){}
+  }
   function esc(value){
     return String(value == null ? '' : value).replace(/[&<>"']/g, char=>({
       '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
@@ -66,7 +76,7 @@
   function updatePath(updates, path, value){
     updates[String(path || '').replace(/^\/+|\/+$/g,'')] = value;
   }
-  async function saveRemoteAtomically(rows, prices, recipes, images){
+  async function saveRemoteAtomically(rows, prices, recipes, images, auditEvent){
     const database = firebaseDatabase();
     if(!database) return {online:false};
     const ts = Date.now();
@@ -80,8 +90,59 @@
     DRAFT.filter(item=>item.cat === 'extra' || item.cat === 'sauce').forEach(item=>{ addonRecipes[item.id] = recipes[item.id] || {}; });
     updatePath(updates, stockPaths.addons, {map:addonRecipes, ts});
     updatePath(updates, '/pos/catalog/meta', {updatedAt:ts, source:'admin-product-catalog'});
+    if(auditEvent) updatePath(updates, `/pos/catalog/history/${auditEvent.id}`, auditEvent);
     await database.ref().update(updates);
     return {online:true, ts};
+  }
+  function auditValue(field, value){
+    if(field === 'image') return value ? 'Image set' : 'No image';
+    if(field === 'recipe') return `${Object.keys(value || {}).length} ingredients`;
+    return value;
+  }
+  function buildAuditEvent(removedIds){
+    const actor = window.BK_ACCESS && BK_ACCESS.actor ? BK_ACCESS.actor() : null;
+    const changes = [];
+    DRAFT.forEach(item=>{
+      const rawBefore = baseline.get(item.originalId);
+      if(!rawBefore){
+        changes.push({productId:item.id, productName:item.name, action:'created', fields:['name','price','category','image','recipe']});
+        return;
+      }
+      const before = JSON.parse(rawBefore);
+      const fields = [];
+      [['name','name'],['price','price'],['category','cat'],['image','image'],['recipe','recipe'],['display order','categoryOrder'],['product ID','id']].forEach(([label,key])=>{
+        if(JSON.stringify(before[key]) !== JSON.stringify(item[key])) fields.push({field:label, before:auditValue(key,before[key]), after:auditValue(key,item[key])});
+      });
+      if(fields.length) changes.push({productId:item.id, productName:item.name, action:'updated', fields});
+    });
+    removedIds.forEach(id=>{
+      const before = baseline.get(id);
+      const product = before ? JSON.parse(before) : {id,name:id};
+      changes.push({productId:id, productName:product.name || id, action:'deleted', fields:[]});
+    });
+    if(!changes.length) return null;
+    const ts = Date.now();
+    return {
+      id:`${ts}_${actor && actor.id ? actor.id : 'unknown'}`,
+      ts,
+      actor:actor || {id:'unknown', name:'Unknown user', role:'unknown'},
+      changes
+    };
+  }
+  function productHistory(item){
+    const entries = history.flatMap(event=>(event.changes || [])
+      .filter(change=>change.productId === item.id || change.productId === item.originalId)
+      .map(change=>({event,change})))
+      .sort((a,b)=>b.event.ts-a.event.ts)
+      .slice(0,5);
+    if(!entries.length) return '<p class="muted">No product changes recorded yet.</p>';
+    return `<div class="catalog-history-list">${entries.map(({event,change})=>{
+      const actor = event.actor && event.actor.name ? event.actor.name : 'Unknown user';
+      const detail = Array.isArray(change.fields) && change.fields.length
+        ? change.fields.map(field=>typeof field === 'string' ? field : `${field.field}: ${field.before} → ${field.after}`).join(' · ')
+        : change.action;
+      return `<article><b>${esc(actor)} · ${esc(change.action)}</b><time datetime="${new Date(event.ts).toISOString()}">${new Date(event.ts).toLocaleString()}</time><small>${esc(detail)}</small></article>`;
+    }).join('')}</div>`;
   }
   function matchesFilter(item){
     if(filter === 'missing-image') return !item.image;
@@ -126,7 +187,7 @@
           <div class="catalog-detail-grid">
             <section><h5>Image</h5><div class="catalog-detail-image">${image}</div><label class="x admin-upload-button">Replace image<input class="sr-only" type="file" accept="image/*" data-image-file></label><button class="mini" type="button" data-image-remove>Remove image</button></section>
             <section><h5>Recipe</h5><div class="recipe-ingredient-list" data-recipe-list>${recipeChips(item,index)}</div><div class="recipe-add-row"><select data-recipe-ingredient>${ingredientOptions()}</select><input data-recipe-quantity type="number" min="0.25" step="0.25" value="1"><button class="x" type="button" data-recipe-add>Add ingredient</button></div></section>
-            <section><h5>Technical details</h5><label><span>Product ID</span><input data-field="id" value="${esc(item.id)}"><small class="catalog-field-error" data-error-for="id"></small></label><h5>History</h5><p class="muted">No product audit history recorded yet.</p><button class="mini admin-row-danger" type="button" data-delete-product>Delete product</button></section>
+            <section><h5>Technical details</h5><label><span>Product ID</span><input data-field="id" value="${esc(item.id)}"><small class="catalog-field-error" data-error-for="id"></small></label><h5>History</h5>${productHistory(item)}<button class="mini admin-row-danger" type="button" data-delete-product>Delete product</button></section>
           </div>
         </details>
         <div class="catalog-row-error" role="alert"></div>
@@ -238,7 +299,27 @@
       bindRecipeRemove(card);
     });
   }
-  function openEditor(){ loadDraft(); search=''; render(); }
+  function loadRemoteHistory(){
+    const database = firebaseDatabase();
+    if(!database) return Promise.resolve(false);
+    return database.ref('/pos/catalog/history').limitToLast(100).get().then(snapshot=>{
+      const remote = snapshot.val() || {};
+      history = Object.values(remote).filter(Boolean);
+      persistHistory();
+      render();
+      return true;
+    }).catch(error=>{
+      console.warn('catalog history load failed:', error && error.message);
+      return false;
+    });
+  }
+  function openEditor(){
+    readHistory();
+    loadDraft();
+    search='';
+    render();
+    loadRemoteHistory();
+  }
   function addProduct(){
     collectDraft();
     const category = 'extra';
@@ -303,12 +384,17 @@
     Object.entries(recipes).forEach(([id,recipe])=>{ finalRecipes[id] = recipe; });
     saving = true;
     updateSaveButton();
+    const auditEvent = buildAuditEvent(removedIds);
     try{
-      await saveRemoteAtomically(rows, prices, finalRecipes, finalImages);
+      await saveRemoteAtomically(rows, prices, finalRecipes, finalImages, auditEvent);
       if(!BK_PRODUCTS.saveRows(rows, {localOnly:true})) return false;
       BK_PRICES.setPrices(prices, removedIds, {localOnly:true});
       BK_STOCK.setRecipes(recipes, removedIds, {localOnly:true});
       if(Object.keys(images).length && !await BK_IMAGES.saveChanges(images, {localOnly:true})) return false;
+      if(auditEvent){
+        history.push(auditEvent);
+        persistHistory();
+      }
       loadDraft();
       render();
       return true;

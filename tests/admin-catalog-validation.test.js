@@ -18,6 +18,6 @@ assert.match(catalog, /aria-invalid/);
 assert.match(css, /\.catalog-product-changed/);
 assert.match(css, /\.catalog-product-invalid/);
 assert.match(css, /\.catalog-change-badge/);
-assert.match(html, /catalog\.js\?v=4/);
+assert.match(html, /catalog\.js\?v=5/);
 
 console.log('Catalog validation and change visibility checks passed.');
