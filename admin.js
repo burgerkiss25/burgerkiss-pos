@@ -257,6 +257,21 @@
   BK_MENUS.load();
   BK_IMAGES.load();
   BK_STOCK.load();
+  let activeStockMode = 'stock';
+  const stockEditorCopy = {
+    stock: { title:'Stock overview', description:'Review inventory levels, locations, and transfers', label:'Stock', reset:'Reset stock to defaults' },
+    ingredients: { title:'Ingredients', description:'Manage ingredient details, units, locations, and minimum levels', label:'Ingredients', reset:'Reset ingredients to defaults' },
+    recipes: { title:'Product recipes', description:'Define ingredient consumption for customer-facing products', label:'Product recipes', reset:'Reset product recipes to defaults' },
+    addons: { title:'Add-ons', description:'Manage paid extras, sauces, and their stock consumption', label:'Add-ons', reset:'Reset add-ons to defaults' }
+  };
+  function openStockEditor(mode){
+    activeStockMode = mode || 'stock';
+    const copy = stockEditorCopy[activeStockMode];
+    document.getElementById('stockModalTitle').textContent = copy.title;
+    document.getElementById('stockModalDescription').textContent = copy.description;
+    document.getElementById('sReset').textContent = copy.reset;
+    BK_STOCK.openEditor(activeStockMode);
+  }
 
   document.getElementById('btnPrices').onclick = ()=> BK_PRICES.openEditor(false);
   document.getElementById('pClose').onclick    = ()=> BK_PRICES.closeEditor();
@@ -281,17 +296,17 @@
   document.getElementById('iSave').onclick     = ()=> saveWithFeedback(()=>BK_IMAGES.save(), 'Images');
   document.getElementById('iReset').onclick    = ()=> resetWithConfirmation(()=>BK_IMAGES.reset(), 'Images');
 
-  document.getElementById('btnStock').onclick = ()=> BK_STOCK.openEditor();
-  document.getElementById('btnIngredients').onclick = ()=> BK_STOCK.openEditor('ingredients');
-  document.getElementById('btnRecipes').onclick = ()=> BK_STOCK.openEditor('recipes');
-  document.getElementById('btnAddons').onclick = ()=> BK_STOCK.openEditor('addons');
+  document.getElementById('btnStock').onclick = ()=> openStockEditor('stock');
+  document.getElementById('btnIngredients').onclick = ()=> openStockEditor('ingredients');
+  document.getElementById('btnRecipes').onclick = ()=> openStockEditor('recipes');
+  document.getElementById('btnAddons').onclick = ()=> openStockEditor('addons');
   document.getElementById('btnPackagingRules').onclick = openPackagingRules;
   document.getElementById('packClose').onclick = closePackagingRules;
   document.getElementById('packSave').onclick = ()=> saveWithFeedback(savePackagingRulesFromModal, 'Packaging rules');
   document.getElementById('packReset').onclick = ()=> resetWithConfirmation(()=>{ savePackagingRules(PACK_RULES_DEFAULT); openPackagingRules(); }, 'Packaging rules');
   document.getElementById('sClose').onclick   = ()=> BK_STOCK.closeEditor();
-  document.getElementById('sSave').onclick    = ()=> saveWithFeedback(()=>BK_STOCK.save(), 'Stock');
-  document.getElementById('sReset').onclick   = ()=> resetWithConfirmation(()=>BK_STOCK.reset(), 'Stock');
+  document.getElementById('sSave').onclick    = ()=> saveWithFeedback(()=>BK_STOCK.save(), stockEditorCopy[activeStockMode].label);
+  document.getElementById('sReset').onclick   = ()=> resetWithConfirmation(()=>{ BK_STOCK.resetEditor(activeStockMode); openStockEditor(activeStockMode); }, stockEditorCopy[activeStockMode].label);
   document.getElementById('btnRefreshDbStatus').onclick = refreshDbStatus;
   document.getElementById('adminConfirmCancel').onclick = ()=> finishConfirmation(false);
   document.getElementById('adminConfirmAccept').onclick = ()=> finishConfirmation(true);
