@@ -77,9 +77,22 @@
     if(typeof ov==='number' && !isNaN(ov)) return ov;
     return Number.isFinite(base) ? base : 0;
   }
+  function setPrices(values, removedIds){
+    (removedIds || []).forEach(id=>delete MAP[id]);
+    Object.entries(values || {}).forEach(([id, value])=>{
+      const price = Number(value);
+      if(Number.isFinite(price) && price >= 0) MAP[id] = price;
+    });
+    MAP = cleanMap(MAP);
+    persistLocal();
+    saveRemoteSoon();
+    renderPosIfAvailable();
+    return true;
+  }
   function openEditor(force, options){
     const modal = document.getElementById('modalPrices');
     const body  = document.getElementById('pricesBody');
+    if(!body) return;
     if(force) body.innerHTML = '';
     if(!body.innerHTML){
       const labels = {burger:'Burgers',wings:'Wings',fries:'Fries',salad:'Salads',drink:'Drinks',extra:'Add-ons',sauce:'Sauces'};
@@ -132,5 +145,5 @@
     renderPosIfAvailable();
   }
 
-  window.BK_PRICES = { load, loadRemoteOnce, getPrice, openEditor, closeEditor, save, reset, remotePath, KEY };
+  window.BK_PRICES = { load, loadRemoteOnce, getPrice, setPrices, openEditor, closeEditor, save, reset, remotePath, KEY };
 })();

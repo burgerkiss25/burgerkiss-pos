@@ -16,7 +16,7 @@ assert.match(admin, /function openStockEditor/);
 assert.match(admin, /stockEditorCopy/);
 assert.match(admin, /openStockEditor\('stock'\)/);
 assert.match(admin, /openStockEditor\('ingredients'\)/);
-assert.match(admin, /BK_STOCK\.openEditor\(section, \{bodyId:'catalogStockBody'/);
+assert.match(admin, /BK_CATALOG\.openEditor/);
 assert.match(admin, /resetEditor\(activeStockMode\)/);
 
 assert.match(stock, /const showIngredients = activeMode === 'stock' \|\| activeMode === 'ingredients'/);

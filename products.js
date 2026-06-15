@@ -78,6 +78,11 @@
     renderPosIfAvailable();
     return true;
   }
+  function saveRows(rows){
+    if(!applyRows(rows)) return false;
+    saveRemoteSoon();
+    return true;
+  }
 
   function loadRemoteOnce(){
     const ref = remoteRef();
@@ -224,6 +229,7 @@
 
   function renderRows(){
     const body = document.getElementById('productsBody');
+    if(!body) return;
     const grouped = CATEGORIES.map(([cat,label])=>{
       const rows = DRAFT.filter(row=>row.cat === cat).sort((a,b)=>Number(a.categoryOrder||0)-Number(b.categoryOrder||0));
       if(!rows.length) return '';
@@ -289,5 +295,5 @@
     renderPosIfAvailable();
   }
 
-  window.BK_PRODUCTS = { KEY, load, loadRemoteOnce, remotePath, openEditor, closeEditor, addRow, save, reset };
+  window.BK_PRODUCTS = { KEY, load, loadRemoteOnce, remotePath, openEditor, closeEditor, addRow, save, saveRows, reset };
 })();

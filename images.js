@@ -260,6 +260,22 @@
   function fileToStoredImage(file){
     return readFileAsDataUrl(file).then(resizeImageDataUrl);
   }
+  function saveChanges(changes){
+    DRAFT = clone(MAP);
+    DIRTY = new Set();
+    REMOVED = new Set();
+    Object.entries(changes || {}).forEach(([id, value])=>{
+      if(value){
+        DRAFT[id] = value;
+        DIRTY.add(id);
+      }else{
+        delete DRAFT[id];
+        DIRTY.add(id);
+        REMOVED.add(id);
+      }
+    });
+    return save();
+  }
 
   function compactDraftImages(){
     const ids = Object.keys(DRAFT).filter(id=> typeof DRAFT[id] === 'string' && DRAFT[id].startsWith('data:image/') && DRAFT[id].length > 300000);
@@ -297,6 +313,7 @@
 
   function renderRows(){
     const body = document.getElementById('imagesBody');
+    if(!body) return;
     const categoryLabels = {burger:'Burgers',wings:'Wings',fries:'Fries',salad:'Salads',drink:'Drinks',extra:'Add-ons',sauce:'Sauces'};
     const products = BK_DATA.BASE.slice();
     const categories = Array.from(new Set(products.map(product=>product.cat || 'other')));
@@ -426,5 +443,5 @@
     renderPosIfAvailable();
   }
 
-  window.BK_IMAGES = { KEY, load, loadRemoteOnce, watchRemote, get, openEditor, closeEditor, save, reset, remotePath };
+  window.BK_IMAGES = { KEY, load, loadRemoteOnce, watchRemote, get, prepareFile:fileToStoredImage, saveChanges, openEditor, closeEditor, save, reset, remotePath };
 })();
