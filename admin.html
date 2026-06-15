@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – Admin Editors</title>
-  <link rel="stylesheet" href="./style.css?v=54" />
+  <link rel="stylesheet" href="./style.css?v=55" />
   <script src="./firebase-config.js?v=2"></script>
 </head>
 <body class="admin-page">
@@ -97,6 +97,8 @@
   <div class="modal" id="modalImages"><div class="sheet"><header><b>Edit Images</b><div><button class="x" id="iSave">Save</button><button class="x" id="iReset">Reset</button><button class="x" id="iClose">Close</button></div></header><div class="body" id="imagesBody"></div></div></div>
   <div class="modal" id="modalStock"><div class="sheet"><header><b id="stockModalTitle">Edit Stock</b><div><button class="x" id="sSave">Save</button><button class="x" id="sReset">Reset</button><button class="x" id="sClose">Close</button></div></header><div class="body" id="stockBody"></div></div></div>
   <div class="modal" id="modalPackagingRules"><div class="sheet"><header><b>Packaging Rules</b><div><button class="x" id="packSave">Save</button><button class="x" id="packReset">Reset</button><button class="x" id="packClose">Close</button></div></header><div class="body" id="packagingRulesBody"></div></div></div>
+  <div class="admin-toast-region" id="adminToastRegion" aria-live="polite" aria-atomic="true"></div>
+  <div class="modal admin-confirm-modal" id="adminConfirmModal" role="dialog" aria-modal="true" aria-labelledby="adminConfirmTitle" aria-describedby="adminConfirmMessage"><div class="admin-confirm-card"><div class="eyebrow">Please confirm</div><h2 id="adminConfirmTitle">Discard changes?</h2><p id="adminConfirmMessage">This action cannot be undone.</p><div class="admin-confirm-actions"><button class="x" id="adminConfirmCancel" type="button">Keep editing</button><button class="x admin-danger" id="adminConfirmAccept" type="button">Discard changes</button></div></div></div>
 
   <script>
     if(!window.FIREBASE_CONFIG){
@@ -130,7 +132,7 @@
       }
       if(document.querySelector('script[data-admin-boot]')) return;
       const script = document.createElement('script');
-      script.src = 'admin.js?v=2';
+      script.src = 'admin.js?v=3';
       script.dataset.adminBoot = 'true';
       document.body.appendChild(script);
     });
