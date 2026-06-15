@@ -1,4 +1,4 @@
-// Produkte & Menüregeln
+// Products and menu rules
 window.BK_DATA = {
   BASE: [
     {id:'hamburger', name:'Hamburger', price:95, cat:'burger'},

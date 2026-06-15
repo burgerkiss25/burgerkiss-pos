@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – Admin Editors</title>
-  <link rel="stylesheet" href="./style.css?v=45" />
+  <link rel="stylesheet" href="./style.css?v=55" />
   <script src="./firebase-config.js?v=2"></script>
 </head>
 <body class="admin-page">
@@ -20,32 +20,72 @@
       </div>
       <nav class="admin-actions" aria-label="Admin editor navigation">
         <a class="x" href="order.html">← Back to POS</a>
-        <button class="x" id="btnPrices" type="button">Edit Prices</button>
-        <button class="x" id="btnProducts" type="button">Edit Products</button>
-        <button class="x" id="btnMenus" type="button">Edit Menus</button>
-        <button class="x" id="btnImages" type="button">Edit Images</button>
-        <button class="x" id="btnStock" type="button">Edit Stock</button>
-        <button class="x" id="btnIngredients" type="button">Edit Ingredients</button>
-        <button class="x" id="btnRecipes" type="button">Edit Product Recipes</button>
-        <button class="x" id="btnAddons" type="button">Edit Add-ons</button>
-        <button class="x" id="btnPackagingRules" type="button">Packaging Rules</button>
       </nav>
     </header>
   </div>
 
   <div class="wrap">
-    <section>
-      <div class="panel">
-        <h3>Editor area</h3>
-        <p class="muted-copy">Use the buttons above to open Price/Product/Image/Stock editors.</p>
-      </div>
-      <div class="panel" id="adminDbStatusPanel">
-        <div class="slot-head">
-          <div><span class="label">Online DB Status</span> · Firebase Realtime Database</div>
-          <button class="x" id="btnRefreshDbStatus" type="button">Refresh</button>
+    <section class="admin-dashboard" aria-labelledby="adminDashboardTitle">
+      <div class="admin-dashboard-heading">
+        <div>
+          <div class="eyebrow">Management workspace</div>
+          <h2 id="adminDashboardTitle">Choose an editor</h2>
+          <p>Manage the catalog, stock operations, and service rules from one place.</p>
         </div>
-        <div class="rows" id="adminDbStatusBody">
-          <div class="empty-state">Checking Firebase status...</div>
+      </div>
+
+      <div class="admin-editor-groups">
+        <article class="admin-editor-group">
+          <div class="admin-group-heading">
+            <span class="admin-group-icon" aria-hidden="true">01</span>
+            <div><h3>Catalog</h3><p>Customer-facing products, menus, prices, and images.</p></div>
+          </div>
+          <div class="admin-editor-grid">
+            <button class="admin-editor-card" id="btnProducts" type="button"><span class="admin-card-icon" aria-hidden="true">P</span><span><b>Products</b><small>Names, categories, and availability</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+            <button class="admin-editor-card" id="btnMenus" type="button"><span class="admin-card-icon" aria-hidden="true">M</span><span><b>Menus</b><small>Combo contents and menu structure</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+            <button class="admin-editor-card" id="btnPrices" type="button"><span class="admin-card-icon" aria-hidden="true">₵</span><span><b>Prices</b><small>Product and menu pricing</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+            <button class="admin-editor-card" id="btnImages" type="button"><span class="admin-card-icon" aria-hidden="true">I</span><span><b>Images</b><small>Product image URLs and uploads</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+          </div>
+        </article>
+
+        <article class="admin-editor-group">
+          <div class="admin-group-heading">
+            <span class="admin-group-icon" aria-hidden="true">02</span>
+            <div><h3>Stock & production</h3><p>Inventory, ingredients, recipes, and paid extras.</p></div>
+          </div>
+          <div class="admin-editor-grid">
+            <button class="admin-editor-card" id="btnStock" type="button"><span class="admin-card-icon" aria-hidden="true">S</span><span><b>Stock overview</b><small>Inventory levels and locations</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+            <button class="admin-editor-card" id="btnIngredients" type="button"><span class="admin-card-icon" aria-hidden="true">IN</span><span><b>Ingredients</b><small>Units, thresholds, and storage</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+            <button class="admin-editor-card" id="btnRecipes" type="button"><span class="admin-card-icon" aria-hidden="true">R</span><span><b>Product recipes</b><small>Ingredient consumption per product</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+            <button class="admin-editor-card" id="btnAddons" type="button"><span class="admin-card-icon" aria-hidden="true">+</span><span><b>Add-ons</b><small>Extra items and stock mappings</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+          </div>
+        </article>
+
+        <article class="admin-editor-group">
+          <div class="admin-group-heading">
+            <span class="admin-group-icon" aria-hidden="true">03</span>
+            <div><h3>Service rules</h3><p>Operational settings used during order handover.</p></div>
+          </div>
+          <div class="admin-editor-grid admin-editor-grid-single">
+            <button class="admin-editor-card" id="btnPackagingRules" type="button"><span class="admin-card-icon" aria-hidden="true">B</span><span><b>Packaging rules</b><small>Bag mappings and order-size thresholds</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+          </div>
+        </article>
+      </div>
+
+      <div class="panel" id="adminDbStatusPanel">
+        <div class="admin-status-heading">
+          <div>
+            <div class="eyebrow">System health</div>
+            <h2>Online database</h2>
+            <p id="adminDbStatusSummary">Checking Firebase status...</p>
+          </div>
+          <button class="x" id="btnRefreshDbStatus" type="button">Refresh status</button>
+        </div>
+        <div class="admin-status-table-wrap">
+          <table class="admin-status-table">
+            <thead><tr><th scope="col">Area</th><th scope="col">Status</th><th scope="col">Last activity</th><th scope="col"><span class="sr-only">Details</span></th></tr></thead>
+            <tbody id="adminDbStatusBody"><tr><td colspan="4" class="empty-state">Checking Firebase status...</td></tr></tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -57,6 +97,8 @@
   <div class="modal" id="modalImages"><div class="sheet"><header><b>Edit Images</b><div><button class="x" id="iSave">Save</button><button class="x" id="iReset">Reset</button><button class="x" id="iClose">Close</button></div></header><div class="body" id="imagesBody"></div></div></div>
   <div class="modal" id="modalStock"><div class="sheet"><header><b id="stockModalTitle">Edit Stock</b><div><button class="x" id="sSave">Save</button><button class="x" id="sReset">Reset</button><button class="x" id="sClose">Close</button></div></header><div class="body" id="stockBody"></div></div></div>
   <div class="modal" id="modalPackagingRules"><div class="sheet"><header><b>Packaging Rules</b><div><button class="x" id="packSave">Save</button><button class="x" id="packReset">Reset</button><button class="x" id="packClose">Close</button></div></header><div class="body" id="packagingRulesBody"></div></div></div>
+  <div class="admin-toast-region" id="adminToastRegion" aria-live="polite" aria-atomic="true"></div>
+  <div class="modal admin-confirm-modal" id="adminConfirmModal" role="dialog" aria-modal="true" aria-labelledby="adminConfirmTitle" aria-describedby="adminConfirmMessage"><div class="admin-confirm-card"><div class="eyebrow">Please confirm</div><h2 id="adminConfirmTitle">Discard changes?</h2><p id="adminConfirmMessage">This action cannot be undone.</p><div class="admin-confirm-actions"><button class="x" id="adminConfirmCancel" type="button">Keep editing</button><button class="x admin-danger" id="adminConfirmAccept" type="button">Discard changes</button></div></div></div>
 
   <script>
     if(!window.FIREBASE_CONFIG){
@@ -90,7 +132,7 @@
       }
       if(document.querySelector('script[data-admin-boot]')) return;
       const script = document.createElement('script');
-      script.src = 'admin.js?v=2';
+      script.src = 'admin.js?v=3';
       script.dataset.adminBoot = 'true';
       document.body.appendChild(script);
     });
