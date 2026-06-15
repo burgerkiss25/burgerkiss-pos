@@ -77,7 +77,7 @@
     if(typeof ov==='number' && !isNaN(ov)) return ov;
     return Number.isFinite(base) ? base : 0;
   }
-  function setPrices(values, removedIds){
+  function setPrices(values, removedIds, options){
     (removedIds || []).forEach(id=>delete MAP[id]);
     Object.entries(values || {}).forEach(([id, value])=>{
       const price = Number(value);
@@ -85,10 +85,11 @@
     });
     MAP = cleanMap(MAP);
     persistLocal();
-    saveRemoteSoon();
+    if(!(options && options.localOnly)) saveRemoteSoon();
     renderPosIfAvailable();
     return true;
   }
+  function getMap(){ return Object.assign({}, MAP); }
   function openEditor(force, options){
     const modal = document.getElementById('modalPrices');
     const body  = document.getElementById('pricesBody');
@@ -145,5 +146,5 @@
     renderPosIfAvailable();
   }
 
-  window.BK_PRICES = { load, loadRemoteOnce, getPrice, setPrices, openEditor, closeEditor, save, reset, remotePath, KEY };
+  window.BK_PRICES = { load, loadRemoteOnce, getPrice, getMap, setPrices, openEditor, closeEditor, save, reset, remotePath, KEY };
 })();

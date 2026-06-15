@@ -354,16 +354,17 @@
   }
   function getIngredients(){ return clone(INGREDIENTS); }
   function getRecipe(productId){ return clone(RECIPES[productId] || {}); }
-  function setRecipes(changes, removedIds){
+  function setRecipes(changes, removedIds, options){
     (removedIds || []).forEach(productId=>{ delete RECIPES[normalizeId(productId)]; });
     Object.entries(changes || {}).forEach(([productId, recipe])=>{
       RECIPES[normalizeId(productId)] = sanitizeRecipes({[productId]:recipe})[normalizeId(productId)] || {};
     });
     persist();
-    persistRemoteSoon();
+    if(!(options && options.localOnly)) persistRemoteSoon();
     renderPosIfAvailable();
     return true;
   }
+  function getRecipes(){ return clone(RECIPES); }
 
   function ingredientRowHtml(id, def){
     const locationOptions = ['storage', 'foodtruck', 'both'].map(loc=>
@@ -703,5 +704,5 @@
     INGREDIENTS = syncAllIngredientStock(ingNext); RECIPES = recipeNext; persist(); persistRemoteSoon(); closeEditor(); return true;
   }
 
-  window.BK_STOCK = { KEY, TRANSFERS_KEY, MOVEMENTS_KEY, load, loadRemoteOnce, reset, resetEditor, getSnapshot, getIngredients, getRecipe, setRecipes, getUsageForSlot, consumeSlot, openEditor, closeEditor, save:saveEditor, saveEditor, remoteEnabled, stockPaths };
+  window.BK_STOCK = { KEY, TRANSFERS_KEY, MOVEMENTS_KEY, load, loadRemoteOnce, reset, resetEditor, getSnapshot, getIngredients, getRecipe, getRecipes, setRecipes, getUsageForSlot, consumeSlot, openEditor, closeEditor, save:saveEditor, saveEditor, remoteEnabled, stockPaths };
 })();

@@ -260,7 +260,20 @@
   function fileToStoredImage(file){
     return readFileAsDataUrl(file).then(resizeImageDataUrl);
   }
-  function saveChanges(changes){
+  function saveChanges(changes, options){
+    if(options && options.localOnly){
+      Object.entries(changes || {}).forEach(([id, value])=>{
+        if(value) MAP[id] = value;
+        else delete MAP[id];
+      });
+      MAP = cleanMap(MAP);
+      DRAFT = clone(MAP);
+      DIRTY = new Set();
+      REMOVED = new Set();
+      persistLocal();
+      renderPosIfAvailable();
+      return Promise.resolve(true);
+    }
     DRAFT = clone(MAP);
     DIRTY = new Set();
     REMOVED = new Set();
@@ -276,6 +289,7 @@
     });
     return save();
   }
+  function getMap(){ return clone(MAP); }
 
   function compactDraftImages(){
     const ids = Object.keys(DRAFT).filter(id=> typeof DRAFT[id] === 'string' && DRAFT[id].startsWith('data:image/') && DRAFT[id].length > 300000);
@@ -443,5 +457,5 @@
     renderPosIfAvailable();
   }
 
-  window.BK_IMAGES = { KEY, load, loadRemoteOnce, watchRemote, get, prepareFile:fileToStoredImage, saveChanges, openEditor, closeEditor, save, reset, remotePath };
+  window.BK_IMAGES = { KEY, load, loadRemoteOnce, watchRemote, get, getMap, prepareFile:fileToStoredImage, saveChanges, openEditor, closeEditor, save, reset, remotePath };
 })();

@@ -78,9 +78,9 @@
     renderPosIfAvailable();
     return true;
   }
-  function saveRows(rows){
+  function saveRows(rows, options){
     if(!applyRows(rows)) return false;
-    saveRemoteSoon();
+    if(!(options && options.localOnly)) saveRemoteSoon();
     return true;
   }
 

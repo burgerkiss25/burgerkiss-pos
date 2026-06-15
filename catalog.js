@@ -9,6 +9,7 @@
   let baseline = new Map();
   let search = '';
   let filter = 'all';
+  let saving = false;
 
   function clone(value){ return JSON.parse(JSON.stringify(value)); }
   function esc(value){
@@ -54,8 +55,33 @@
     const button = document.getElementById('catalogSave');
     if(!button) return;
     const count = changedCount();
-    button.disabled = count === 0;
-    button.textContent = count ? `Save ${count} change${count === 1 ? '' : 's'}` : 'All changes saved';
+    button.disabled = saving || count === 0;
+    button.textContent = saving ? 'Saving…' : count ? `Save ${count} change${count === 1 ? '' : 's'}` : 'All changes saved';
+  }
+  function firebaseDatabase(){
+    if(window.BK_SYNC_ENABLED === false || !window.FIREBASE_CONFIG || !window.firebase || !window.firebase.database) return null;
+    const app = window.firebase.apps && firebase.apps.length ? firebase.app() : firebase.initializeApp(window.FIREBASE_CONFIG);
+    return firebase.database(app);
+  }
+  function updatePath(updates, path, value){
+    updates[String(path || '').replace(/^\/+|\/+$/g,'')] = value;
+  }
+  async function saveRemoteAtomically(rows, prices, recipes, images){
+    const database = firebaseDatabase();
+    if(!database) return {online:false};
+    const ts = Date.now();
+    const updates = {};
+    updatePath(updates, BK_PRODUCTS.remotePath(), {rows, ts});
+    updatePath(updates, BK_PRICES.remotePath(), {map:prices, ts});
+    updatePath(updates, BK_IMAGES.remotePath(), {map:images, ts});
+    const stockPaths = BK_STOCK.stockPaths();
+    updatePath(updates, stockPaths.recipes, {map:recipes, ts});
+    const addonRecipes = {};
+    DRAFT.filter(item=>item.cat === 'extra' || item.cat === 'sauce').forEach(item=>{ addonRecipes[item.id] = recipes[item.id] || {}; });
+    updatePath(updates, stockPaths.addons, {map:addonRecipes, ts});
+    updatePath(updates, '/pos/catalog/meta', {updatedAt:ts, source:'admin-product-catalog'});
+    await database.ref().update(updates);
+    return {online:true, ts};
   }
   function matchesFilter(item){
     if(filter === 'missing-image') return !item.image;
@@ -226,6 +252,7 @@
     if(card){ card.scrollIntoView({block:'center'}); card.querySelector('[data-field="name"]').select(); }
   }
   async function save(){
+    if(saving) return false;
     collectDraft();
     const ids = new Set();
     for(let index=0; index<DRAFT.length; index++){
@@ -269,13 +296,29 @@
       }
     });
     removedIds.forEach(id=>{ images[id] = ''; });
-    if(!BK_PRODUCTS.saveRows(rows)) return false;
-    BK_PRICES.setPrices(prices, removedIds);
-    BK_STOCK.setRecipes(recipes, removedIds);
-    if(Object.keys(images).length && !await BK_IMAGES.saveChanges(images)) return false;
-    loadDraft();
-    render();
-    return true;
+    const finalImages = BK_IMAGES.getMap();
+    Object.entries(images).forEach(([id,value])=>{ if(value) finalImages[id] = value; else delete finalImages[id]; });
+    const finalRecipes = BK_STOCK.getRecipes();
+    removedIds.forEach(id=>delete finalRecipes[id]);
+    Object.entries(recipes).forEach(([id,recipe])=>{ finalRecipes[id] = recipe; });
+    saving = true;
+    updateSaveButton();
+    try{
+      await saveRemoteAtomically(rows, prices, finalRecipes, finalImages);
+      if(!BK_PRODUCTS.saveRows(rows, {localOnly:true})) return false;
+      BK_PRICES.setPrices(prices, removedIds, {localOnly:true});
+      BK_STOCK.setRecipes(recipes, removedIds, {localOnly:true});
+      if(Object.keys(images).length && !await BK_IMAGES.saveChanges(images, {localOnly:true})) return false;
+      loadDraft();
+      render();
+      return true;
+    }catch(error){
+      console.warn('atomic catalog save failed:', error && error.message);
+      throw error;
+    }finally{
+      saving = false;
+      updateSaveButton();
+    }
   }
   function reset(){
     BK_PRODUCTS.reset();
