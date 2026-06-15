@@ -265,20 +265,37 @@
     addons: { title:'Add-ons', description:'Manage paid extras, sauces, and their stock consumption', label:'Add-ons', reset:'Reset add-ons to defaults' }
   };
   function openStockEditor(mode){
+    closeWorkspaceModals();
     activeStockMode = mode || 'stock';
     const copy = stockEditorCopy[activeStockMode];
     document.getElementById('stockModalTitle').textContent = copy.title;
     document.getElementById('stockModalDescription').textContent = copy.description;
     document.getElementById('sReset').textContent = copy.reset;
+    const activeId = activeStockMode === 'stock' ? 'btnStock' : activeStockMode === 'ingredients' ? 'btnIngredients' : activeStockMode === 'recipes' ? 'btnRecipesFromStock' : 'btnAddonsFromStock';
+    document.querySelectorAll('#modalStock .admin-workspace-nav button').forEach(button=>button.classList.toggle('active', button.id === activeId));
     BK_STOCK.openEditor(activeStockMode);
   }
+  function closeWorkspaceModals(){
+    ['modalProducts','modalPrices','modalImages','modalMenus','modalStock','modalPackagingRules'].forEach(id=>{
+      const modal = document.getElementById(id);
+      if(modal) modal.classList.remove('open');
+    });
+  }
+  function openProductsWorkspace(){ closeWorkspaceModals(); BK_PRODUCTS.openEditor(); }
+  function openPricesWorkspace(){ closeWorkspaceModals(); BK_PRICES.openEditor(false); }
+  function openImagesWorkspace(){ closeWorkspaceModals(); BK_IMAGES.openEditor(); }
+  function openOperationsWorkspace(){ closeWorkspaceModals(); openPackagingRules(); }
 
-  document.getElementById('btnPrices').onclick = ()=> BK_PRICES.openEditor(false);
+  document.getElementById('btnCatalog').onclick = openProductsWorkspace;
+  document.getElementById('btnInventory').onclick = ()=> openStockEditor('stock');
+  document.getElementById('btnOperations').onclick = openOperationsWorkspace;
+  document.getElementById('btnPrices').onclick = openPricesWorkspace;
+  document.getElementById('btnProducts').onclick = openProductsWorkspace;
+  document.getElementById('btnImages').onclick = openImagesWorkspace;
   document.getElementById('pClose').onclick    = ()=> BK_PRICES.closeEditor();
   document.getElementById('pSave').onclick     = ()=> saveWithFeedback(()=>BK_PRICES.save(), 'Prices');
   document.getElementById('pReset').onclick    = ()=> resetWithConfirmation(()=>BK_PRICES.reset(), 'Prices');
 
-  document.getElementById('btnProducts').onclick = ()=> BK_PRODUCTS.openEditor();
   document.getElementById('prodClose').onclick   = ()=> BK_PRODUCTS.closeEditor();
   document.getElementById('prodAdd').onclick     = ()=> BK_PRODUCTS.addRow();
   document.getElementById('prodSave').onclick    = ()=> saveWithFeedback(()=>BK_PRODUCTS.save(), 'Products');
@@ -291,7 +308,6 @@
   document.getElementById('menuReset').onclick  = ()=> resetWithConfirmation(()=>BK_MENUS.reset(), 'Menus');
 
 
-  document.getElementById('btnImages').onclick = ()=> BK_IMAGES.openEditor();
   document.getElementById('iClose').onclick    = ()=> BK_IMAGES.closeEditor();
   document.getElementById('iSave').onclick     = ()=> saveWithFeedback(()=>BK_IMAGES.save(), 'Images');
   document.getElementById('iReset').onclick    = ()=> resetWithConfirmation(()=>BK_IMAGES.reset(), 'Images');
@@ -300,7 +316,11 @@
   document.getElementById('btnIngredients').onclick = ()=> openStockEditor('ingredients');
   document.getElementById('btnRecipes').onclick = ()=> openStockEditor('recipes');
   document.getElementById('btnAddons').onclick = ()=> openStockEditor('addons');
-  document.getElementById('btnPackagingRules').onclick = openPackagingRules;
+  ['btnProductsFromImages','btnProductsFromStock'].forEach(id=>document.getElementById(id).onclick = openProductsWorkspace);
+  ['btnPricesFromImages'].forEach(id=>document.getElementById(id).onclick = openPricesWorkspace);
+  document.getElementById('btnImagesFromPrices').onclick = openImagesWorkspace;
+  ['btnRecipesFromPrices','btnRecipesFromImages','btnRecipesFromStock'].forEach(id=>document.getElementById(id).onclick = ()=>openStockEditor('recipes'));
+  ['btnAddonsFromPrices','btnAddonsFromImages','btnAddonsFromStock'].forEach(id=>document.getElementById(id).onclick = ()=>openStockEditor('addons'));
   document.getElementById('packClose').onclick = closePackagingRules;
   document.getElementById('packSave').onclick = ()=> saveWithFeedback(savePackagingRulesFromModal, 'Packaging rules');
   document.getElementById('packReset').onclick = ()=> resetWithConfirmation(()=>{ savePackagingRules(PACK_RULES_DEFAULT); openPackagingRules(); }, 'Packaging rules');

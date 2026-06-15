@@ -8,14 +8,16 @@ const html = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'admin.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
 
-test('admin header stays compact and editor actions live in three dashboard groups', () => {
+test('admin header stays compact and navigation uses four domain workspaces', () => {
   const header = html.slice(html.indexOf('<header class="admin-header">'), html.indexOf('</header>'));
   assert.match(header, /← Back to POS/);
-  assert.doesNotMatch(header, /id="btnProducts"|id="btnStock"|id="btnPackagingRules"/);
-  assert.strictEqual((html.match(/class="admin-editor-group"/g) || []).length, 3);
-  assert.match(html, />Catalog</);
-  assert.match(html, />Stock & production</);
-  assert.match(html, />Service rules</);
+  assert.doesNotMatch(header, /id="btnCatalog"|id="btnInventory"|id="btnOperations"/);
+  assert.strictEqual((html.match(/class="admin-editor-group"/g) || []).length, 1);
+  assert.match(html, /id="btnCatalog"/);
+  assert.match(html, /id="btnMenus"/);
+  assert.match(html, /id="btnInventory"/);
+  assert.match(html, /id="btnOperations"/);
+  assert.match(html, /Products, prices, images, recipes, and add-ons/);
 });
 
 test('database health uses a compact table with badges and hidden technical paths', () => {

@@ -6,7 +6,7 @@ const admin = fs.readFileSync('admin.js', 'utf8');
 const stock = fs.readFileSync('stock.js', 'utf8');
 
 assert.match(html, /id="stockModalDescription"/);
-assert.match(html, /Product prices/);
+assert.match(html, /Bulk-update product selling prices/);
 assert.match(html, /Packaging rules[\s\S]*Reset to defaults[\s\S]*Cancel[\s\S]*Save changes/);
 
 assert.match(admin, /function openStockEditor/);

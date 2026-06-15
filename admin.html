@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – Admin Editors</title>
-  <link rel="stylesheet" href="./style.css?v=56" />
+  <link rel="stylesheet" href="./style.css?v=57" />
   <script src="./firebase-config.js?v=2"></script>
 </head>
 <body class="admin-page">
@@ -34,40 +34,17 @@
         </div>
       </div>
 
-      <div class="admin-editor-groups">
+      <div class="admin-editor-groups admin-workspace-groups">
         <article class="admin-editor-group">
           <div class="admin-group-heading">
             <span class="admin-group-icon" aria-hidden="true">01</span>
-            <div><h3>Catalog</h3><p>Customer-facing products, menus, prices, and images.</p></div>
+            <div><h3>Business workspaces</h3><p>Open one workspace for each day-to-day management task.</p></div>
           </div>
           <div class="admin-editor-grid">
-            <button class="admin-editor-card" id="btnProducts" type="button"><span class="admin-card-icon" aria-hidden="true">P</span><span><b>Products</b><small>Names, categories, and availability</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
-            <button class="admin-editor-card" id="btnMenus" type="button"><span class="admin-card-icon" aria-hidden="true">M</span><span><b>Menus</b><small>Combo contents and menu structure</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
-            <button class="admin-editor-card" id="btnPrices" type="button"><span class="admin-card-icon" aria-hidden="true">₵</span><span><b>Product prices</b><small>Quickly update selling prices</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
-            <button class="admin-editor-card" id="btnImages" type="button"><span class="admin-card-icon" aria-hidden="true">I</span><span><b>Images</b><small>Product image URLs and uploads</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
-          </div>
-        </article>
-
-        <article class="admin-editor-group">
-          <div class="admin-group-heading">
-            <span class="admin-group-icon" aria-hidden="true">02</span>
-            <div><h3>Stock & production</h3><p>Inventory, ingredients, recipes, and paid extras.</p></div>
-          </div>
-          <div class="admin-editor-grid">
-            <button class="admin-editor-card" id="btnStock" type="button"><span class="admin-card-icon" aria-hidden="true">S</span><span><b>Stock overview</b><small>Inventory levels, locations, and transfers</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
-            <button class="admin-editor-card" id="btnIngredients" type="button"><span class="admin-card-icon" aria-hidden="true">IN</span><span><b>Ingredients</b><small>Units, thresholds, and storage</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
-            <button class="admin-editor-card" id="btnRecipes" type="button"><span class="admin-card-icon" aria-hidden="true">R</span><span><b>Product recipes</b><small>Ingredient consumption per product</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
-            <button class="admin-editor-card" id="btnAddons" type="button"><span class="admin-card-icon" aria-hidden="true">+</span><span><b>Add-ons</b><small>Extra items and stock mappings</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
-          </div>
-        </article>
-
-        <article class="admin-editor-group">
-          <div class="admin-group-heading">
-            <span class="admin-group-icon" aria-hidden="true">03</span>
-            <div><h3>Service rules</h3><p>Operational settings used during order handover.</p></div>
-          </div>
-          <div class="admin-editor-grid admin-editor-grid-single">
-            <button class="admin-editor-card" id="btnPackagingRules" type="button"><span class="admin-card-icon" aria-hidden="true">B</span><span><b>Packaging rules</b><small>Bag mappings and order-size thresholds</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+            <button class="admin-editor-card" id="btnCatalog" type="button"><span class="admin-card-icon" aria-hidden="true">P</span><span><b>Products</b><small>Products, prices, images, recipes, and add-ons</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+            <button class="admin-editor-card" id="btnMenus" type="button"><span class="admin-card-icon" aria-hidden="true">M</span><span><b>Menus</b><small>Menu contents, prices, and default choices</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+            <button class="admin-editor-card" id="btnInventory" type="button"><span class="admin-card-icon" aria-hidden="true">IN</span><span><b>Inventory</b><small>Stock overview, ingredients, and transfers</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
+            <button class="admin-editor-card" id="btnOperations" type="button"><span class="admin-card-icon" aria-hidden="true">O</span><span><b>Operations</b><small>Packaging and service rules</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
           </div>
         </article>
       </div>
@@ -91,11 +68,11 @@
     </section>
   </div>
 
-  <div class="modal admin-editor-modal" id="modalPrices"><div class="sheet"><header><div><b>Prices</b><small>Manage product selling prices</small></div><div><button class="x admin-reset" id="pReset">Reset to defaults</button><button class="x" id="pClose">Cancel</button><button class="x admin-primary" id="pSave">Save changes</button></div></header><div class="body" id="pricesBody"></div></div></div>
-  <div class="modal admin-editor-modal admin-editor-wide" id="modalProducts"><div class="sheet"><header><div><b>Products</b><small>Manage products, categories, and POS display order</small></div><div><button class="x" id="prodAdd">Add product</button><button class="x admin-reset" id="prodReset">Reset to defaults</button><button class="x" id="prodClose">Cancel</button><button class="x admin-primary" id="prodSave">Save changes</button></div></header><div class="body" id="productsBody"></div></div></div>
+  <div class="modal admin-editor-modal" id="modalPrices"><div class="sheet"><nav class="admin-workspace-nav" aria-label="Product workspace"><button id="btnProducts" type="button">Products</button><button class="active" type="button">Prices</button><button id="btnImagesFromPrices" type="button">Images</button><button id="btnRecipesFromPrices" type="button">Recipes</button><button id="btnAddonsFromPrices" type="button">Add-ons</button></nav><header><div><b>Prices</b><small>Bulk-update product selling prices</small></div><div><button class="x admin-reset" id="pReset">Reset to defaults</button><button class="x" id="pClose">Close workspace</button><button class="x admin-primary" id="pSave">Save changes</button></div></header><div class="body" id="pricesBody"></div></div></div>
+  <div class="modal admin-editor-modal admin-editor-wide" id="modalProducts"><div class="sheet"><nav class="admin-workspace-nav" aria-label="Product workspace"><button class="active" type="button">Products</button><button id="btnPrices" type="button">Prices</button><button id="btnImages" type="button">Images</button><button id="btnRecipes" type="button">Recipes</button><button id="btnAddons" type="button">Add-ons</button></nav><header><div><b>Products</b><small>Manage products, categories, and POS display order</small></div><div><button class="x" id="prodAdd">Add product</button><button class="x admin-reset" id="prodReset">Reset to defaults</button><button class="x" id="prodClose">Close workspace</button><button class="x admin-primary" id="prodSave">Save changes</button></div></header><div class="body" id="productsBody"></div></div></div>
   <div class="modal admin-editor-modal admin-editor-wide" id="modalMenus"><div class="sheet"><header><div><b>Menus</b><small>Configure menu products, prices, and defaults</small></div><div><button class="x" id="menuAdd">Add menu</button><button class="x admin-reset" id="menuReset">Reset to defaults</button><button class="x" id="menuClose">Cancel</button><button class="x admin-primary" id="menuSave">Save changes</button></div></header><div class="body" id="menusBody"></div></div></div>
-  <div class="modal admin-editor-modal admin-editor-wide" id="modalImages"><div class="sheet"><header><div><b>Images</b><small>Manage product images and previews</small></div><div><button class="x admin-reset" id="iReset">Reset to defaults</button><button class="x" id="iClose">Cancel</button><button class="x admin-primary" id="iSave">Save changes</button></div></header><div class="body" id="imagesBody"></div></div></div>
-  <div class="modal admin-editor-modal admin-editor-workspace" id="modalStock"><div class="sheet"><header><div><b id="stockModalTitle">Stock overview</b><small id="stockModalDescription">Review inventory levels, locations, and transfers</small></div><div><button class="x admin-reset" id="sReset">Reset stock to defaults</button><button class="x" id="sClose">Cancel</button><button class="x admin-primary" id="sSave">Save changes</button></div></header><div class="body" id="stockBody"></div></div></div>
+  <div class="modal admin-editor-modal admin-editor-wide" id="modalImages"><div class="sheet"><nav class="admin-workspace-nav" aria-label="Product workspace"><button id="btnProductsFromImages" type="button">Products</button><button id="btnPricesFromImages" type="button">Prices</button><button class="active" type="button">Images</button><button id="btnRecipesFromImages" type="button">Recipes</button><button id="btnAddonsFromImages" type="button">Add-ons</button></nav><header><div><b>Images</b><small>Manage product images and previews</small></div><div><button class="x admin-reset" id="iReset">Reset to defaults</button><button class="x" id="iClose">Close workspace</button><button class="x admin-primary" id="iSave">Save changes</button></div></header><div class="body" id="imagesBody"></div></div></div>
+  <div class="modal admin-editor-modal admin-editor-workspace" id="modalStock"><div class="sheet"><nav class="admin-workspace-nav" aria-label="Workspace sections"><button id="btnStock" type="button">Overview</button><button id="btnIngredients" type="button">Ingredients</button><button id="btnProductsFromStock" type="button">Products</button><button id="btnRecipesFromStock" type="button">Recipes</button><button id="btnAddonsFromStock" type="button">Add-ons</button></nav><header><div><b id="stockModalTitle">Stock overview</b><small id="stockModalDescription">Review inventory levels, locations, and transfers</small></div><div><button class="x admin-reset" id="sReset">Reset stock to defaults</button><button class="x" id="sClose">Close workspace</button><button class="x admin-primary" id="sSave">Save changes</button></div></header><div class="body" id="stockBody"></div></div></div>
   <div class="modal admin-editor-modal" id="modalPackagingRules"><div class="sheet"><header><div><b>Packaging rules</b><small>Configure bag mappings and order-size thresholds</small></div><div><button class="x admin-reset" id="packReset">Reset to defaults</button><button class="x" id="packClose">Cancel</button><button class="x admin-primary" id="packSave">Save changes</button></div></header><div class="body" id="packagingRulesBody"></div></div></div>
   <div class="admin-toast-region" id="adminToastRegion" aria-live="polite" aria-atomic="true"></div>
   <div class="modal admin-confirm-modal" id="adminConfirmModal" role="dialog" aria-modal="true" aria-labelledby="adminConfirmTitle" aria-describedby="adminConfirmMessage"><div class="admin-confirm-card"><div class="eyebrow">Please confirm</div><h2 id="adminConfirmTitle">Discard changes?</h2><p id="adminConfirmMessage">This action cannot be undone.</p><div class="admin-confirm-actions"><button class="x" id="adminConfirmCancel" type="button">Keep editing</button><button class="x admin-danger" id="adminConfirmAccept" type="button">Discard changes</button></div></div></div>
@@ -132,7 +109,7 @@
       }
       if(document.querySelector('script[data-admin-boot]')) return;
       const script = document.createElement('script');
-      script.src = 'admin.js?v=4';
+      script.src = 'admin.js?v=5';
       script.dataset.adminBoot = 'true';
       document.body.appendChild(script);
     });
