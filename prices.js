@@ -77,33 +77,53 @@
     if(typeof ov==='number' && !isNaN(ov)) return ov;
     return Number.isFinite(base) ? base : 0;
   }
-  function openEditor(force){
+  function setPrices(values, removedIds){
+    (removedIds || []).forEach(id=>delete MAP[id]);
+    Object.entries(values || {}).forEach(([id, value])=>{
+      const price = Number(value);
+      if(Number.isFinite(price) && price >= 0) MAP[id] = price;
+    });
+    MAP = cleanMap(MAP);
+    persistLocal();
+    saveRemoteSoon();
+    renderPosIfAvailable();
+    return true;
+  }
+  function openEditor(force, options){
     const modal = document.getElementById('modalPrices');
     const body  = document.getElementById('pricesBody');
+    if(!body) return;
     if(force) body.innerHTML = '';
     if(!body.innerHTML){
-      BK_DATA.BASE.forEach(it=>{
-        const row = document.createElement('div');
-        row.className='row';
+      const labels = {burger:'Burgers',wings:'Wings',fries:'Fries',salad:'Salads',drink:'Drinks',extra:'Add-ons',sauce:'Sauces'};
+      body.innerHTML = '<div class="admin-editor-intro"><div><h4>Product prices</h4><p>Prices follow the same category and display order used in the POS.</p></div></div>';
+      Object.entries(labels).forEach(([cat,label])=>{
+        const products = BK_DATA.BASE.filter(item=>item.cat === cat).sort((a,b)=>Number(a.categoryOrder||0)-Number(b.categoryOrder||0));
+        if(!products.length) return;
+        const section = document.createElement('section');
+        section.className = 'admin-category-group';
+        section.innerHTML = `<header><div><h4>${label}</h4><small>${products.length} item${products.length === 1 ? '' : 's'}</small></div></header><div class="price-editor-list"></div>`;
+        const list = section.querySelector('.price-editor-list');
+        products.forEach(it=>{
+          const row = document.createElement('div');
+          row.className='admin-data-row price-editor-row';
         const val = getPrice(it.id);
         row.innerHTML = `
-          <span><b>${it.name}</b> <small>(${it.cat})</small></span>
-          <span>
-            <input type="number" step="1" min="0" value="${val}" data-id="${it.id}"
-                   style="width:90px;background:#0f1318;border:1px solid #2a313b;color:#eaf0f6;border-radius:8px;padding:6px">
-            <span style="margin-left:6px">GHS</span>
-          </span>
+          <span class="admin-item-identity"><b>${it.name}</b><small>${it.id}</small></span>
+          <label><span>Selling price</span><span class="currency-field"><input type="number" step="1" min="0" value="${val}" data-id="${it.id}"><b>GHS</b></span></label>
         `;
-        body.appendChild(row);
+          list.appendChild(row);
+        });
+        body.appendChild(section);
       });
     }else{
       body.querySelectorAll('input[data-id]').forEach(inp=>{
         inp.value = getPrice(inp.dataset.id);
       });
     }
-    modal.classList.add('open');
+    if(modal && (!options || options.showModal !== false)) modal.classList.add('open');
   }
-  function closeEditor(){ document.getElementById('modalPrices').classList.remove('open'); }
+  function closeEditor(){ const modal = document.getElementById('modalPrices'); if(modal) modal.classList.remove('open'); }
   function save(){
     const body = document.getElementById('pricesBody');
     body.querySelectorAll('input[data-id]').forEach(inp=>{
@@ -115,22 +135,15 @@
     saveRemoteSoon();
     closeEditor();
     renderPosIfAvailable(); // refresh
-    if(window.BK_UI && BK_UI.infoDialog) BK_UI.infoDialog(remoteEnabled() ? 'Prices saved online.' : 'Prices saved locally.');
+    return true;
   }
   function reset(){
-    const run = ()=>{
-      MAP = {};
-      localStorage.removeItem(KEY);
-      saveRemoteSoon();
-      openEditor(true);
-      renderPosIfAvailable();
-    };
-    if(window.BK_UI && BK_UI.confirmDialog){
-      BK_UI.confirmDialog('Reset prices', 'Reset all edited prices to defaults?').then(ok=>{ if(ok) run(); });
-      return;
-    }
-    run();
+    MAP = {};
+    localStorage.removeItem(KEY);
+    saveRemoteSoon();
+    openEditor(true);
+    renderPosIfAvailable();
   }
 
-  window.BK_PRICES = { load, loadRemoteOnce, getPrice, openEditor, closeEditor, save, reset, remotePath, KEY };
+  window.BK_PRICES = { load, loadRemoteOnce, getPrice, setPrices, openEditor, closeEditor, save, reset, remotePath, KEY };
 })();
