@@ -1,4 +1,4 @@
-// UI & Interaktionen – nutzt BK_STATE, BK_PRICES, BK_LOGIC
+// UI and interactions using BK_STATE, BK_PRICES, and BK_LOGIC.
 (function(){
   const PRODUCT_CATEGORIES = ['burger', 'wings', 'fries', 'salad', 'drink'];
   let currentCat = 'burger';

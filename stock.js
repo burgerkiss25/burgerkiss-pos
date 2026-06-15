@@ -463,7 +463,7 @@
     ).join('');
     return `<section class="stock-transfer-panel">
       <div class="stock-transfer-copy">
-        <h4>Transfer / Auffüllen</h4>
+        <h4>Transfer / Replenishment</h4>
         <p>Moves stock from BurgerKiss Store to BurgerKiss Block Factory and syncs both location inventory records.</p>
       </div>
       <div class="stock-transfer-form">
