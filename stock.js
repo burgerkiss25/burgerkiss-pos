@@ -19,6 +19,8 @@
   let TRANSFERS = [];
   let MOVEMENTS = [];
   let remoteSaveTimer = null;
+  let editorBodyId = 'stockBody';
+  let editorModalId = 'modalStock';
 
   function clone(x){ return JSON.parse(JSON.stringify(x)); }
   function remoteEnabled(){
@@ -260,6 +262,35 @@
   }
   function persistMovements(){ localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(MOVEMENTS.slice(-200))); }
   function reset(){ INGREDIENTS = sanitizeIngredients(clone(DEFAULTS.ingredients)); RECIPES = clone(DEFAULTS.recipes); localStorage.removeItem(KEY); persistRemoteSoon(); }
+  function resetEditor(mode){
+    if(mode === 'recipes'){
+      const next = clone(RECIPES);
+      Object.keys(next).forEach(id=>{
+        const product = (window.BK_DATA.BASE || []).find(row=>row.id === id);
+        if(product && product.cat !== 'extra' && product.cat !== 'sauce') delete next[id];
+      });
+      Object.entries(DEFAULTS.recipes || {}).forEach(([id, recipe])=>{
+        const product = (window.BK_DATA.BASE || []).find(row=>row.id === id);
+        if(product && product.cat !== 'extra' && product.cat !== 'sauce') next[id] = clone(recipe);
+      });
+      RECIPES = next;
+    }else if(mode === 'addons'){
+      const next = clone(RECIPES);
+      Object.keys(next).forEach(id=>{
+        const product = (window.BK_DATA.BASE || []).find(row=>row.id === id);
+        if(product && (product.cat === 'extra' || product.cat === 'sauce')) delete next[id];
+      });
+      Object.entries(DEFAULTS.recipes || {}).forEach(([id, recipe])=>{
+        const product = (window.BK_DATA.BASE || []).find(row=>row.id === id);
+        if(product && (product.cat === 'extra' || product.cat === 'sauce')) next[id] = clone(recipe);
+      });
+      RECIPES = next;
+    }else{
+      INGREDIENTS = sanitizeIngredients(clone(DEFAULTS.ingredients));
+    }
+    persist();
+    persistRemoteSoon();
+  }
 
   function getSnapshot(slots){
     const usage = usageForSlots(slots);
@@ -386,21 +417,31 @@
   }
 
   function recipeRowHtml(p, ingredientOptions){
-    return `<div class="row" data-recipe-row>
-      <span class="left" style="display:grid;grid-template-columns:1.1fr 1fr;gap:8px;flex:1">
-        <span><b>${p.name}</b> <small>(${p.id})</small></span>
-        <div>
-          <input data-product-id="${p.id}" data-recipe-input placeholder="ingredient_id:qty, ingredient_id2:qty" value="${recipeToText(RECIPES[p.id] || {})}">
-          <div style="display:grid;grid-template-columns:1fr 100px auto;gap:6px;margin-top:6px">
+    const recipe = RECIPES[p.id] || {};
+    const ingredients = Object.entries(recipe).map(([id, qty])=>{
+      const def = INGREDIENTS[id] || {};
+      return `<span class="recipe-ingredient-chip"><b>${def.name || id}</b><span>${qty} ${def.unit || ''}</span><button type="button" data-recipe-remove="${id}" aria-label="Remove ${def.name || id}">×</button></span>`;
+    }).join('');
+    return `<article class="admin-recipe-card" data-recipe-row>
+      <header><div><h4>${p.name}</h4><small>${p.id}</small></div><span class="admin-count-badge">${Object.keys(recipe).length} ingredients</span></header>
+      <div class="recipe-ingredient-list" data-recipe-list>${ingredients || '<span class="admin-empty-inline">No ingredients configured</span>'}</div>
+      <div class="recipe-add-row">
             <select data-recipe-ing>${ingredientOptions}</select>
             <input data-recipe-qty type="number" min="0.25" step="0.25" value="1">
-            <button class="mini" data-recipe-add>+ Add</button>
-          </div>
-        </div>
-      </span>
-    </div>`;
+            <button class="x" type="button" data-recipe-add>Add ingredient</button>
+      </div>
+      <details class="admin-advanced"><summary>Advanced raw recipe</summary><input data-product-id="${p.id}" data-recipe-input placeholder="ingredient_id:qty, ingredient_id2:qty" value="${recipeToText(recipe)}"></details>
+    </article>`;
   }
   function bindRecipeBuilder(body){
+    const refreshCard = row=>{
+      const input = row.querySelector('[data-recipe-input]');
+      const product = {id:input.dataset.productId, name:row.querySelector('h4').textContent};
+      const replacement = document.createElement('div');
+      replacement.innerHTML = recipeRowHtml(product, row.querySelector('[data-recipe-ing]').innerHTML);
+      row.replaceWith(replacement.firstElementChild);
+      bindRecipeBuilder(body);
+    };
     body.querySelectorAll('[data-recipe-row]').forEach(row=>{
       const addBtn = row.querySelector('[data-recipe-add]');
       if(!addBtn) return;
@@ -412,10 +453,37 @@
         const parsed = parseRecipeText(input.value);
         parsed[ing] = qty;
         input.value = recipeToText(parsed);
+        refreshCard(row);
       };
+      row.querySelectorAll('[data-recipe-remove]').forEach(button=>{
+        button.onclick = ()=>{
+          const input = row.querySelector('[data-recipe-input]');
+          const parsed = parseRecipeText(input.value);
+          delete parsed[button.dataset.recipeRemove];
+          input.value = recipeToText(parsed);
+          refreshCard(row);
+        };
+      });
     });
   }
   function bindIngredientActions(body){ body.querySelectorAll('[data-remove]').forEach(btn=>{ btn.onclick = ()=>{ const row = btn.closest('[data-ing-row]'); if(row) row.remove(); }; }); }
+
+  function ingredientCategoryLabel(category){
+    return String(category || 'general').replace(/(^|[_-])([a-z])/g,(_,separator,letter)=>`${separator ? ' ' : ''}${letter.toUpperCase()}`);
+  }
+  function renderIngredientGroups(body){
+    const entries = Object.entries(INGREDIENTS);
+    const categories = Array.from(new Set(entries.map(([, def])=>String(def.category || 'general')))).sort();
+    body.innerHTML = categories.map(category=>{
+      const rows = entries
+        .filter(([, def])=>String(def.category || 'general') === category)
+        .sort(([, a],[, b])=>String(a.name || '').localeCompare(String(b.name || '')));
+      return `<section class="admin-category-group" data-ingredient-category="${category}">
+        <header><div><h4>${ingredientCategoryLabel(category)}</h4><small>${rows.length} ${rows.length === 1 ? 'ingredient' : 'ingredients'}</small></div><span>Sorted by name</span></header>
+        <div class="stock-ingredient-category">${rows.map(([id, def])=>ingredientRowHtml(id, def)).join('')}</div>
+      </section>`;
+    }).join('');
+  }
 
 
   function readIngredientsFromEditor(body){
@@ -463,7 +531,7 @@
     ).join('');
     return `<section class="stock-transfer-panel">
       <div class="stock-transfer-copy">
-        <h4>Transfer / Auffüllen</h4>
+        <h4>Transfer / Replenishment</h4>
         <p>Moves stock from BurgerKiss Store to BurgerKiss Block Factory and syncs both location inventory records.</p>
       </div>
       <div class="stock-transfer-form">
@@ -537,29 +605,34 @@
     };
   }
 
-  function openEditor(mode){
-    const body = document.getElementById('stockBody'); if(!body) return;
-    const titleEl = document.getElementById('stockModalTitle');
+  function openEditor(mode, options){
+    const config = options || {};
+    editorBodyId = config.bodyId || 'stockBody';
+    editorModalId = Object.prototype.hasOwnProperty.call(config, 'modalId') ? config.modalId : 'modalStock';
+    const body = document.getElementById(editorBodyId); if(!body) return;
+    const titleEl = config.titleId ? document.getElementById(config.titleId) : document.getElementById('stockModalTitle');
     const productList = Array.isArray(window.BK_DATA && BK_DATA.BASE) ? BK_DATA.BASE : [];
-    const showIngredients = !mode || mode === 'all' || mode === 'ingredients';
-    const showRecipes = !mode || mode === 'all' || mode === 'recipes' || mode === 'addons';
+    const activeMode = mode || 'stock';
+    const showIngredients = activeMode === 'stock' || activeMode === 'ingredients';
+    const showTransfers = activeMode === 'stock';
+    const showRecipes = activeMode === 'recipes' || activeMode === 'addons';
     if(titleEl){
-      titleEl.textContent = mode === 'ingredients'
-        ? 'Edit Ingredients'
-        : mode === 'recipes'
-          ? 'Edit Product Recipes'
-          : mode === 'addons'
-            ? 'Edit Add-ons'
-            : 'Edit Stock';
+      titleEl.textContent = activeMode === 'ingredients'
+        ? 'Ingredients'
+        : activeMode === 'recipes'
+          ? 'Product recipes'
+          : activeMode === 'addons'
+            ? 'Add-ons'
+            : 'Stock overview';
     }
-    const recipeProducts = mode === 'addons'
+    const recipeProducts = activeMode === 'addons'
       ? productList.filter(p=> p && (p.cat === 'extra' || p.cat === 'sauce'))
-      : productList;
+      : productList.filter(p=> p && p.cat !== 'extra' && p.cat !== 'sauce');
     body.innerHTML = `
       ${showIngredients ? `<div class="stock-editor-intro">
         <div>
           <h4>Stock locations</h4>
-          <p>Phase 3 keeps old fields compatible while syncing a location-based inventory for BurgerKiss Store and Block Factory.</p>
+          <p>${showTransfers ? 'Review stock at both locations and transfer inventory to the Block Factory.' : 'Manage ingredient details, units, locations, and minimum stock levels.'}</p>
         </div>
         <div class="stock-tabs" aria-label="Stock location sections">
           <span>BurgerKiss Store</span>
@@ -573,38 +646,51 @@
         </div>
         <button class="x" id="sAddIngredient">+ Ingredient</button>
       </div>
-      ${transferPanelHtml()}
+      ${showTransfers ? transferPanelHtml() : ''}
       <div id="stockIngredients" class="stock-ingredients-list"></div>` : ''}
-      ${(showIngredients && showRecipes) ? '<hr style="border:0;border-top:1px solid #2a2f39;margin:16px 0">' : ''}
-      ${showRecipes ? `<h4 style="margin:4px 0 8px">${mode === 'addons' ? 'Add-on Recipes' : 'Product Recipes'}</h4><div style="font-size:12px;color:#9aa3ad;margin-bottom:8px">Format: ingredient_id:qty, ingredient_id2:qty</div><div id="stockRecipes"></div>` : ''}
+      ${showRecipes ? `<div class="admin-editor-intro"><div><h4>${activeMode === 'addons' ? 'Add-on recipes' : 'Product recipes'}</h4><p>Choose ingredients and quantities. Technical recipe text remains available under Advanced.</p></div></div><div id="stockRecipes"></div>` : ''}
     `;
     if(showIngredients){
       const ingWrap = document.getElementById('stockIngredients');
-      ingWrap.innerHTML = Object.entries(INGREDIENTS).map(([id, def])=> ingredientRowHtml(id, def)).join('');
+      renderIngredientGroups(ingWrap);
       bindIngredientActions(ingWrap);
-      bindTransferActions(body);
-      document.getElementById('sAddIngredient').onclick = ()=>{ ingWrap.insertAdjacentHTML('beforeend', ingredientRowHtml('', {name:'', category:'general', unit:'', track_stock:true, stock_location:'both', current_stock_storage:0, current_stock_foodtruck:0, moq_storage:0, moq_foodtruck:0})); bindIngredientActions(ingWrap); };
+      if(showTransfers) bindTransferActions(body);
+      document.getElementById('sAddIngredient').onclick = ()=>{
+        let generalGroup = ingWrap.querySelector('[data-ingredient-category="general"] .stock-ingredient-category');
+        if(!generalGroup){
+          ingWrap.insertAdjacentHTML('beforeend', '<section class="admin-category-group" data-ingredient-category="general"><header><div><h4>General</h4><small>New ingredient</small></div></header><div class="stock-ingredient-category"></div></section>');
+          generalGroup = ingWrap.querySelector('[data-ingredient-category="general"] .stock-ingredient-category');
+        }
+        generalGroup.insertAdjacentHTML('beforeend', ingredientRowHtml('', {name:'', category:'general', unit:'', track_stock:true, stock_location:'both', current_stock_storage:0, current_stock_foodtruck:0, moq_storage:0, moq_foodtruck:0}));
+        bindIngredientActions(ingWrap);
+        generalGroup.lastElementChild.querySelector('[data-field="name"]').focus();
+      };
     }
     if(showRecipes){
       const recipeWrap = document.getElementById('stockRecipes');
       const ingredientOptions = Object.entries(INGREDIENTS).map(([id, def])=> `<option value="${id}">${def.name || id} (${id})</option>`).join('');
-      recipeWrap.innerHTML = recipeProducts.map(p=> recipeRowHtml(p, ingredientOptions)).join('');
+      const categoryLabels = {burger:'Burgers',wings:'Wings',fries:'Fries',salad:'Salads',drink:'Drinks',extra:'Add-ons',sauce:'Sauces'};
+      recipeWrap.innerHTML = Object.entries(categoryLabels).map(([cat,label])=>{
+        const rows = recipeProducts.filter(product=>product.cat === cat).sort((a,b)=>Number(a.categoryOrder||0)-Number(b.categoryOrder||0));
+        return rows.length ? `<section class="admin-category-group"><header><div><h4>${label}</h4><small>${rows.length} recipes</small></div></header><div class="admin-recipe-grid">${rows.map(p=>recipeRowHtml(p, ingredientOptions)).join('')}</div></section>` : '';
+      }).join('');
       bindRecipeBuilder(recipeWrap);
     }
-    document.getElementById('modalStock').classList.add('open');
+    const modal = editorModalId ? document.getElementById(editorModalId) : null;
+    if(modal && config.showModal !== false) modal.classList.add('open');
   }
 
-  function closeEditor(){ const modal = document.getElementById('modalStock'); if(modal) modal.classList.remove('open'); }
+  function closeEditor(){ const modal = editorModalId ? document.getElementById(editorModalId) : null; if(modal) modal.classList.remove('open'); }
 
   function saveEditor(){
-    const body = document.getElementById('stockBody'); if(!body) return false;
+    const body = document.getElementById(editorBodyId); if(!body) return false;
     const ingNext = readIngredientsFromEditor(body) || clone(INGREDIENTS);
     if(!Object.keys(ingNext).length) return false;
     const recipeInputs = body.querySelectorAll('[data-recipe-input]');
-    const recipeNext = recipeInputs.length ? {} : clone(RECIPES);
+    const recipeNext = clone(RECIPES);
     recipeInputs.forEach(inp=>{ const pid = normalizeId(inp.dataset.productId); if(!pid) return; const parsed = parseRecipeText(inp.value); const filtered = {}; Object.entries(parsed).forEach(([iid, qty])=>{ if(ingNext[iid]) filtered[iid] = qty; }); recipeNext[pid] = filtered; });
     INGREDIENTS = syncAllIngredientStock(ingNext); RECIPES = recipeNext; persist(); persistRemoteSoon(); closeEditor(); return true;
   }
 
-  window.BK_STOCK = { KEY, TRANSFERS_KEY, MOVEMENTS_KEY, load, loadRemoteOnce, reset, getSnapshot, getIngredients, getUsageForSlot, consumeSlot, openEditor, closeEditor, saveEditor, remoteEnabled, stockPaths };
+  window.BK_STOCK = { KEY, TRANSFERS_KEY, MOVEMENTS_KEY, load, loadRemoteOnce, reset, resetEditor, getSnapshot, getIngredients, getUsageForSlot, consumeSlot, openEditor, closeEditor, save:saveEditor, saveEditor, remoteEnabled, stockPaths };
 })();
