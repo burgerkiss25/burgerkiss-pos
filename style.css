@@ -379,6 +379,7 @@ button:focus-visible,.chip:focus-visible,input:focus-visible,a:focus-visible,sum
 .order-discount-row .tool-panel{right:0;grid-template-columns:repeat(3,minmax(64px,1fr));min-width:260px}
 .cart-close,.mobile-cart-toggle{display:none}
 .app-loading>.hud-wrap,.app-loading>.catbar,.app-loading>.wrap{visibility:hidden}
+.cart-detail-editable{cursor:pointer}.cart-detail-editable:hover b,.cart-detail-editable:focus-within b{color:#ffdb70}.cart-child-line{display:flex;align-items:center;justify-content:space-between;gap:8px}.cart-child-actions{display:inline-flex;gap:4px;margin-left:auto}.cart-child-actions .mini,.edit-menu-line{min-height:26px;padding:3px 7px;font-size:11px}.edit-menu-line{width:max-content;margin-top:6px;border-color:#806923;color:#ffdb70}
 
 @media (min-width:701px){
   #tab-order .order-main{min-height:0}
