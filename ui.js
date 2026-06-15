@@ -1,4 +1,4 @@
-// UI & Interaktionen – nutzt BK_STATE, BK_PRICES, BK_LOGIC
+// UI and interactions using BK_STATE, BK_PRICES, and BK_LOGIC.
 (function(){
   const PRODUCT_CATEGORIES = ['burger', 'wings', 'fries', 'salad', 'drink'];
   let currentCat = 'burger';
@@ -278,10 +278,11 @@
     const base = (Array.isArray(BK_DATA.BASE) && BK_DATA.BASE.length) ? BK_DATA.BASE : (BK_DATA.DEFAULT_BASE || []);
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
     const query = productQuery.trim().toLowerCase();
-    const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
+    const isFrontProduct = it => it && it.active !== false && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
     const items = base.filter(isFrontProduct)
       .filter(it => it.cat === currentCat)
-      .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true);
+      .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true)
+      .sort((a,b)=>Number(a.categoryOrder || 0) - Number(b.categoryOrder || 0));
     const pageSize = productsPerPage();
     const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
     productPage = Math.min(productPage, pageCount - 1);
