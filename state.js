@@ -391,6 +391,25 @@
     const next = s.items.filter(it => !(it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId)));
     if(next.length !== s.items.length){ s.items = next; s.packAsked=false; s.sentToKitchen=false; clearSlotDiscount(s); save(); }
   }
+  function replaceMenuGroup(menuGroupId, nextItems){
+    const s = slots[active]; if(!s || s.issued || !menuGroupId) return false;
+    const replacements = Array.isArray(nextItems) ? nextItems : [];
+    s.items = s.items
+      .filter(it => (it.menuGroupId || '') !== menuGroupId)
+      .concat(replacements.map(it => ({
+        itemId:it.itemId,
+        note:(it.note || '').trim(),
+        done:false,
+        menuGroupId,
+        menuName:typeof it.menuName === 'string' ? it.menuName : '',
+        menuRole:typeof it.menuRole === 'string' ? it.menuRole : '',
+        menuNoSauce:!!it.menuNoSauce,
+        customerGroupId:typeof it.customerGroupId === 'string' ? it.customerGroupId : '',
+        packGroupId:typeof it.packGroupId === 'string' ? it.packGroupId : ''
+      })));
+    s.packAsked=false; s.sentToKitchen=false; clearSlotDiscount(s); save();
+    return true;
+  }
   function setPay(i,status){
     if(!slots[i] || slots[i].issued) return;
     slots[i].pay = PAY_SET.has(status) ? status : 'unpaid';
@@ -458,7 +477,7 @@
     load, save, clearAll, clearStorage,
     addSlot, renameActive, deleteActive, setActive, updateSlot,
     setActiveName,
-    addItem, addItemForKey, undo, decItemForKey, removeItemForKey, setPay, setIssued, toggleDone, setDoneForKey,
+    addItem, addItemForKey, undo, decItemForKey, removeItemForKey, replaceMenuGroup, setPay, setIssued, toggleDone, setDoneForKey,
     setPackMode,
     setDiscount,
     getState, setState, whenReady, allocateOrderNo, repairOrderNumbers, formatOrderNo, flushRemote:saveRemoteNow

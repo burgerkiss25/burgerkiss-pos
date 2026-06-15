@@ -54,7 +54,7 @@
     });
   }
 
-  // Schutz gegen fehlerhafte Merge-Duplikate in order.html
+  // Protect against invalid merge duplicates in order.html.
   removeDuplicateIds([
     'tabOrder','tabMake','tabPay','tabIssue',
     'btnStockOverview','btnHistory','btnDailyReport','btnReceipt','btnPrices','btnProducts','btnImages','btnOnlineOrder',
