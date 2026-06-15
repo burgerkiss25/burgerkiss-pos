@@ -101,10 +101,25 @@
       { label: 'History', path: pathFor('BK_HISTORY_PATH', '/pos/history') }
     ];
   }
+  function escapeHtml(value){
+    return String(value == null ? '' : value).replace(/[&<>"']/g, char=>({
+      '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+    }[char]));
+  }
   function formatTs(v){
     const n = Number(v);
     if(!Number.isFinite(n) || n <= 0) return '-';
-    return new Date(n).toLocaleString();
+    const elapsed = Date.now() - n;
+    const future = elapsed < 0;
+    const absolute = Math.abs(elapsed);
+    let value;
+    let unit;
+    if(absolute < 60000){ value = Math.max(1, Math.round(absolute / 1000)); unit = 'second'; }
+    else if(absolute < 3600000){ value = Math.round(absolute / 60000); unit = 'minute'; }
+    else if(absolute < 86400000){ value = Math.round(absolute / 3600000); unit = 'hour'; }
+    else if(absolute < 2592000000){ value = Math.round(absolute / 86400000); unit = 'day'; }
+    else{ value = Math.round(absolute / 2592000000); unit = 'month'; }
+    return future ? `in ${value} ${unit}${value === 1 ? '' : 's'}` : `${value} ${unit}${value === 1 ? '' : 's'} ago`;
   }
   function findTs(value){
     if(!value || typeof value !== 'object') return null;
@@ -117,21 +132,26 @@
   }
   function renderStatus(rows, summary){
     const body = document.getElementById('adminDbStatusBody');
+    const summaryEl = document.getElementById('adminDbStatusSummary');
     if(!body) return;
-    const header = `<div class="row" style="border-top:none;padding:8px 0 14px">
-      <span><b>Firebase:</b> ${summary}</span>
-      <span><small>${new Date().toLocaleString()}</small></span>
-    </div>`;
-    body.innerHTML = header + rows.map(r=>`
-      <div class="row" style="border-top:1px dashed #2a2f39;padding:8px 0">
-        <span class="left"><b>${r.label}</b> <small>${r.path}</small></span>
-        <span style="color:${r.ok ? '#74d99f' : '#ffb347'}">${r.ok ? 'online' : r.status}${r.ts ? ` · ${formatTs(r.ts)}` : ''}</span>
-      </div>
-    `).join('');
+    if(summaryEl) summaryEl.textContent = `${summary} · Checked ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+    body.innerHTML = rows.map(r=>{
+      const status = r.ok ? 'available' : String(r.status || 'error').toLowerCase();
+      const tone = r.ok ? 'ok' : status === 'empty' ? 'empty' : status === 'local only' ? 'local' : 'error';
+      const label = r.ok ? 'Available' : status === 'local only' ? 'Local only' : status === 'empty' ? 'Empty' : 'Error';
+      const exactTime = r.ts ? new Date(Number(r.ts)).toLocaleString() : 'No activity timestamp';
+      return `
+      <tr>
+        <td><strong>${escapeHtml(r.label)}</strong></td>
+        <td><span class="admin-status-badge ${tone}"><span aria-hidden="true"></span>${label}</span></td>
+        <td><span class="admin-relative-time" title="${escapeHtml(exactTime)}">${r.ts ? formatTs(r.ts) : 'Not available'}</span></td>
+        <td><details class="admin-path-details"><summary aria-label="Show technical path for ${escapeHtml(r.label)}">Details</summary><code>${escapeHtml(r.path)}</code>${tone === 'error' ? `<small>${escapeHtml(r.status)}</small>` : ''}</details></td>
+      </tr>`;
+    }).join('');
   }
   function refreshDbStatus(){
     const body = document.getElementById('adminDbStatusBody');
-    if(body) body.innerHTML = '<div class="empty-state">Checking Firebase status...</div>';
+    if(body) body.innerHTML = '<tr><td colspan="4" class="empty-state">Checking Firebase status...</td></tr>';
     const database = db();
     if(!database){
       renderStatus(statusRows().map(r=>Object.assign({}, r, {ok:false, status:'local only'})), 'not configured');
