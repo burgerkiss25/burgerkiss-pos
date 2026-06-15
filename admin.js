@@ -328,12 +328,54 @@
   BK_IMAGES.load();
   BK_STOCK.load();
   let activeStockMode = 'stock';
+  let activeCatalogSection = 'products';
   const stockEditorCopy = {
     stock: { title:'Stock overview', description:'Review inventory levels, locations, and transfers', label:'Stock', reset:'Reset stock to defaults' },
-    ingredients: { title:'Ingredients', description:'Manage ingredient details, units, locations, and minimum levels', label:'Ingredients', reset:'Reset ingredients to defaults' },
-    recipes: { title:'Product recipes', description:'Define ingredient consumption for customer-facing products', label:'Product recipes', reset:'Reset product recipes to defaults' },
-    addons: { title:'Add-ons', description:'Manage paid extras, sauces, and their stock consumption', label:'Add-ons', reset:'Reset add-ons to defaults' }
+    ingredients: { title:'Ingredients', description:'Manage ingredient details, units, locations, and minimum levels', label:'Ingredients', reset:'Reset ingredients to defaults' }
   };
+  const catalogSections = {
+    products: { title:'Products', description:'Manage products, categories, and POS display order', label:'Products', reset:'Reset products to defaults', bodyId:'productsBody' },
+    prices: { title:'Prices', description:'Bulk-update product selling prices', label:'Prices', reset:'Reset prices to defaults', bodyId:'pricesBody' },
+    images: { title:'Images', description:'Manage product images and previews', label:'Images', reset:'Reset images to defaults', bodyId:'imagesBody' },
+    recipes: { title:'Product recipes', description:'Define ingredient consumption for customer-facing products', label:'Product recipes', reset:'Reset product recipes to defaults', bodyId:'catalogStockBody' },
+    addons: { title:'Add-ons', description:'Manage paid extras, sauces, and their stock consumption', label:'Add-ons', reset:'Reset add-ons to defaults', bodyId:'catalogStockBody' }
+  };
+  function closeWorkspaceModals(){
+    ['modalCatalog','modalMenus','modalStock','modalPackagingRules'].forEach(id=>{
+      const modal = document.getElementById(id);
+      if(modal) modal.classList.remove('open');
+    });
+  }
+  function clearCatalogBodies(activeBodyId){
+    ['productsBody','pricesBody','imagesBody','catalogStockBody'].forEach(id=>{
+      const body = document.getElementById(id);
+      body.hidden = id !== activeBodyId;
+      if(id !== activeBodyId) body.innerHTML = '';
+    });
+  }
+  function renderCatalogSection(section){
+    activeCatalogSection = section;
+    const copy = catalogSections[section];
+    const modal = document.getElementById('modalCatalog');
+    clearCatalogBodies(copy.bodyId);
+    document.getElementById('catalogModalTitle').textContent = copy.title;
+    document.getElementById('catalogModalDescription').textContent = copy.description;
+    document.getElementById('catalogReset').textContent = copy.reset;
+    document.getElementById('catalogAdd').hidden = section !== 'products';
+    modal.querySelectorAll('.admin-workspace-nav button').forEach(button=>button.classList.toggle('active', button.id === `btn${section[0].toUpperCase()}${section.slice(1)}`));
+    if(section === 'products') BK_PRODUCTS.openEditor({showModal:false});
+    else if(section === 'prices') BK_PRICES.openEditor(true, {showModal:false});
+    else if(section === 'images') BK_IMAGES.openEditor({showModal:false});
+    else BK_STOCK.openEditor(section, {bodyId:'catalogStockBody', modalId:null, showModal:false, titleId:'catalogModalTitle'});
+    modal.classList.add('open');
+    setTimeout(()=>trackEditor('modalCatalog'), 0);
+  }
+  function openCatalogSection(section){
+    return guardWorkspaceChange(()=>{
+      if(!document.getElementById('modalCatalog').classList.contains('open')) closeWorkspaceModals();
+      renderCatalogSection(section);
+    });
+  }
   function showStockEditor(mode){
     closeWorkspaceModals();
     activeStockMode = mode || 'stock';
@@ -341,37 +383,38 @@
     document.getElementById('stockModalTitle').textContent = copy.title;
     document.getElementById('stockModalDescription').textContent = copy.description;
     document.getElementById('sReset').textContent = copy.reset;
-    const activeId = activeStockMode === 'stock' ? 'btnStock' : activeStockMode === 'ingredients' ? 'btnIngredients' : activeStockMode === 'recipes' ? 'btnRecipesFromStock' : 'btnAddonsFromStock';
+    const activeId = activeStockMode === 'stock' ? 'btnStock' : 'btnIngredients';
     document.querySelectorAll('#modalStock .admin-workspace-nav button').forEach(button=>button.classList.toggle('active', button.id === activeId));
-    openEditorModal('modalStock', ()=>BK_STOCK.openEditor(activeStockMode));
+    openEditorModal('modalStock', ()=>BK_STOCK.openEditor(activeStockMode, {bodyId:'stockBody', modalId:'modalStock', titleId:'stockModalTitle'}));
   }
   function openStockEditor(mode){ return guardWorkspaceChange(()=>showStockEditor(mode)); }
-  function closeWorkspaceModals(){
-    ['modalProducts','modalPrices','modalImages','modalMenus','modalStock','modalPackagingRules'].forEach(id=>{
-      const modal = document.getElementById(id);
-      if(modal) modal.classList.remove('open');
-    });
-  }
-  function openProductsWorkspace(){ return guardWorkspaceChange(()=>{ closeWorkspaceModals(); openEditorModal('modalProducts', ()=>BK_PRODUCTS.openEditor()); }); }
-  function openPricesWorkspace(){ return guardWorkspaceChange(()=>{ closeWorkspaceModals(); openEditorModal('modalPrices', ()=>BK_PRICES.openEditor(false)); }); }
-  function openImagesWorkspace(){ return guardWorkspaceChange(()=>{ closeWorkspaceModals(); openEditorModal('modalImages', ()=>BK_IMAGES.openEditor()); }); }
   function openOperationsWorkspace(){ return guardWorkspaceChange(()=>{ closeWorkspaceModals(); openPackagingRules(); }); }
   function closeEditorSafely(modalId, close){ return guardWorkspaceChange(()=>{ markEditorSaved(modalId); close(); }); }
 
-  document.getElementById('btnCatalog').onclick = openProductsWorkspace;
+  document.getElementById('btnCatalog').onclick = ()=>openCatalogSection('products');
   document.getElementById('btnInventory').onclick = ()=> openStockEditor('stock');
   document.getElementById('btnOperations').onclick = openOperationsWorkspace;
-  document.getElementById('btnPrices').onclick = openPricesWorkspace;
-  document.getElementById('btnProducts').onclick = openProductsWorkspace;
-  document.getElementById('btnImages').onclick = openImagesWorkspace;
-  document.getElementById('pClose').onclick    = ()=> closeEditorSafely('modalPrices', ()=>BK_PRICES.closeEditor());
-  document.getElementById('pSave').onclick     = async ()=>{ if(await saveWithFeedback(()=>BK_PRICES.save(), 'Prices')) markEditorSaved('modalPrices'); };
-  document.getElementById('pReset').onclick    = ()=> resetWithConfirmation(()=>BK_PRICES.reset(), 'Prices');
-
-  document.getElementById('prodClose').onclick   = ()=> closeEditorSafely('modalProducts', ()=>BK_PRODUCTS.closeEditor());
-  document.getElementById('prodAdd').onclick     = ()=> BK_PRODUCTS.addRow();
-  document.getElementById('prodSave').onclick    = async ()=>{ if(await saveWithFeedback(()=>BK_PRODUCTS.save(), 'Products')) markEditorSaved('modalProducts'); };
-  document.getElementById('prodReset').onclick   = ()=> resetWithConfirmation(()=>BK_PRODUCTS.reset(), 'Products');
+  Object.keys(catalogSections).forEach(section=>{
+    document.getElementById(`btn${section[0].toUpperCase()}${section.slice(1)}`).onclick = ()=>openCatalogSection(section);
+  });
+  document.getElementById('catalogAdd').onclick = ()=>BK_PRODUCTS.addRow();
+  document.getElementById('catalogClose').onclick = ()=>closeEditorSafely('modalCatalog', ()=>document.getElementById('modalCatalog').classList.remove('open'));
+  document.getElementById('catalogSave').onclick = async ()=>{
+    const copy = catalogSections[activeCatalogSection];
+    const save = activeCatalogSection === 'products' ? ()=>BK_PRODUCTS.save()
+      : activeCatalogSection === 'prices' ? ()=>BK_PRICES.save()
+      : activeCatalogSection === 'images' ? ()=>BK_IMAGES.save()
+      : ()=>BK_STOCK.save();
+    if(await saveWithFeedback(save, copy.label)) markEditorSaved('modalCatalog');
+  };
+  document.getElementById('catalogReset').onclick = ()=>{
+    const copy = catalogSections[activeCatalogSection];
+    const reset = activeCatalogSection === 'products' ? ()=>BK_PRODUCTS.reset()
+      : activeCatalogSection === 'prices' ? ()=>BK_PRICES.reset()
+      : activeCatalogSection === 'images' ? ()=>BK_IMAGES.reset()
+      : ()=>{ BK_STOCK.resetEditor(activeCatalogSection); renderCatalogSection(activeCatalogSection); };
+    resetWithConfirmation(reset, copy.label);
+  };
 
   document.getElementById('btnMenus').onclick = ()=> guardWorkspaceChange(()=>{ closeWorkspaceModals(); openEditorModal('modalMenus', ()=>BK_MENUS.openEditor()); });
   document.getElementById('menuClose').onclick  = ()=> closeEditorSafely('modalMenus', ()=>BK_MENUS.closeEditor());
@@ -380,19 +423,8 @@
   document.getElementById('menuReset').onclick  = ()=> resetWithConfirmation(()=>BK_MENUS.reset(), 'Menus');
 
 
-  document.getElementById('iClose').onclick    = ()=> closeEditorSafely('modalImages', ()=>BK_IMAGES.closeEditor());
-  document.getElementById('iSave').onclick     = async ()=>{ if(await saveWithFeedback(()=>BK_IMAGES.save(), 'Images')) markEditorSaved('modalImages'); };
-  document.getElementById('iReset').onclick    = ()=> resetWithConfirmation(()=>BK_IMAGES.reset(), 'Images');
-
   document.getElementById('btnStock').onclick = ()=> openStockEditor('stock');
   document.getElementById('btnIngredients').onclick = ()=> openStockEditor('ingredients');
-  document.getElementById('btnRecipes').onclick = ()=> openStockEditor('recipes');
-  document.getElementById('btnAddons').onclick = ()=> openStockEditor('addons');
-  ['btnProductsFromImages','btnProductsFromStock'].forEach(id=>document.getElementById(id).onclick = openProductsWorkspace);
-  ['btnPricesFromImages'].forEach(id=>document.getElementById(id).onclick = openPricesWorkspace);
-  document.getElementById('btnImagesFromPrices').onclick = openImagesWorkspace;
-  ['btnRecipesFromPrices','btnRecipesFromImages','btnRecipesFromStock'].forEach(id=>document.getElementById(id).onclick = ()=>openStockEditor('recipes'));
-  ['btnAddonsFromPrices','btnAddonsFromImages','btnAddonsFromStock'].forEach(id=>document.getElementById(id).onclick = ()=>openStockEditor('addons'));
   document.getElementById('packClose').onclick = ()=> closeEditorSafely('modalPackagingRules', closePackagingRules);
   document.getElementById('packSave').onclick = async ()=>{ if(await saveWithFeedback(savePackagingRulesFromModal, 'Packaging rules')) markEditorSaved('modalPackagingRules'); };
   document.getElementById('packReset').onclick = ()=> resetWithConfirmation(()=>{ savePackagingRules(PACK_RULES_DEFAULT); openPackagingRules(); }, 'Packaging rules');

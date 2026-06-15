@@ -237,14 +237,16 @@
     bindRowEvents(body);
   }
 
-  function openEditor(){
+  function openEditor(options){
     DRAFT = clone(window.BK_DATA.BASE || []);
     renderRows();
-    document.getElementById('modalProducts').classList.add('open');
+    const modal = document.getElementById('modalProducts');
+    if(modal && (!options || options.showModal !== false)) modal.classList.add('open');
   }
 
   function closeEditor(){
-    document.getElementById('modalProducts').classList.remove('open');
+    const modal = document.getElementById('modalProducts');
+    if(modal) modal.classList.remove('open');
   }
 
   function addRow(){

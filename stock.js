@@ -19,6 +19,8 @@
   let TRANSFERS = [];
   let MOVEMENTS = [];
   let remoteSaveTimer = null;
+  let editorBodyId = 'stockBody';
+  let editorModalId = 'modalStock';
 
   function clone(x){ return JSON.parse(JSON.stringify(x)); }
   function remoteEnabled(){
@@ -603,9 +605,12 @@
     };
   }
 
-  function openEditor(mode){
-    const body = document.getElementById('stockBody'); if(!body) return;
-    const titleEl = document.getElementById('stockModalTitle');
+  function openEditor(mode, options){
+    const config = options || {};
+    editorBodyId = config.bodyId || 'stockBody';
+    editorModalId = Object.prototype.hasOwnProperty.call(config, 'modalId') ? config.modalId : 'modalStock';
+    const body = document.getElementById(editorBodyId); if(!body) return;
+    const titleEl = config.titleId ? document.getElementById(config.titleId) : document.getElementById('stockModalTitle');
     const productList = Array.isArray(window.BK_DATA && BK_DATA.BASE) ? BK_DATA.BASE : [];
     const activeMode = mode || 'stock';
     const showIngredients = activeMode === 'stock' || activeMode === 'ingredients';
@@ -671,13 +676,14 @@
       }).join('');
       bindRecipeBuilder(recipeWrap);
     }
-    document.getElementById('modalStock').classList.add('open');
+    const modal = editorModalId ? document.getElementById(editorModalId) : null;
+    if(modal && config.showModal !== false) modal.classList.add('open');
   }
 
-  function closeEditor(){ const modal = document.getElementById('modalStock'); if(modal) modal.classList.remove('open'); }
+  function closeEditor(){ const modal = editorModalId ? document.getElementById(editorModalId) : null; if(modal) modal.classList.remove('open'); }
 
   function saveEditor(){
-    const body = document.getElementById('stockBody'); if(!body) return false;
+    const body = document.getElementById(editorBodyId); if(!body) return false;
     const ingNext = readIngredientsFromEditor(body) || clone(INGREDIENTS);
     if(!Object.keys(ingNext).length) return false;
     const recipeInputs = body.querySelectorAll('[data-recipe-input]');

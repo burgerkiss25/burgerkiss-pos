@@ -77,7 +77,7 @@
     if(typeof ov==='number' && !isNaN(ov)) return ov;
     return Number.isFinite(base) ? base : 0;
   }
-  function openEditor(force){
+  function openEditor(force, options){
     const modal = document.getElementById('modalPrices');
     const body  = document.getElementById('pricesBody');
     if(force) body.innerHTML = '';
@@ -108,9 +108,9 @@
         inp.value = getPrice(inp.dataset.id);
       });
     }
-    modal.classList.add('open');
+    if(modal && (!options || options.showModal !== false)) modal.classList.add('open');
   }
-  function closeEditor(){ document.getElementById('modalPrices').classList.remove('open'); }
+  function closeEditor(){ const modal = document.getElementById('modalPrices'); if(modal) modal.classList.remove('open'); }
   function save(){
     const body = document.getElementById('pricesBody');
     body.querySelectorAll('input[data-id]').forEach(inp=>{

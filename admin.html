@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – Admin Editors</title>
-  <link rel="stylesheet" href="./style.css?v=60" />
+  <link rel="stylesheet" href="./style.css?v=61" />
   <script src="./firebase-config.js?v=2"></script>
 </head>
 <body class="admin-page">
@@ -68,11 +68,13 @@
     </section>
   </div>
 
-  <div class="modal admin-editor-modal" id="modalPrices"><div class="sheet"><nav class="admin-workspace-nav" aria-label="Product workspace"><button id="btnProducts" type="button">Products</button><button class="active" type="button">Prices</button><button id="btnImagesFromPrices" type="button">Images</button><button id="btnRecipesFromPrices" type="button">Recipes</button><button id="btnAddonsFromPrices" type="button">Add-ons</button></nav><header><div><b>Prices</b><small>Bulk-update product selling prices</small></div><div><button class="x admin-reset" id="pReset">Reset to defaults</button><button class="x" id="pClose">Close workspace</button><button class="x admin-primary" id="pSave">Save changes</button></div></header><div class="body" id="pricesBody"></div></div></div>
-  <div class="modal admin-editor-modal admin-editor-wide" id="modalProducts"><div class="sheet"><nav class="admin-workspace-nav" aria-label="Product workspace"><button class="active" type="button">Products</button><button id="btnPrices" type="button">Prices</button><button id="btnImages" type="button">Images</button><button id="btnRecipes" type="button">Recipes</button><button id="btnAddons" type="button">Add-ons</button></nav><header><div><b>Products</b><small>Manage products, categories, and POS display order</small></div><div><button class="x" id="prodAdd">Add product</button><button class="x admin-reset" id="prodReset">Reset to defaults</button><button class="x" id="prodClose">Close workspace</button><button class="x admin-primary" id="prodSave">Save changes</button></div></header><div class="body" id="productsBody"></div></div></div>
+  <div class="modal admin-editor-modal admin-editor-workspace" id="modalCatalog" role="dialog" aria-modal="true" aria-labelledby="catalogModalTitle"><div class="sheet">
+    <nav class="admin-workspace-nav" aria-label="Product workspace"><button id="btnProducts" type="button">Products</button><button id="btnPrices" type="button">Prices</button><button id="btnImages" type="button">Images</button><button id="btnRecipes" type="button">Recipes</button><button id="btnAddons" type="button">Add-ons</button></nav>
+    <header><div><b id="catalogModalTitle">Products</b><small id="catalogModalDescription">Manage products, categories, and POS display order</small></div><div><button class="x" id="catalogAdd" type="button">Add product</button><button class="x admin-reset" id="catalogReset" type="button">Reset to defaults</button><button class="x" id="catalogClose" type="button">Close workspace</button><button class="x admin-primary" id="catalogSave" type="button">Save changes</button></div></header>
+    <div class="body catalog-workspace-body"><div id="productsBody"></div><div id="pricesBody" hidden></div><div id="imagesBody" hidden></div><div id="catalogStockBody" hidden></div></div>
+  </div></div>
   <div class="modal admin-editor-modal admin-editor-wide" id="modalMenus"><div class="sheet"><header><div><b>Menus</b><small>Configure menu products, prices, and defaults</small></div><div><button class="x" id="menuAdd">Add menu</button><button class="x admin-reset" id="menuReset">Reset to defaults</button><button class="x" id="menuClose">Cancel</button><button class="x admin-primary" id="menuSave">Save changes</button></div></header><div class="body" id="menusBody"></div></div></div>
-  <div class="modal admin-editor-modal admin-editor-wide" id="modalImages"><div class="sheet"><nav class="admin-workspace-nav" aria-label="Product workspace"><button id="btnProductsFromImages" type="button">Products</button><button id="btnPricesFromImages" type="button">Prices</button><button class="active" type="button">Images</button><button id="btnRecipesFromImages" type="button">Recipes</button><button id="btnAddonsFromImages" type="button">Add-ons</button></nav><header><div><b>Images</b><small>Manage product images and previews</small></div><div><button class="x admin-reset" id="iReset">Reset to defaults</button><button class="x" id="iClose">Close workspace</button><button class="x admin-primary" id="iSave">Save changes</button></div></header><div class="body" id="imagesBody"></div></div></div>
-  <div class="modal admin-editor-modal admin-editor-workspace" id="modalStock"><div class="sheet"><nav class="admin-workspace-nav" aria-label="Workspace sections"><button id="btnStock" type="button">Overview</button><button id="btnIngredients" type="button">Ingredients</button><button id="btnProductsFromStock" type="button">Products</button><button id="btnRecipesFromStock" type="button">Recipes</button><button id="btnAddonsFromStock" type="button">Add-ons</button></nav><header><div><b id="stockModalTitle">Stock overview</b><small id="stockModalDescription">Review inventory levels, locations, and transfers</small></div><div><button class="x admin-reset" id="sReset">Reset stock to defaults</button><button class="x" id="sClose">Close workspace</button><button class="x admin-primary" id="sSave">Save changes</button></div></header><div class="body" id="stockBody"></div></div></div>
+  <div class="modal admin-editor-modal admin-editor-workspace" id="modalStock" role="dialog" aria-modal="true" aria-labelledby="stockModalTitle"><div class="sheet"><nav class="admin-workspace-nav" aria-label="Inventory workspace"><button id="btnStock" type="button">Overview</button><button id="btnIngredients" type="button">Ingredients</button></nav><header><div><b id="stockModalTitle">Stock overview</b><small id="stockModalDescription">Review inventory levels, locations, and transfers</small></div><div><button class="x admin-reset" id="sReset">Reset stock to defaults</button><button class="x" id="sClose">Close workspace</button><button class="x admin-primary" id="sSave">Save changes</button></div></header><div class="body" id="stockBody"></div></div></div>
   <div class="modal admin-editor-modal" id="modalPackagingRules"><div class="sheet"><header><div><b>Packaging rules</b><small>Configure bag mappings and order-size thresholds</small></div><div><button class="x admin-reset" id="packReset">Reset to defaults</button><button class="x" id="packClose">Cancel</button><button class="x admin-primary" id="packSave">Save changes</button></div></header><div class="body" id="packagingRulesBody"></div></div></div>
   <div class="admin-toast-region" id="adminToastRegion" aria-live="polite" aria-atomic="true"></div>
   <div class="modal admin-confirm-modal" id="adminConfirmModal" role="dialog" aria-modal="true" aria-labelledby="adminConfirmTitle" aria-describedby="adminConfirmMessage"><div class="admin-confirm-card"><div class="eyebrow">Please confirm</div><h2 id="adminConfirmTitle">Discard changes?</h2><p id="adminConfirmMessage">This action cannot be undone.</p><div class="admin-confirm-actions"><button class="x" id="adminConfirmCancel" type="button">Keep editing</button><button class="x admin-danger" id="adminConfirmAccept" type="button">Discard changes</button></div></div></div>
@@ -90,13 +92,13 @@
 
   <script src="./access.js?v=2"></script>
   <script src="./data.js?v=13"></script>
-  <script src="./prices.js?v=14"></script>
-  <script src="./products.js?v=16"></script>
+  <script src="./prices.js?v=15"></script>
+  <script src="./products.js?v=17"></script>
   <script src="./menus.js?v=4"></script>
-  <script src="./images.js?v=20"></script>
+  <script src="./images.js?v=21"></script>
   <script src="./stock_data.js?v=13"></script>
   <script src="./stock_utils.js?v=15"></script>
-  <script src="./stock.js?v=21"></script>
+  <script src="./stock.js?v=22"></script>
   <script src="./state.js?v=20"></script>
   <script src="./logic.js?v=14"></script>
   <script src="./packing.js?v=1"></script>
@@ -109,7 +111,7 @@
       }
       if(document.querySelector('script[data-admin-boot]')) return;
       const script = document.createElement('script');
-      script.src = 'admin.js?v=6';
+      script.src = 'admin.js?v=7';
       script.dataset.adminBoot = 'true';
       document.body.appendChild(script);
     });

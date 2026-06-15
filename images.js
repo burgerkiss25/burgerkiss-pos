@@ -368,16 +368,18 @@
     });
   }
 
-  function openEditor(){
+  function openEditor(options){
     DRAFT = clone(MAP);
     DIRTY = new Set();
     REMOVED = new Set();
     renderRows();
-    document.getElementById('modalImages').classList.add('open');
+    const modal = document.getElementById('modalImages');
+    if(modal && (!options || options.showModal !== false)) modal.classList.add('open');
   }
 
   function closeEditor(){
-    document.getElementById('modalImages').classList.remove('open');
+    const modal = document.getElementById('modalImages');
+    if(modal) modal.classList.remove('open');
   }
 
   function save(){

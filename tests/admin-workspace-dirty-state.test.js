@@ -14,6 +14,7 @@ assert.match(admin, /beforeunload/);
 assert.match(admin, /MutationObserver/);
 assert.match(admin, /closeEditorSafely/);
 assert.match(admin, /if\(await saveWithFeedback/);
+assert.match(admin, /trackEditor\('modalCatalog'\)/);
 assert.match(css, /\.workspace-dirty-state\.dirty/);
 
 console.log('Admin workspace dirty-state checks passed.');
