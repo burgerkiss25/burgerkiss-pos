@@ -6,7 +6,9 @@
   let DRAFT = [];
   let imageChanges = {};
   let initialIds = [];
+  let baseline = new Map();
   let search = '';
+  let filter = 'all';
 
   function clone(value){ return JSON.parse(JSON.stringify(value)); }
   function esc(value){
@@ -36,7 +38,30 @@
       recipe:BK_STOCK.getRecipe(product.id)
     }));
     initialIds = DRAFT.map(item=>item.id);
+    baseline = new Map(DRAFT.map(item=>[item.originalId, JSON.stringify(item)]));
     imageChanges = {};
+  }
+  function changeState(item){
+    if(!baseline.has(item.originalId)) return 'New';
+    return baseline.get(item.originalId) === JSON.stringify(item) ? '' : 'Modified';
+  }
+  function changedCount(){
+    const changed = DRAFT.filter(changeState).length;
+    const currentIds = new Set(DRAFT.map(item=>item.id));
+    return changed + initialIds.filter(id=>!currentIds.has(id)).length;
+  }
+  function updateSaveButton(){
+    const button = document.getElementById('catalogSave');
+    if(!button) return;
+    const count = changedCount();
+    button.disabled = count === 0;
+    button.textContent = count ? `Save ${count} change${count === 1 ? '' : 's'}` : 'All changes saved';
+  }
+  function matchesFilter(item){
+    if(filter === 'missing-image') return !item.image;
+    if(filter === 'missing-recipe') return !Object.keys(item.recipe || {}).length;
+    if(filter === 'modified') return Boolean(changeState(item));
+    return true;
   }
   function collectDraft(){
     document.querySelectorAll('#catalogBody [data-catalog-product]').forEach(card=>{
@@ -59,24 +84,26 @@
   }
   function productCard(item, index){
     const recipeCount = Object.keys(item.recipe || {}).length;
+    const state = changeState(item);
     const image = item.image
       ? `<img src="${esc(item.image)}" alt="${esc(item.name)}">`
       : '<span>No image</span>';
-    return `<article class="catalog-product-card" data-catalog-product data-index="${index}">
+    return `<article class="catalog-product-card ${state ? 'catalog-product-changed' : ''}" data-catalog-product data-index="${index}">
       <div class="catalog-product-summary">
         <div class="catalog-order-controls"><button type="button" data-move="-1" aria-label="Move ${esc(item.name)} up">↑</button><button type="button" data-move="1" aria-label="Move ${esc(item.name)} down">↓</button></div>
         <div class="catalog-product-image">${image}</div>
         <div class="catalog-product-main"><input data-field="name" aria-label="Product name" value="${esc(item.name)}"><small>${esc(item.id)}</small></div>
         <label><span>Price</span><span class="currency-field"><input data-field="price" type="number" min="0" step="1" value="${item.price}"><b>GHS</b></span></label>
         <label><span>Category</span><select data-field="cat">${categoryOptions(item.cat)}</select></label>
-        <div class="catalog-product-status"><span class="admin-count-badge">${recipeCount} ingredient${recipeCount === 1 ? '' : 's'}</span><small>${item.image ? 'Image ready' : 'Image missing'}</small></div>
+        <div class="catalog-product-status">${state ? `<span class="catalog-change-badge">${state}</span>` : ''}<span class="admin-count-badge">${recipeCount} ingredient${recipeCount === 1 ? '' : 's'}</span><small>${item.image ? 'Image ready' : 'Image missing'}</small></div>
         <details class="catalog-product-details"><summary>Edit details</summary>
           <div class="catalog-detail-grid">
             <section><h5>Image</h5><div class="catalog-detail-image">${image}</div><label class="x admin-upload-button">Replace image<input class="sr-only" type="file" accept="image/*" data-image-file></label><button class="mini" type="button" data-image-remove>Remove image</button></section>
             <section><h5>Recipe</h5><div class="recipe-ingredient-list" data-recipe-list>${recipeChips(item,index)}</div><div class="recipe-add-row"><select data-recipe-ingredient>${ingredientOptions()}</select><input data-recipe-quantity type="number" min="0.25" step="0.25" value="1"><button class="x" type="button" data-recipe-add>Add ingredient</button></div></section>
-            <section><h5>Technical details</h5><label><span>Product ID</span><input data-field="id" value="${esc(item.id)}"></label><h5>History</h5><p class="muted">No product audit history recorded yet.</p><button class="mini admin-row-danger" type="button" data-delete-product>Delete product</button></section>
+            <section><h5>Technical details</h5><label><span>Product ID</span><input data-field="id" value="${esc(item.id)}"><small class="catalog-field-error" data-error-for="id"></small></label><h5>History</h5><p class="muted">No product audit history recorded yet.</p><button class="mini admin-row-danger" type="button" data-delete-product>Delete product</button></section>
           </div>
         </details>
+        <div class="catalog-row-error" role="alert"></div>
       </div>
     </article>`;
   }
@@ -85,13 +112,16 @@
     const query = search.trim().toLowerCase();
     const groups = CATEGORIES.map(([category,label])=>{
       const items = DRAFT.map((item,index)=>({item,index}))
-        .filter(entry=>entry.item.cat === category && (!query || `${entry.item.name} ${entry.item.id}`.toLowerCase().includes(query)))
+        .filter(entry=>entry.item.cat === category && matchesFilter(entry.item) && (!query || `${entry.item.name} ${entry.item.id}`.toLowerCase().includes(query)))
         .sort((a,b)=>Number(a.item.categoryOrder)-Number(b.item.categoryOrder));
       if(!items.length) return '';
       return `<details class="admin-category-group catalog-category" open><summary><span><b>${label}</b><small>${items.length} product${items.length === 1 ? '' : 's'}</small></span></summary><div class="catalog-category-products">${items.map(({item,index})=>productCard(item,index)).join('')}</div></details>`;
     }).join('');
-    body.innerHTML = `<div class="catalog-toolbar"><label><span class="sr-only">Search products</span><input id="catalogSearch" type="search" placeholder="Search products..." value="${esc(search)}"></label><span class="admin-count-badge">${DRAFT.length} products</span></div>${groups || '<div class="empty-state">No matching products.</div>'}`;
+    const modified = changedCount();
+    body.innerHTML = `<div class="catalog-toolbar"><label><span class="sr-only">Search products</span><input id="catalogSearch" type="search" placeholder="Search products..." value="${esc(search)}"></label><select id="catalogFilter" aria-label="Filter products"><option value="all">All products</option><option value="modified">Modified</option><option value="missing-image">Missing image</option><option value="missing-recipe">Missing recipe</option></select><span class="admin-count-badge">${modified ? `${modified} changed` : `${DRAFT.length} products`}</span></div>${groups || '<div class="empty-state">No matching products.</div>'}`;
+    body.querySelector('#catalogFilter').value = filter;
     bind();
+    updateSaveButton();
   }
   function updateRecipeDisplay(card, item, index){
     card.querySelector('[data-recipe-list]').innerHTML = recipeChips(item,index);
@@ -106,6 +136,7 @@
         const item = DRAFT[Number(button.dataset.index)];
         delete item.recipe[button.dataset.recipeRemove];
         updateRecipeDisplay(button.closest('[data-catalog-product]'), item, Number(button.dataset.index));
+        updateSaveButton();
       };
     });
   }
@@ -119,6 +150,11 @@
       input.focus();
       input.setSelectionRange(input.value.length,input.value.length);
     };
+    body.querySelector('#catalogFilter').onchange = event=>{
+      collectDraft();
+      filter = event.target.value;
+      render();
+    };
     body.querySelectorAll('[data-catalog-product]').forEach(card=>{
       const index = Number(card.dataset.index);
       const item = DRAFT[index];
@@ -127,6 +163,12 @@
         collectDraft();
         render();
       };
+      card.querySelectorAll('[data-field="name"],[data-field="price"],[data-field="id"]').forEach(input=>{
+        input.oninput = ()=>{
+          collectDraft();
+          updateSaveButton();
+        };
+      });
       card.querySelector('[data-image-file]').onchange = event=>{
         const file = event.target.files && event.target.files[0];
         if(!file) return;
@@ -147,6 +189,7 @@
         if(!ingredient || !Number.isFinite(quantity) || quantity <= 0) return;
         item.recipe[ingredient] = quantity;
         updateRecipeDisplay(card,item,index);
+        updateSaveButton();
       };
       card.querySelector('[data-delete-product]').onclick = ()=>{
         collectDraft();
@@ -176,6 +219,7 @@
     const count = DRAFT.filter(item=>item.cat === category).length;
     const id = `new_product_${Date.now()}`;
     DRAFT.push({id,originalId:id,name:'New product',cat:category,price:0,categoryOrder:(count+1)*10,image:'',recipe:{}});
+    filter = 'all';
     render();
     const cards = document.querySelectorAll('#catalogBody [data-catalog-product]');
     const card = cards[cards.length-1];
@@ -184,8 +228,32 @@
   async function save(){
     collectDraft();
     const ids = new Set();
-    for(const item of DRAFT){
-      if(!item.id || !item.name || !Number.isFinite(item.price) || item.price < 0 || ids.has(item.id)) return false;
+    for(let index=0; index<DRAFT.length; index++){
+      const item = DRAFT[index];
+      let message = '';
+      let field = '';
+      if(!item.name){ message = 'Product name is required.'; field = 'name'; }
+      else if(!item.id){ message = 'Product ID is required.'; field = 'id'; }
+      else if(ids.has(item.id)){ message = 'Product ID already exists.'; field = 'id'; }
+      else if(!Number.isFinite(item.price) || item.price < 0){ message = 'Price must be zero or greater.'; field = 'price'; }
+      else if(!item.cat){ message = 'Category is required.'; field = 'cat'; }
+      if(message){
+        filter = 'all';
+        search = '';
+        render();
+        const card = document.querySelector(`[data-catalog-product][data-index="${index}"]`);
+        if(card){
+          card.classList.add('catalog-product-invalid');
+          card.querySelector('.catalog-row-error').textContent = message;
+          const details = card.querySelector('details');
+          if(field === 'id') details.open = true;
+          const input = card.querySelector(`[data-field="${field}"]`);
+          input.setAttribute('aria-invalid','true');
+          input.focus();
+          card.scrollIntoView({block:'center'});
+        }
+        return false;
+      }
       ids.add(item.id);
     }
     const rows = DRAFT.map(item=>({id:item.id,name:item.name,price:item.price,cat:item.cat,categoryOrder:item.categoryOrder}));
