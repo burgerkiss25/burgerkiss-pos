@@ -297,23 +297,32 @@
 
   function renderRows(){
     const body = document.getElementById('imagesBody');
-    body.innerHTML = '';
-    BK_DATA.BASE.forEach(it=>{
+    const categoryLabels = {burger:'Burgers',wings:'Wings',fries:'Fries',salad:'Salads',drink:'Drinks',extra:'Add-ons',sauce:'Sauces'};
+    const products = BK_DATA.BASE.slice();
+    const categories = Array.from(new Set(products.map(product=>product.cat || 'other')));
+    body.innerHTML = `<div class="admin-editor-intro"><div><h4>Product images</h4><p>Images are grouped by product category and follow the display order managed in Products.</p></div><span class="admin-count-badge">${products.length} products</span></div><div id="adminImageCategories"></div>`;
+    const categoriesWrap = body.querySelector('#adminImageCategories');
+    categories.forEach(category=>{
+      const items = products.filter(product=>(product.cat || 'other') === category).sort((a,b)=>Number(a.categoryOrder||0)-Number(b.categoryOrder||0));
+      const section = document.createElement('section');
+      section.className = 'admin-category-group';
+      section.dataset.imageCategory = category;
+      const label = categoryLabels[category] || String(category).replace(/(^|_)([a-z])/g,(_,space,letter)=>`${space ? ' ' : ''}${letter.toUpperCase()}`);
+      section.innerHTML = `<header><div><h4>${label}</h4><small>${items.length} ${items.length === 1 ? 'product' : 'products'}</small></div><span>Follows product order</span></header><div class="admin-image-grid"></div>`;
+      const grid = section.querySelector('.admin-image-grid');
+      items.forEach(it=>{
       const row = document.createElement('div');
-      row.className = 'row';
+      row.className = 'admin-image-card';
       const src = DRAFT[it.id] || '';
       row.innerHTML = `
-        <span class="left">
-          <b>${it.name}</b> <small>(${it.cat})</small>
-        </span>
-        <span class="left">
-          <img class="img-preview ${src ? '' : 'hidden'}" id="img-prev-${it.id}" data-preview-id="${it.id}" loading="lazy" alt="${it.name}">
-          <input type="file" accept="image/*" data-img-id="${it.id}">
-          <small id="img-status-${it.id}" class="muted"></small>
-          <button class="mini" data-remove-id="${it.id}">Remove</button>
-        </span>
+        <div class="admin-image-preview"><img class="img-preview ${src ? '' : 'hidden'}" id="img-prev-${it.id}" data-preview-id="${it.id}" loading="lazy" alt="${it.name}"><span class="${src ? 'hidden' : ''}" data-empty-image>No image</span></div>
+        <div class="admin-image-copy"><b>${it.name}</b><small>${it.cat} · ${it.id}</small></div>
+        <div class="admin-image-actions"><label class="x admin-upload-button">Choose image<input class="sr-only" type="file" accept="image/*" data-img-id="${it.id}"></label><button class="mini" data-remove-id="${it.id}">Remove</button></div>
+        <small id="img-status-${it.id}" class="muted"></small>
       `;
-      body.appendChild(row);
+      grid.appendChild(row);
+      });
+      categoriesWrap.appendChild(section);
     });
     hydrateVisiblePreviews(body);
 
@@ -331,7 +340,7 @@
           DIRTY.add(id);
           REMOVED.delete(id);
           const prev = document.getElementById(`img-prev-${id}`);
-          if(prev){ prev.src = DRAFT[id]; prev.classList.remove('hidden'); }
+          if(prev){ prev.src = DRAFT[id]; prev.classList.remove('hidden'); const empty=prev.parentElement.querySelector('[data-empty-image]'); if(empty) empty.classList.add('hidden'); }
           if(status) status.textContent = 'Ready';
         }).catch(e=>{
           console.warn('image processing failed:', e && e.message);
@@ -353,7 +362,7 @@
         REMOVED.add(id);
         const prev = document.getElementById(`img-prev-${id}`);
         const status = document.getElementById(`img-status-${id}`);
-        if(prev){ prev.src = ''; prev.classList.add('hidden'); }
+        if(prev){ prev.src = ''; prev.classList.add('hidden'); const empty=prev.parentElement.querySelector('[data-empty-image]'); if(empty) empty.classList.remove('hidden'); }
         if(status) status.textContent = 'Removed';
       };
     });
@@ -405,7 +414,6 @@
   }
 
   function reset(){
-    if(!confirm('Reset all edited images?')) return;
     MAP = {};
     DRAFT = {};
     DIRTY = new Set();
