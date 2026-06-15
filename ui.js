@@ -281,7 +281,8 @@
     const isFrontProduct = it => it && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
     const items = base.filter(isFrontProduct)
       .filter(it => it.cat === currentCat)
-      .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true);
+      .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true)
+      .sort((a,b)=>Number(a.categoryOrder || 0) - Number(b.categoryOrder || 0));
     const pageSize = productsPerPage();
     const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
     productPage = Math.min(productPage, pageCount - 1);
