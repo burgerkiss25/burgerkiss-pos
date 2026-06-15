@@ -43,12 +43,14 @@
   async function saveWithFeedback(save, label){
     try{
       const result = await Promise.resolve(save());
-      if(result === false) return;
+      if(result === false) return false;
       showToast(`${label} saved successfully.`);
       setTimeout(refreshDbStatus, 500);
+      return true;
     }catch(error){
       showToast(`${label} could not be saved.`, true);
       console.error(`Failed to save ${label}:`, error);
+      return false;
     }
   }
   async function resetWithConfirmation(reset, label){
@@ -56,6 +58,72 @@
     reset();
     showToast(`${label} reset to defaults.`);
     setTimeout(refreshDbStatus, 500);
+  }
+  const editorBaselines = new Map();
+  const editorObservers = new Map();
+  function editorSnapshot(modal){
+    const controls = Array.from(modal.querySelectorAll('.body input,.body select,.body textarea')).map(control=>({
+      key: control.dataset.field || control.dataset.productId || control.dataset.imgId || control.id || control.name || control.type,
+      value: control.type === 'checkbox' || control.type === 'radio' ? control.checked : control.value
+    }));
+    const rows = Array.from(modal.querySelectorAll('.body [data-prod-row],.body [data-menu-row],.body [data-ing-row],.body [data-recipe-row]')).map(row=>{
+      const identity = row.querySelector('[data-field="id"],[data-product-id]');
+      return identity ? identity.value || identity.dataset.productId : row.textContent.trim().slice(0, 80);
+    });
+    return JSON.stringify({controls, rows});
+  }
+  function updateEditorDirtyState(modal){
+    const dirty = editorBaselines.has(modal.id) && editorSnapshot(modal) !== editorBaselines.get(modal.id);
+    modal.dataset.dirty = dirty ? 'true' : 'false';
+    let state = modal.querySelector('.workspace-dirty-state');
+    if(!state){
+      state = document.createElement('span');
+      state.className = 'workspace-dirty-state';
+      modal.querySelector('.sheet>header>div:first-child').appendChild(state);
+    }
+    state.textContent = dirty ? 'Unsaved changes' : 'All changes saved';
+    state.classList.toggle('dirty', dirty);
+    return dirty;
+  }
+  function trackEditor(modalId){
+    const modal = document.getElementById(modalId);
+    if(!modal) return;
+    editorBaselines.set(modalId, editorSnapshot(modal));
+    updateEditorDirtyState(modal);
+    if(editorObservers.has(modalId)) editorObservers.get(modalId).disconnect();
+    const update = ()=>updateEditorDirtyState(modal);
+    const body = modal.querySelector('.body');
+    if(!body.dataset.dirtyTracking){
+      body.addEventListener('input', ()=>updateEditorDirtyState(modal));
+      body.addEventListener('change', ()=>updateEditorDirtyState(modal));
+      body.dataset.dirtyTracking = 'true';
+    }
+    const observer = new MutationObserver(update);
+    observer.observe(body, {childList:true, subtree:true});
+    editorObservers.set(modalId, observer);
+  }
+  function markEditorSaved(modalId){
+    const modal = document.getElementById(modalId);
+    if(!modal) return;
+    editorBaselines.set(modalId, editorSnapshot(modal));
+    updateEditorDirtyState(modal);
+  }
+  function openEditorModal(modalId, open){
+    open();
+    setTimeout(()=>trackEditor(modalId), 0);
+  }
+  function activeDirtyEditor(){
+    return Array.from(document.querySelectorAll('.admin-editor-modal.open')).find(modal=>updateEditorDirtyState(modal));
+  }
+  async function guardWorkspaceChange(next){
+    const dirtyModal = activeDirtyEditor();
+    if(dirtyModal){
+      const title = dirtyModal.querySelector('.sheet>header b');
+      const discard = await confirmAction('Discard unsaved changes?', `Changes in ${title ? title.textContent : 'this editor'} have not been saved.`, 'Discard changes');
+      if(!discard) return false;
+    }
+    next();
+    return true;
   }
   function packagingRuleRow(label, id, value, help, numeric){
     return `<label class="packaging-rule-field"><span>${label}</span><input id="${id}" ${numeric ? 'type="number" min="0" step="1"' : 'type="text"'} value="${String(value == null ? '' : value)}" aria-describedby="${id}Help ${id}Error"><small id="${id}Help">${help}</small><small class="packaging-rule-error" id="${id}Error"></small></label>`;
@@ -81,6 +149,7 @@
     body.oninput = updatePackagingPreview;
     updatePackagingPreview();
     modal.classList.add('open');
+    setTimeout(()=>trackEditor('modalPackagingRules'), 0);
   }
   function closePackagingRules(){
     const modal = document.getElementById('modalPackagingRules');
@@ -101,6 +170,7 @@
       return false;
     }
     savePackagingRules(next);
+    markEditorSaved('modalPackagingRules');
     closePackagingRules();
     return true;
   }
@@ -264,7 +334,7 @@
     recipes: { title:'Product recipes', description:'Define ingredient consumption for customer-facing products', label:'Product recipes', reset:'Reset product recipes to defaults' },
     addons: { title:'Add-ons', description:'Manage paid extras, sauces, and their stock consumption', label:'Add-ons', reset:'Reset add-ons to defaults' }
   };
-  function openStockEditor(mode){
+  function showStockEditor(mode){
     closeWorkspaceModals();
     activeStockMode = mode || 'stock';
     const copy = stockEditorCopy[activeStockMode];
@@ -273,18 +343,20 @@
     document.getElementById('sReset').textContent = copy.reset;
     const activeId = activeStockMode === 'stock' ? 'btnStock' : activeStockMode === 'ingredients' ? 'btnIngredients' : activeStockMode === 'recipes' ? 'btnRecipesFromStock' : 'btnAddonsFromStock';
     document.querySelectorAll('#modalStock .admin-workspace-nav button').forEach(button=>button.classList.toggle('active', button.id === activeId));
-    BK_STOCK.openEditor(activeStockMode);
+    openEditorModal('modalStock', ()=>BK_STOCK.openEditor(activeStockMode));
   }
+  function openStockEditor(mode){ return guardWorkspaceChange(()=>showStockEditor(mode)); }
   function closeWorkspaceModals(){
     ['modalProducts','modalPrices','modalImages','modalMenus','modalStock','modalPackagingRules'].forEach(id=>{
       const modal = document.getElementById(id);
       if(modal) modal.classList.remove('open');
     });
   }
-  function openProductsWorkspace(){ closeWorkspaceModals(); BK_PRODUCTS.openEditor(); }
-  function openPricesWorkspace(){ closeWorkspaceModals(); BK_PRICES.openEditor(false); }
-  function openImagesWorkspace(){ closeWorkspaceModals(); BK_IMAGES.openEditor(); }
-  function openOperationsWorkspace(){ closeWorkspaceModals(); openPackagingRules(); }
+  function openProductsWorkspace(){ return guardWorkspaceChange(()=>{ closeWorkspaceModals(); openEditorModal('modalProducts', ()=>BK_PRODUCTS.openEditor()); }); }
+  function openPricesWorkspace(){ return guardWorkspaceChange(()=>{ closeWorkspaceModals(); openEditorModal('modalPrices', ()=>BK_PRICES.openEditor(false)); }); }
+  function openImagesWorkspace(){ return guardWorkspaceChange(()=>{ closeWorkspaceModals(); openEditorModal('modalImages', ()=>BK_IMAGES.openEditor()); }); }
+  function openOperationsWorkspace(){ return guardWorkspaceChange(()=>{ closeWorkspaceModals(); openPackagingRules(); }); }
+  function closeEditorSafely(modalId, close){ return guardWorkspaceChange(()=>{ markEditorSaved(modalId); close(); }); }
 
   document.getElementById('btnCatalog').onclick = openProductsWorkspace;
   document.getElementById('btnInventory').onclick = ()=> openStockEditor('stock');
@@ -292,24 +364,24 @@
   document.getElementById('btnPrices').onclick = openPricesWorkspace;
   document.getElementById('btnProducts').onclick = openProductsWorkspace;
   document.getElementById('btnImages').onclick = openImagesWorkspace;
-  document.getElementById('pClose').onclick    = ()=> BK_PRICES.closeEditor();
-  document.getElementById('pSave').onclick     = ()=> saveWithFeedback(()=>BK_PRICES.save(), 'Prices');
+  document.getElementById('pClose').onclick    = ()=> closeEditorSafely('modalPrices', ()=>BK_PRICES.closeEditor());
+  document.getElementById('pSave').onclick     = async ()=>{ if(await saveWithFeedback(()=>BK_PRICES.save(), 'Prices')) markEditorSaved('modalPrices'); };
   document.getElementById('pReset').onclick    = ()=> resetWithConfirmation(()=>BK_PRICES.reset(), 'Prices');
 
-  document.getElementById('prodClose').onclick   = ()=> BK_PRODUCTS.closeEditor();
+  document.getElementById('prodClose').onclick   = ()=> closeEditorSafely('modalProducts', ()=>BK_PRODUCTS.closeEditor());
   document.getElementById('prodAdd').onclick     = ()=> BK_PRODUCTS.addRow();
-  document.getElementById('prodSave').onclick    = ()=> saveWithFeedback(()=>BK_PRODUCTS.save(), 'Products');
+  document.getElementById('prodSave').onclick    = async ()=>{ if(await saveWithFeedback(()=>BK_PRODUCTS.save(), 'Products')) markEditorSaved('modalProducts'); };
   document.getElementById('prodReset').onclick   = ()=> resetWithConfirmation(()=>BK_PRODUCTS.reset(), 'Products');
 
-  document.getElementById('btnMenus').onclick = ()=> BK_MENUS.openEditor();
-  document.getElementById('menuClose').onclick  = ()=> BK_MENUS.closeEditor();
+  document.getElementById('btnMenus').onclick = ()=> guardWorkspaceChange(()=>{ closeWorkspaceModals(); openEditorModal('modalMenus', ()=>BK_MENUS.openEditor()); });
+  document.getElementById('menuClose').onclick  = ()=> closeEditorSafely('modalMenus', ()=>BK_MENUS.closeEditor());
   document.getElementById('menuAdd').onclick    = ()=> BK_MENUS.addRow();
-  document.getElementById('menuSave').onclick   = ()=> saveWithFeedback(()=>BK_MENUS.save(), 'Menus');
+  document.getElementById('menuSave').onclick   = async ()=>{ if(await saveWithFeedback(()=>BK_MENUS.save(), 'Menus')) markEditorSaved('modalMenus'); };
   document.getElementById('menuReset').onclick  = ()=> resetWithConfirmation(()=>BK_MENUS.reset(), 'Menus');
 
 
-  document.getElementById('iClose').onclick    = ()=> BK_IMAGES.closeEditor();
-  document.getElementById('iSave').onclick     = ()=> saveWithFeedback(()=>BK_IMAGES.save(), 'Images');
+  document.getElementById('iClose').onclick    = ()=> closeEditorSafely('modalImages', ()=>BK_IMAGES.closeEditor());
+  document.getElementById('iSave').onclick     = async ()=>{ if(await saveWithFeedback(()=>BK_IMAGES.save(), 'Images')) markEditorSaved('modalImages'); };
   document.getElementById('iReset').onclick    = ()=> resetWithConfirmation(()=>BK_IMAGES.reset(), 'Images');
 
   document.getElementById('btnStock').onclick = ()=> openStockEditor('stock');
@@ -321,13 +393,18 @@
   document.getElementById('btnImagesFromPrices').onclick = openImagesWorkspace;
   ['btnRecipesFromPrices','btnRecipesFromImages','btnRecipesFromStock'].forEach(id=>document.getElementById(id).onclick = ()=>openStockEditor('recipes'));
   ['btnAddonsFromPrices','btnAddonsFromImages','btnAddonsFromStock'].forEach(id=>document.getElementById(id).onclick = ()=>openStockEditor('addons'));
-  document.getElementById('packClose').onclick = closePackagingRules;
-  document.getElementById('packSave').onclick = ()=> saveWithFeedback(savePackagingRulesFromModal, 'Packaging rules');
+  document.getElementById('packClose').onclick = ()=> closeEditorSafely('modalPackagingRules', closePackagingRules);
+  document.getElementById('packSave').onclick = async ()=>{ if(await saveWithFeedback(savePackagingRulesFromModal, 'Packaging rules')) markEditorSaved('modalPackagingRules'); };
   document.getElementById('packReset').onclick = ()=> resetWithConfirmation(()=>{ savePackagingRules(PACK_RULES_DEFAULT); openPackagingRules(); }, 'Packaging rules');
-  document.getElementById('sClose').onclick   = ()=> BK_STOCK.closeEditor();
-  document.getElementById('sSave').onclick    = ()=> saveWithFeedback(()=>BK_STOCK.save(), stockEditorCopy[activeStockMode].label);
-  document.getElementById('sReset').onclick   = ()=> resetWithConfirmation(()=>{ BK_STOCK.resetEditor(activeStockMode); openStockEditor(activeStockMode); }, stockEditorCopy[activeStockMode].label);
+  document.getElementById('sClose').onclick   = ()=> closeEditorSafely('modalStock', ()=>BK_STOCK.closeEditor());
+  document.getElementById('sSave').onclick    = async ()=>{ if(await saveWithFeedback(()=>BK_STOCK.save(), stockEditorCopy[activeStockMode].label)) markEditorSaved('modalStock'); };
+  document.getElementById('sReset').onclick   = ()=> resetWithConfirmation(()=>{ BK_STOCK.resetEditor(activeStockMode); showStockEditor(activeStockMode); }, stockEditorCopy[activeStockMode].label);
   document.getElementById('btnRefreshDbStatus').onclick = refreshDbStatus;
   document.getElementById('adminConfirmCancel').onclick = ()=> finishConfirmation(false);
   document.getElementById('adminConfirmAccept').onclick = ()=> finishConfirmation(true);
+  window.addEventListener('beforeunload', event=>{
+    if(!activeDirtyEditor()) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
 })();
