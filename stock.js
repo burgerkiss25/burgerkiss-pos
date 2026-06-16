@@ -524,9 +524,21 @@
   function ingredientCategoryLabel(category){
     return String(category || 'general').replace(/(^|[_-])([a-z])/g,(_,separator,letter)=>`${separator ? ' ' : ''}${letter.toUpperCase()}`);
   }
-  function renderIngredientGroups(body){
-    const entries = Object.entries(INGREDIENTS);
+  function normalizeIngredientSearch(value){
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function renderIngredientGroups(body, query){
+    const search = normalizeIngredientSearch(query);
+    const entries = Object.entries(INGREDIENTS).filter(([id, def])=>{
+      if(!search) return true;
+      return [id, def.name, def.category, def.unit].some(value=>String(value || '').toLowerCase().includes(search));
+    });
     const categories = Array.from(new Set(entries.map(([, def])=>String(def.category || 'general')))).sort();
+    if(!entries.length){
+      body.innerHTML = '<div class="empty-state">No matching ingredients.</div>';
+      return;
+    }
     body.innerHTML = categories.map(category=>{
       const rows = entries
         .filter(([, def])=>String(def.category || 'general') === category)
@@ -541,7 +553,9 @@
 
   function readIngredientsFromEditor(body){
     if(!body || !body.querySelector('[data-ing-row]')) return null;
-    const ingNext = {};
+    const searchInput = body.querySelector('#stockIngredientSearch');
+    const hasActiveSearch = !!(searchInput && normalizeIngredientSearch(searchInput.value));
+    const ingNext = hasActiveSearch ? clone(INGREDIENTS) : {};
     body.querySelectorAll('[data-ing-row]').forEach(row=>{
       const id = normalizeId(row.querySelector('[data-field="id"]').value);
       if(!id) return;
@@ -666,13 +680,11 @@
     const titleEl = config.titleId ? document.getElementById(config.titleId) : document.getElementById('stockModalTitle');
     const productList = Array.isArray(window.BK_DATA && BK_DATA.BASE) ? BK_DATA.BASE : [];
     const activeMode = mode || 'stock';
-    const showIngredients = activeMode === 'stock' || activeMode === 'ingredients';
+    const showIngredients = activeMode === 'stock';
     const showTransfers = activeMode === 'stock';
     const showRecipes = activeMode === 'recipes' || activeMode === 'addons';
     if(titleEl){
-      titleEl.textContent = activeMode === 'ingredients'
-        ? 'Ingredients'
-        : activeMode === 'recipes'
+      titleEl.textContent = activeMode === 'recipes'
           ? 'Product recipes'
           : activeMode === 'addons'
             ? 'Add-ons'
@@ -685,7 +697,7 @@
       ${showIngredients ? `<div class="stock-editor-intro">
         <div>
           <h4>Stock locations</h4>
-          <p>${showTransfers ? 'Review stock at both locations and transfer inventory to the Block Factory.' : 'Manage ingredient details, units, locations, and minimum stock levels.'}</p>
+          <p>Review stock at both locations, transfer inventory to the Block Factory, and maintain ingredient details in one place.</p>
         </div>
         <div class="stock-tabs" aria-label="Stock location sections">
           <span>BurgerKiss Store</span>
@@ -697,7 +709,10 @@
           <h4>Ingredients</h4>
           <p>Each ingredient has separate stock and minimum levels for the main warehouse and the Block Factory.</p>
         </div>
-        <button class="x" id="sAddIngredient">+ Ingredient</button>
+        <div class="stock-search-actions">
+          <label class="stock-search"><span class="sr-only">Search ingredients</span><input id="stockIngredientSearch" type="search" placeholder="Search ingredients..." autocomplete="off"></label>
+          <button class="x" id="sAddIngredient">+ Ingredient</button>
+        </div>
       </div>
       ${showTransfers ? transferPanelHtml() : ''}
       <div id="stockIngredients" class="stock-ingredients-list"></div>` : ''}
@@ -705,8 +720,13 @@
     `;
     if(showIngredients){
       const ingWrap = document.getElementById('stockIngredients');
-      renderIngredientGroups(ingWrap);
-      bindIngredientActions(ingWrap);
+      const searchInput = document.getElementById('stockIngredientSearch');
+      const refreshIngredients = ()=>{
+        renderIngredientGroups(ingWrap, searchInput && searchInput.value);
+        bindIngredientActions(ingWrap);
+      };
+      refreshIngredients();
+      if(searchInput) searchInput.oninput = refreshIngredients;
       if(showTransfers) bindTransferActions(body);
       document.getElementById('sAddIngredient').onclick = ()=>{
         let generalGroup = ingWrap.querySelector('[data-ingredient-category="general"] .stock-ingredient-category');
