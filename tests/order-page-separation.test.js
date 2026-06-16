@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '..');
 const landing = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const order = fs.readFileSync(path.join(root, 'order.html'), 'utf8');
 const shift = fs.readFileSync(path.join(root, 'shift.html'), 'utf8');
+const purchases = fs.readFileSync(path.join(root, 'purchases.html'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
 
@@ -40,8 +41,8 @@ test('shift tools are isolated on a dedicated page without the order UI bundle',
   assert.match(shift, /Shift Tools/);
   assert.match(shift, /shift_reports\.js/);
   assert.match(shift, /shift\.js/);
-  assert.match(shift, /id="shiftPurchaseForm"/);
-  assert.match(shift, /Receipt is in purse/);
+  assert.match(shift, /purchases\.html/);
+  assert.doesNotMatch(shift, /id="shiftPurchaseForm"/);
   assert.doesNotMatch(shift, /ui\.js|main\.js|id="buttons"|id="orderCart"/);
 });
 
@@ -55,4 +56,12 @@ test('a completed order cannot be restored by an older remote snapshot', () => {
   const state = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
   assert.match(state, /if\(updatedAt && Number\(raw\.ts\) <= updatedAt\) return false;/);
   assert.match(state, /flushRemote:saveRemoteNow/);
+});
+
+
+test('purchase entry is isolated and requires purchaser PIN confirmation', () => {
+  assert.match(purchases, /purchaseAuthForm/);
+  assert.match(purchases, /authorizeStaffPin|purchases\.js/);
+  assert.match(purchases, /Receipt is in purse/);
+  assert.doesNotMatch(purchases, /ui\.js|main\.js|id="buttons"|id="orderCart"/);
 });

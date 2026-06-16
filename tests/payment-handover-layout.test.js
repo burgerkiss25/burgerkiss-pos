@@ -50,3 +50,10 @@ test('walk-in MoMo payments are split by Telecel and MTN', () => {
   assert.match(ui, /momoTelecelTotal/);
   assert.match(ui, /momoMtnTotal/);
 });
+
+test('staff order history is limited to today or yesterday unless owner opens all', () => {
+  assert.match(html, /id="hYesterday"/);
+  assert.match(ui, /historyFilterRange = 'today'/);
+  assert.match(ui, /function filterHistoryYesterday/);
+  assert.match(ui, /owner && historyFilterRange === 'all'/);
+});

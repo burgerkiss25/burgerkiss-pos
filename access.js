@@ -138,6 +138,11 @@
     if(!owner || !(await verifyPin(owner.id, pin))) return null;
     return {id:owner.id, name:owner.name, role:owner.role, mode:'approval'};
   }
+  async function authorizeStaffPin(staffId, pin){
+    const person = staffById(staffId);
+    if(!person || !(await verifyPin(person.id, pin))) return null;
+    return {id:person.id, name:person.name, role:person.role, mode:'purchase'};
+  }
   function setSession(staffId, shiftId){
     const person = staffById(staffId);
     const mode = shiftId === 'remote' && person && person.role !== 'employee' ? 'remote' : 'operational';
@@ -263,7 +268,7 @@
     return false;
   }
 
-  const api = { STAFF, SHIFTS, ROLE_LEVEL, suggestedShift, salesStatus, businessDate, init, current:()=>session, actor, operationalActor, authorizeOwnerPin, canOperate, hasRole, can, applyPermissions, guardNewSale, signOut };
+  const api = { STAFF, SHIFTS, ROLE_LEVEL, suggestedShift, salesStatus, businessDate, init, current:()=>session, actor, operationalActor, authorizeOwnerPin, authorizeStaffPin, canOperate, hasRole, can, applyPermissions, guardNewSale, signOut };
   root.BK_ACCESS = api;
   if(typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

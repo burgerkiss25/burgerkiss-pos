@@ -382,7 +382,7 @@
     def.unit = unit;
     def.current_stock_foodtruck = before + qty;
     INGREDIENTS[id] = syncIngredientStock(def);
-    const actor = window.BK_ACCESS && BK_ACCESS.actor ? BK_ACCESS.actor() : null;
+    const actor = (input && input.purchasedBy && typeof input.purchasedBy === 'object') ? input.purchasedBy : (window.BK_ACCESS && BK_ACCESS.actor ? BK_ACCESS.actor() : null);
     const purchase = {
       id:`pur_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, ts:Date.now(), businessDate:actor && actor.businessDate || '',
       ingredient_id:id, ingredient_name:rawName, qty, unit, amount, paymentSource:String((input && input.paymentSource) || 'cash_wallet'), receiptInPurse:true, note:String((input && input.note) || ''),

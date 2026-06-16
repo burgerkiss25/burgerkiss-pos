@@ -8,7 +8,7 @@
   const HISTORY_KEY = 'bk_order_history_v1';
   const CATEGORY_LABELS = { all:'All', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
   let historyFilterText = '';
-  let historyFilterToday = false;
+  let historyFilterRange = 'today';
   let selectedHistoryOrderId = null;
   const QUICK_NOTES = ['No onion', 'Extra onion', 'No lettuce', 'Extra spicy'];
   const PACK_RULES_KEY = 'bk_packaging_rules_v1';
@@ -2441,10 +2441,20 @@
   }
   function getFilteredHistory(){
     const text = historyFilterText.trim().toLowerCase();
-    const today = new Date();
-    today.setHours(0,0,0,0);
+    const current = window.BK_ACCESS && BK_ACCESS.current ? BK_ACCESS.current() : null;
+    const owner = current && current.role === 'owner';
+    const startOfDay = offset=>{ const d = new Date(); d.setDate(d.getDate() + offset); d.setHours(0,0,0,0); return d.getTime(); };
+    const todayStart = startOfDay(0);
+    const tomorrowStart = startOfDay(1);
+    const yesterdayStart = startOfDay(-1);
     return getHistory().filter(h=>{
-      if(historyFilterToday && Number(h.closedAt || 0) < today.getTime()) return false;
+      const closed = Number(h.closedAt || 0);
+      if(!(owner && historyFilterRange === 'all')){
+        const useYesterday = historyFilterRange === 'yesterday';
+        const from = useYesterday ? yesterdayStart : todayStart;
+        const to = useYesterday ? todayStart : tomorrowStart;
+        if(closed < from || closed >= to) return false;
+      }
       if(!text) return true;
       return String(h.orderNo || '').toLowerCase().includes(text)
         || String(h.slotName || '').toLowerCase().includes(text)
@@ -2458,12 +2468,16 @@
     openHistory();
   }
   function filterHistoryToday(){
-    historyFilterToday = !historyFilterToday;
+    historyFilterRange = 'today';
+    openHistory();
+  }
+  function filterHistoryYesterday(){
+    historyFilterRange = 'yesterday';
     openHistory();
   }
   function clearHistoryFilters(){
     historyFilterText = '';
-    historyFilterToday = false;
+    historyFilterRange = (window.BK_ACCESS && BK_ACCESS.current && (BK_ACCESS.current() || {}).role === 'owner') ? 'all' : 'today';
     const search = document.getElementById('hSearch');
     if(search) search.value = '';
     renderHistoryBody();
@@ -3035,7 +3049,7 @@
     renderAll, renderOrder, renderMake, renderPay, renderIssue, refreshTotals,
     renderStock,
     openSummary, closeSummary, openHistory, closeHistory, openHistoryOrder, closeHistoryOrder, reprintHistoryOrder, voidSelectedHistoryOrder,
-    exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, clearHistoryFilters,
+    exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, filterHistoryYesterday, clearHistoryFilters,
     openDailyReport, closeDailyReport, renderDailyReport, exportDailyReportCsv, printDailyReport, dailyReportData, voidHistoryOrder, archiveCompletedSlots, workflowNextState, buildHandoverPlan, handoverPlanHtml,
     openStockOverview, closeStockOverview,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,

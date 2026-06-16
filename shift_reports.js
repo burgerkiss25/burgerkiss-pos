@@ -153,6 +153,19 @@
         <div class="report-order ${entry.status === 'voided' ? 'voided' : ''}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(paymentLabel(entry.pay, entry.momoProvider))}${entry.voidReason ? ` · ${escapeHtml(entry.voidReason)}` : ''}</small></span><strong>${entry.total} GHS</strong></div>`).join('') : '<div class="empty-state">No orders for this date.</div>'}</div>
     </div>`;
   }
+
+  function visibleHistory(range){
+    const all = getHistory();
+    const current = root.BK_ACCESS && root.BK_ACCESS.current ? root.BK_ACCESS.current() : null;
+    const today = dateInputValue(new Date());
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterday = dateInputValue(yesterdayDate);
+    if(range === 'all' && current && current.role === 'owner') return all;
+    const selected = range === 'yesterday' ? yesterday : today;
+    return all.filter(entry=>dateInputValue(entry.closedAt) === selected);
+  }
+
   function purchaseListHtml(items){
     if(!items.length) return '<div class="empty-state">No purchases recorded yet.</div>';
     return `<div class="report-orders"><h3>Purchase audit</h3>${items.slice().reverse().slice(0,50).map(entry=>`<div class="report-order"><span><b>${escapeHtml(entry.ingredient_name || entry.ingredientId)}</b><small>${escapeHtml(entry.qty)} ${escapeHtml(entry.unit)} · ${escapeHtml(entry.paymentSource)} · Receipt in purse</small></span><strong>${escapeHtml(entry.amount)} GHS</strong></div>`).join('')}</div>`;
@@ -165,6 +178,6 @@
       <div class="history-order-list">${items.slice(0,200).map(entry=>`<div class="history-order-row ${entry.status === 'voided' ? 'voided' : ''}"><span><strong>${escapeHtml(entry.orderNo)}</strong><small>${escapeHtml(entry.externalOrderNo || entry.slotName)} · ${escapeHtml(paymentLabel(entry.pay, entry.momoProvider))} · ${new Date(entry.closedAt).toLocaleString()}</small></span><span><b>${entry.total} GHS</b><small class="history-status">${entry.status === 'voided' ? 'Voided' : 'Completed'}</small></span></div>`).join('')}</div>`;
   }
 
-  root.BK_REPORTS = { CASH_FLOAT_GHS, escapeHtml, dateInputValue, paymentLabel, getHistory, refreshHistoryFromRemote, dailyReportData, dailyReportHtml, purchaseListHtml, historyListHtml };
+  root.BK_REPORTS = { CASH_FLOAT_GHS, escapeHtml, dateInputValue, paymentLabel, getHistory, refreshHistoryFromRemote, dailyReportData, dailyReportHtml, visibleHistory, purchaseListHtml, historyListHtml };
   if(typeof module !== 'undefined' && module.exports) module.exports = root.BK_REPORTS;
 })(typeof window !== 'undefined' ? window : globalThis);

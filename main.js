@@ -140,6 +140,7 @@
   document.getElementById('btnHistory').onclick = ()=> BK_UI.openHistory();
   document.getElementById('hClose').onclick     = ()=> BK_UI.closeHistory();
   document.getElementById('hToday').onclick     = ()=> BK_UI.filterHistoryToday();
+  document.getElementById('hYesterday').onclick = ()=> BK_UI.filterHistoryYesterday();
   document.getElementById('hClear').onclick     = ()=> BK_UI.clearHistoryFilters();
   document.getElementById('hSearch').oninput    = (e)=> BK_UI.filterHistoryText(e.target.value);
   document.getElementById('hExportJson').onclick= ()=>{ if(!window.BK_ACCESS || BK_ACCESS.can('history_export')) BK_UI.exportHistoryJson(); };
