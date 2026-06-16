@@ -4,12 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="theme-color" content="#090a0f" />
-  <title>BurgerKiss – Start Order</title>
+  <title>BurgerKiss – Start</title>
+  <link rel="stylesheet" href="./style.css?v=53" />
+  <script src="./firebase-config.js?v=2"></script>
   <style>
     :root{color-scheme:dark;--accent:#ffd24d;--ink:#f7f8fb;--muted:#aeb7c4;--line:#2a303b}
     *{box-sizing:border-box}
     html,body{min-height:100%;margin:0}
     body{min-height:100dvh;display:grid;place-items:center;padding:20px;background:radial-gradient(circle at top left,#1b1720 0,#090a0f 38%,#07080c 100%);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    body.entry-locked main{visibility:hidden}
     main{width:min(680px,100%);padding:clamp(28px,6vw,52px);border:1px solid var(--line);border-radius:24px;background:rgba(16,18,24,.96);box-shadow:0 28px 70px rgba(0,0,0,.42);text-align:center}
     .brand{width:64px;height:64px;margin:0 auto 22px;display:grid;place-items:center;border-radius:18px;background:linear-gradient(135deg,var(--accent),#ff8f1f);box-shadow:0 14px 30px rgba(255,191,31,.24);color:#201300;font-size:20px;font-weight:950}
     .eyebrow{margin:0;color:var(--muted);font-size:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}
@@ -23,17 +26,28 @@
     @media(max-width:560px){body{padding:12px}main{padding:28px 18px}.actions{grid-template-columns:1fr}.action{min-height:66px}}
   </style>
 </head>
-<body>
+<body class="entry-locked">
   <main aria-labelledby="welcomeTitle">
     <div class="brand" aria-hidden="true">BK</div>
     <p class="eyebrow">Welcome to BurgerKiss</p>
-    <h1 id="welcomeTitle">Start an order</h1>
-    <p class="copy">Choose how the customer placed this order, or open shift tools for cash checks and closeout.</p>
+    <h1 id="welcomeTitle">Choose your workspace</h1>
+    <p class="copy">Signed in as <b id="entryStaffName">staff</b>. Start a customer order or open shift tools for closeout.</p>
     <div class="actions">
       <a class="action" href="order.html?start=walkin">Walk-in Order</a>
       <a class="action online" href="order.html?start=online">Online Order</a>
-      <a class="action shift" href="order.html?start=shift">Shift Tools</a>
+      <a class="action shift" href="shift.html">Shift Tools</a>
     </div>
   </main>
+  <script>
+    if(!window.FIREBASE_CONFIG){
+      console.warn('Firebase config missing: online database is disabled until firebase-config.js is filled.');
+    }
+  </script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <script src="./access.js?v=3"></script>
+  <script src="./entry.js?v=1"></script>
+  <script>BK_ACCESS.init();</script>
 </body>
 </html>

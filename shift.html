@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BurgerKiss – Shift Tools</title>
+  <link rel="stylesheet" href="./style.css?v=53" />
+  <script src="./firebase-config.js?v=2"></script>
+  <style>
+    body.shift-app{min-height:100dvh;background:radial-gradient(circle at top left,#161b22 0,#090a0f 42%,#07080c 100%);color:#f7f8fb}
+    .shift-wrap{width:min(1180px,100%);margin:0 auto;padding:22px}
+    .shift-header{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:14px;margin:-22px -22px 20px;padding:14px 22px;border-bottom:1px solid #27303b;background:rgba(9,11,16,.94);backdrop-filter:blur(14px)}
+    .shift-brand{display:flex;align-items:center;gap:12px}.shift-brand h1{margin:0;font-size:22px}.shift-brand small{display:block;color:#9eabba}.shift-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.shift-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.shift-card{padding:16px;border:1px solid #303948;border-radius:16px;background:#10151d}.shift-card h2{margin:0 0 12px;color:#fff2c7}.shift-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}.shift-toolbar input{min-height:40px;padding:8px;border:1px solid #384356;border-radius:9px;background:#101620;color:#edf3fa}@media(max-width:900px){.shift-grid{grid-template-columns:1fr}.shift-header{position:static;align-items:flex-start;flex-direction:column}.shift-actions{width:100%}}
+  </style>
+</head>
+<body class="shift-app app-loading">
+  <main class="shift-wrap">
+    <header class="shift-header">
+      <div class="shift-brand"><div class="brand-mark">BK</div><div><h1>Shift Tools</h1><small>Closeout, cash checks and order history</small></div></div>
+      <div class="shift-actions"><a class="x" href="index.html">Start</a><a class="x" href="order.html?start=walkin">Order</a><div class="staff-session" id="staffSession" aria-live="polite"></div></div>
+    </header>
+    <section class="shift-grid">
+      <article class="shift-card">
+        <div class="shift-toolbar"><div><h2>Daily closeout</h2><small>The BurgerKiss purse must start each shift with 200 GHS change.</small></div><input id="shiftReportDate" type="date" /></div>
+        <div id="shiftReportBody"></div>
+      </article>
+      <article class="shift-card">
+        <div class="shift-toolbar"><div><h2>Order history</h2><small>Recent completed and voided orders.</small></div></div>
+        <div id="shiftHistoryBody"></div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    if(!window.FIREBASE_CONFIG){
+      console.warn('Firebase config missing: online database is disabled until firebase-config.js is filled.');
+    }
+  </script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <script src="./access.js?v=3"></script>
+  <script src="./shift_reports.js?v=1"></script>
+  <script src="./shift.js?v=1"></script>
+  <script>BK_ACCESS.init();</script>
+</body>
+</html>
