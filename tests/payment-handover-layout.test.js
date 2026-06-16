@@ -76,6 +76,23 @@ test('daily sales date picker is restricted for non-owner staff', () => {
 });
 
 
+
+test('owner-only history purge requires date range, selected orders and owner PIN', () => {
+  const order = fs.readFileSync(path.join(root, 'order.html'), 'utf8');
+  const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+  const access = fs.readFileSync(path.join(root, 'access.js'), 'utf8');
+  assert.match(order, /id="hPurge"/);
+  assert.match(order, /id="modalHistoryPurge"/);
+  assert.match(order, /id="hpFrom"/);
+  assert.match(order, /id="hpTo"/);
+  assert.match(order, /id="hpPin"/);
+  assert.match(main, /BK_UI\.openHistoryPurge/);
+  assert.match(access, /history_purge:'owner'/);
+  assert.match(ui, /function deleteHistoryRemote/);
+  assert.match(ui, /authorizeOwnerPin\(pin\)/);
+  assert.match(ui, /selectedHistoryPurgeEntries/);
+});
+
 test('daily sales shows and exports purchase audit with date and purchaser', () => {
   const shift = fs.readFileSync(path.join(root, 'shift.html'), 'utf8');
   const shiftJs = fs.readFileSync(path.join(root, 'shift.js'), 'utf8');
