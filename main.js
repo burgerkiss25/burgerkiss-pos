@@ -134,6 +134,7 @@
   document.getElementById('btnHistory').onclick = ()=> BK_UI.openHistory();
   document.getElementById('hClose').onclick     = ()=> BK_UI.closeHistory();
   document.getElementById('hToday').onclick     = ()=> BK_UI.filterHistoryToday();
+  document.getElementById('hYesterday').onclick = ()=> BK_UI.filterHistoryYesterday();
   document.getElementById('hClear').onclick     = ()=> BK_UI.clearHistoryFilters();
   document.getElementById('hSearch').oninput    = (e)=> BK_UI.filterHistoryText(e.target.value);
   document.getElementById('hExportJson').onclick= ()=>{ if(!window.BK_ACCESS || BK_ACCESS.can('history_export')) BK_UI.exportHistoryJson(); };
@@ -145,7 +146,7 @@
     BK_UI.voidSelectedHistoryOrder();
   };
   document.getElementById('btnDailyReport').onclick = ()=>{
-    if(window.BK_ACCESS && !BK_ACCESS.can('daily_report')) return BK_UI.infoDialog('A supervisor or owner is required to open the daily report.');
+    if(window.BK_ACCESS && !BK_ACCESS.can('daily_report')) return BK_UI.infoDialog('Staff access is required to open the daily report.');
     BK_UI.openDailyReport();
   };
   document.getElementById('reportDate').onchange = ()=> BK_UI.renderDailyReport();
