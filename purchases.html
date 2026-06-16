@@ -24,6 +24,7 @@
     </section>
     <section class="purchase-card hidden" id="purchaseEntryCard">
       <div class="purchase-auth-ok" id="purchaseActor"></div>
+      <div class="shift-actions"><button class="x" id="purchaseToday" type="button">Today</button><button class="x" id="purchaseYesterday" type="button">Yesterday</button><button class="x" id="purchaseExport" type="button">Export CSV</button></div>
       <form class="purchase-form" id="purchaseEntryForm">
         <label>Item<input id="purchaseItem" name="name" list="purchaseItems" placeholder="Search or type item" required></label><datalist id="purchaseItems"></datalist>
         <label>Quantity received<input name="qty" type="number" min="0" step="0.01" required></label>
@@ -47,7 +48,7 @@
   <script src="./stock_utils.js?v=15"></script>
   <script src="./stock.js?v=21"></script>
   <script src="./shift_reports.js?v=3"></script>
-  <script src="./purchases.js?v=1"></script>
+  <script src="./purchases.js?v=2"></script>
   <script>BK_STOCK.load(); BK_ACCESS.init();</script>
 </body>
 </html>

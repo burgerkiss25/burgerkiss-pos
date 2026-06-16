@@ -13,6 +13,7 @@
   const QUICK_NOTES = ['No onion', 'Extra onion', 'No lettuce', 'Extra spicy'];
   const PACK_RULES_KEY = 'bk_packaging_rules_v1';
   let stockOverviewFilter = 'all';
+  let stockOverviewQuery = '';
   const FALLBACK_STANDARD_MENUS = [
     { id:'menu_cheeseburger', name:'Cheeseburger Menu', baseId:'cheeseburger', menuPrice:135, defaultFries:'fries_standard', defaultDrink:'d_cola' },
     { id:'menu_hamburger', name:'Hamburger Menu', baseId:'hamburger', menuPrice:120, defaultFries:'fries_standard', defaultDrink:'d_cola' },
@@ -2750,7 +2751,11 @@
       }
     }
     const stockStatus = r=> (r.buyNeeded || r.shortage) ? 'buy' : (r.refillNeeded ? 'refill' : 'ok');
-    const visible = tracked.filter(r=> stockOverviewFilter === 'all' ? true : stockStatus(r) === stockOverviewFilter);
+    const query = stockOverviewQuery.trim().toLowerCase();
+    const visible = tracked
+      .filter(r=> stockOverviewFilter === 'all' ? true : stockStatus(r) === stockOverviewFilter)
+      .filter(r=> !query || String(r.name || '').toLowerCase().includes(query) || String(r.id || '').toLowerCase().includes(query))
+      .sort((a,b)=>String(a.name || '').localeCompare(String(b.name || '')));
     host.innerHTML = `
       <div class="stock-overview-summary">
         <div class="stock-kpi"><span>Tracked</span><b>${tracked.length}</b></div>
@@ -2759,6 +2764,7 @@
         <div class="stock-kpi"><span>Buy</span><b>${buyCount}</b></div>
       </div>
       <div class="stock-overview-filters">
+        <input id="stockOverviewSearch" class="dialog-field" placeholder="Search stock item" value="${escapeHtml(stockOverviewQuery)}" />
         <button class="stock-filter ${stockOverviewFilter==='all'?'active':''}" data-stock-filter="all">All</button>
         <button class="stock-filter ${stockOverviewFilter==='ok'?'active':''}" data-stock-filter="ok">OK</button>
         <button class="stock-filter ${stockOverviewFilter==='refill'?'active':''}" data-stock-filter="refill">Refill</button>
@@ -2767,6 +2773,12 @@
       <div class="stock-overview-list" id="stockOverviewList"></div>
     `;
     const list = host.querySelector('#stockOverviewList');
+    const searchInput = host.querySelector('#stockOverviewSearch');
+    if(searchInput){
+      searchInput.oninput = event=>{ stockOverviewQuery = event.target.value; renderStock(); };
+      searchInput.focus({preventScroll:true});
+      searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+    }
     if(!visible.length){
       const empty = document.createElement('div');
       empty.className = 'empty-state';

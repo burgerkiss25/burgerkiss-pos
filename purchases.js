@@ -2,6 +2,7 @@
 (function(){
   'use strict';
   let purchaser = null;
+  let purchaseRange = 'today';
 
   function fillStaffOptions(){
     const select = document.getElementById('purchaseStaff');
@@ -11,8 +12,23 @@
     const ingredients = BK_STOCK.getIngredients();
     document.getElementById('purchaseItems').innerHTML = Object.entries(ingredients).map(([id, item])=>`<option value="${BK_REPORTS.escapeHtml(item.name || id)}" data-id="${BK_REPORTS.escapeHtml(id)}"></option>`).join('');
   }
+  function purchaseDate(offset){ const date = new Date(); date.setDate(date.getDate() + offset); return BK_REPORTS.dateInputValue(date); }
+  function visiblePurchases(){
+    const selected = purchaseRange === 'yesterday' ? purchaseDate(-1) : purchaseDate(0);
+    return BK_STOCK.getPurchases().filter(entry=>BK_REPORTS.dateInputValue(entry.ts) === selected);
+  }
   function renderPurchaseHistory(){
-    document.getElementById('purchaseHistory').innerHTML = BK_REPORTS.purchaseListHtml(BK_STOCK.getPurchases());
+    document.getElementById('purchaseHistory').innerHTML = BK_REPORTS.purchaseListHtml(visiblePurchases());
+  }
+  function exportPurchasesCsv(){
+    const rows = [['date','staff','item','qty','unit','amount','paymentSource','receiptInPurse','note']];
+    visiblePurchases().forEach(entry=>rows.push([new Date(entry.ts).toISOString(), entry.staff && entry.staff.name || '', entry.ingredient_name, entry.qty, entry.unit, entry.amount, entry.paymentSource, entry.receiptInPurse ? 'yes' : 'no', entry.note || '']));
+    const csv = rows.map(row=>row.map(value=>`"${String(value == null ? '' : value).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = `bk-purchases-${purchaseRange}-${Date.now()}.csv`; link.click();
+    URL.revokeObjectURL(url);
   }
   async function confirmPurchaser(event){
     event.preventDefault();
@@ -46,6 +62,9 @@
     fillStaffOptions();
     document.getElementById('purchaseAuthForm').onsubmit = confirmPurchaser;
     document.getElementById('purchaseEntryForm').onsubmit = savePurchase;
+    document.getElementById('purchaseToday').onclick = ()=>{ purchaseRange = 'today'; renderPurchaseHistory(); };
+    document.getElementById('purchaseYesterday').onclick = ()=>{ purchaseRange = 'yesterday'; renderPurchaseHistory(); };
+    document.getElementById('purchaseExport').onclick = exportPurchasesCsv;
   }
   document.addEventListener('bk-access-ready', init);
 })();

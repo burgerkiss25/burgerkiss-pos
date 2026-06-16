@@ -64,5 +64,6 @@ test('purchase entry is isolated and requires purchaser PIN confirmation', () =>
   assert.match(purchases, /purchaseAuthForm/);
   assert.match(purchases, /authorizeStaffPin|purchases\.js/);
   assert.match(purchases, /Receipt is in purse/);
+  assert.match(purchases, /purchaseExport/);
   assert.doesNotMatch(purchases, /ui\.js|main\.js|id="buttons"|id="orderCart"/);
 });

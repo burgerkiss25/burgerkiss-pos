@@ -66,3 +66,17 @@ test('shift order audit rows can open order detail modal', () => {
   assert.match(shiftReports, /function historyDetailHtml/);
   assert.match(shiftJs, /openOrderDetail/);
 });
+
+
+test('daily sales date picker is restricted for non-owner staff', () => {
+  const shiftJs = fs.readFileSync(path.join(root, 'shift.js'), 'utf8');
+  assert.match(shiftJs, /function restrictDateInput/);
+  assert.match(shiftJs, /dateInput\.min = yesterday/);
+  assert.match(shiftJs, /dateInput\.max = today/);
+});
+
+test('stock overview has search and sorted results', () => {
+  assert.match(ui, /stockOverviewSearch/);
+  assert.match(ui, /stockOverviewQuery/);
+  assert.match(ui, /localeCompare/);
+});
