@@ -2,6 +2,7 @@
   const KEY = 'bk_stock_v1';
   const TRANSFERS_KEY = 'bk_stock_transfers_v1';
   const MOVEMENTS_KEY = 'bk_stock_movements_v1';
+  const PURCHASES_KEY = 'bk_stock_purchases_v1';
   const DEFAULTS = window.BK_STOCK_DATA.DEFAULTS;
   const {
     normalizeId,
@@ -18,6 +19,7 @@
   let RECIPES = {};
   let TRANSFERS = [];
   let MOVEMENTS = [];
+  let PURCHASES = [];
   let remoteSaveTimer = null;
   let editorBodyId = 'stockBody';
   let editorModalId = 'modalStock';
@@ -34,6 +36,7 @@
       addons: (window.BK_STOCK_ADDONS_PATH || '/pos/stock/addons').replace(/\/+$/,''),
       transfers: (window.BK_STOCK_TRANSFERS_PATH || '/pos/stock/transfers').replace(/\/+$/,''),
       movements: (window.BK_STOCK_MOVEMENTS_PATH || '/pos/stock/movements').replace(/\/+$/,''),
+      purchases: (window.BK_STOCK_PURCHASES_PATH || '/pos/stock/purchases').replace(/\/+$/,''),
       locations: (window.BK_STOCK_LOCATIONS_PATH || '/pos/stock/config/locations').replace(/\/+$/,'')
     };
   }
@@ -156,7 +159,8 @@
         database.ref(paths.inventory).update(Object.assign({ map: inventoryFromIngredients(INGREDIENTS), ts }, inventoryLocations)),
         database.ref(paths.addons).set({ map: addonRecipesFromRecipes(RECIPES), ts }),
         database.ref(paths.transfers).set({ items: TRANSFERS.slice(-100), ts }),
-        database.ref(paths.movements).set({ items: MOVEMENTS.slice(-200), ts })
+        database.ref(paths.movements).set({ items: MOVEMENTS.slice(-200), ts }),
+        database.ref(paths.purchases).set({ items: PURCHASES.slice(-200), ts })
       ]).catch(e=>{
         console.warn('stock remote save failed:', e && e.message);
       });
@@ -226,6 +230,7 @@
     RECIPES = clone(DEFAULTS.recipes);
     loadTransfers();
     loadMovements();
+    loadPurchases();
     try{
       const raw = localStorage.getItem(KEY);
       if(!raw){ loadRemoteOnce(); return; }
@@ -261,6 +266,13 @@
     }catch(e){ MOVEMENTS = []; localStorage.removeItem(MOVEMENTS_KEY); }
   }
   function persistMovements(){ localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(MOVEMENTS.slice(-200))); }
+  function loadPurchases(){
+    try{
+      const parsed = JSON.parse(localStorage.getItem(PURCHASES_KEY) || '[]');
+      PURCHASES = Array.isArray(parsed) ? parsed.filter(p=> p && typeof p === 'object').slice(-200) : [];
+    }catch(e){ PURCHASES = []; localStorage.removeItem(PURCHASES_KEY); }
+  }
+  function persistPurchases(){ localStorage.setItem(PURCHASES_KEY, JSON.stringify(PURCHASES.slice(-200))); }
   function reset(){ INGREDIENTS = sanitizeIngredients(clone(DEFAULTS.ingredients)); RECIPES = clone(DEFAULTS.recipes); localStorage.removeItem(KEY); persistRemoteSoon(); }
   function resetEditor(mode){
     if(mode === 'recipes'){
@@ -353,6 +365,35 @@
     return usageForSlots([slot]);
   }
   function getIngredients(){ return clone(INGREDIENTS); }
+  function getPurchases(){ return clone(PURCHASES); }
+  function recordPurchase(input){
+    const rawName = String((input && input.name) || '').trim();
+    const id = normalizeId((input && input.ingredientId) || rawName);
+    const qty = Number(input && input.qty);
+    const amount = Number(input && input.amount);
+    if(!id || !rawName) return {ok:false, message:'Choose or enter an item.'};
+    if(!Number.isFinite(qty) || qty <= 0) return {ok:false, message:'Enter the quantity received.'};
+    if(!Number.isFinite(amount) || amount < 0) return {ok:false, message:'Enter the purchase amount.'};
+    if(!(input && input.receiptInPurse)) return {ok:false, message:'Confirm that the receipt is in the purse.'};
+    const unit = String((input && input.unit) || (INGREDIENTS[id] && INGREDIENTS[id].unit) || 'pcs').trim() || 'pcs';
+    const before = num(INGREDIENTS[id] && INGREDIENTS[id].current_stock_foodtruck, 0);
+    const def = INGREDIENTS[id] || sanitizeIngredient({name:rawName, category:'general', unit, track_stock:true, stock_location:'foodtruck', current_stock_storage:0, current_stock_foodtruck:0, moq_storage:0, moq_foodtruck:0}, id);
+    def.name = rawName;
+    def.unit = unit;
+    def.current_stock_foodtruck = before + qty;
+    INGREDIENTS[id] = syncIngredientStock(def);
+    const actor = window.BK_ACCESS && BK_ACCESS.actor ? BK_ACCESS.actor() : null;
+    const purchase = {
+      id:`pur_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, ts:Date.now(), businessDate:actor && actor.businessDate || '',
+      ingredient_id:id, ingredient_name:rawName, qty, unit, amount, paymentSource:String((input && input.paymentSource) || 'cash_wallet'), receiptInPurse:true, note:String((input && input.note) || ''),
+      stockLocation:'block_factory', before, after:def.current_stock_foodtruck, staff:actor
+    };
+    PURCHASES.push(purchase); PURCHASES = PURCHASES.slice(-200);
+    MOVEMENTS.push({id:purchase.id, ts:purchase.ts, type:'purchase', ingredient_id:id, ingredient_name:rawName, qty, unit, before, after:def.current_stock_foodtruck});
+    MOVEMENTS = MOVEMENTS.slice(-200);
+    persist(); persistMovements(); persistPurchases(); persistRemoteSoon(); renderPosIfAvailable();
+    return {ok:true, purchase};
+  }
   function getRecipe(productId){ return clone(RECIPES[productId] || {}); }
   function setRecipes(changes, removedIds, options){
     (removedIds || []).forEach(productId=>{ delete RECIPES[normalizeId(productId)]; });
@@ -704,5 +745,5 @@
     INGREDIENTS = syncAllIngredientStock(ingNext); RECIPES = recipeNext; persist(); persistRemoteSoon(); closeEditor(); return true;
   }
 
-  window.BK_STOCK = { KEY, TRANSFERS_KEY, MOVEMENTS_KEY, load, loadRemoteOnce, reset, resetEditor, getSnapshot, getIngredients, getRecipe, getRecipes, setRecipes, getUsageForSlot, consumeSlot, openEditor, closeEditor, save:saveEditor, saveEditor, remoteEnabled, stockPaths };
+  window.BK_STOCK = { KEY, TRANSFERS_KEY, MOVEMENTS_KEY, PURCHASES_KEY, load, loadRemoteOnce, reset, resetEditor, getSnapshot, getIngredients, getPurchases, recordPurchase, getRecipe, getRecipes, setRecipes, getUsageForSlot, consumeSlot, openEditor, closeEditor, save:saveEditor, saveEditor, remoteEnabled, stockPaths };
 })();

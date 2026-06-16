@@ -145,7 +145,7 @@
     BK_UI.voidSelectedHistoryOrder();
   };
   document.getElementById('btnDailyReport').onclick = ()=>{
-    if(window.BK_ACCESS && !BK_ACCESS.can('daily_report')) return BK_UI.infoDialog('A supervisor or owner is required to open the daily report.');
+    if(window.BK_ACCESS && !BK_ACCESS.can('daily_report')) return BK_UI.infoDialog('Staff access is required to open the daily report.');
     BK_UI.openDailyReport();
   };
   document.getElementById('reportDate').onchange = ()=> BK_UI.renderDailyReport();

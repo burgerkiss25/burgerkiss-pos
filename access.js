@@ -161,7 +161,7 @@
   }
   function can(permission){
     const required = {
-      daily_report:'supervisor', void_order:'supervisor', high_discount:'supervisor',
+      daily_report:'employee', void_order:'supervisor', high_discount:'supervisor',
       admin:'owner', maintenance:'owner', history_export:'owner'
     }[permission] || 'employee';
     return hasRole(required);
@@ -178,8 +178,9 @@
     const host = document.getElementById('staffSession');
     if(!host || !session) return;
     const status = salesStatus();
-    host.innerHTML = `<button type="button" class="staff-session-button" id="btnStaffSwitch"><b>${escapeHtml(session.name)}</b><span>${escapeHtml(session.roleLabel)} · ${escapeHtml(session.shiftLabel)}</span></button><span class="sales-status ${status.state}"><b>${escapeHtml(status.label)}</b><small>${escapeHtml(status.detail)}</small></span>`;
-    document.getElementById('btnStaffSwitch').onclick = signOut;
+    host.innerHTML = `<details class="staff-session-menu"><summary class="staff-session-button"><b>${escapeHtml(session.name)}</b><span>${escapeHtml(session.roleLabel)} · ${escapeHtml(session.shiftLabel)}</span></summary><div class="staff-session-dropdown"><a href="shift.html">Shift Tools</a><button type="button" id="btnStaffSwitch">Switch staff / Sign out</button></div></details><span class="sales-status ${status.state}"><b>${escapeHtml(status.label)}</b><small>${escapeHtml(status.detail)}</small></span>`;
+    const signOutButton = document.getElementById('btnStaffSwitch');
+    if(signOutButton) signOutButton.onclick = signOut;
   }
   function escapeHtml(value){
     return String(value || '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));

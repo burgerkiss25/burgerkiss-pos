@@ -32,3 +32,15 @@ test('owner and supervisor roles expose remote-capable identities', () => {
   assert.equal(supervisor.role, 'supervisor');
   assert.equal(access.STAFF.filter(person=>person.role === 'employee').length, 2);
 });
+
+
+test('all staff can open the daily closeout report', () => {
+  for (const person of access.STAFF) {
+    global.sessionStorage = { getItem(){ return JSON.stringify({ staffId: person.id, shiftId: 'early', businessDate: '2026-06-16', signedInAt: 1 }); }, setItem(){}, removeItem(){} };
+    delete require.cache[require.resolve('../access.js')];
+    const freshAccess = require('../access.js');
+    assert.equal(freshAccess.can('daily_report'), true, `${person.name} should access daily report`);
+  }
+  delete global.sessionStorage;
+  delete require.cache[require.resolve('../access.js')];
+});

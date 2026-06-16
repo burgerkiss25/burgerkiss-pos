@@ -2,7 +2,7 @@
 (function(){
   const SAVE_KEY = 'bk_state_v5';
   const ORDER_COUNTER_KEY = 'bk_order_counter_v1';
-  let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo', issued:false}]
+  let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo', momoProvider:'telecel'|'mtn'|'', issued:false}]
   let active = 0;
   let discountRate = 0;
   let orderSeq = 0;
@@ -37,6 +37,7 @@
       name: (slot && typeof slot.name==='string' && slot.name.trim()) ? slot.name.trim() : `SN${idx+1}`,
       items: rawItems.map(normalizeItem).filter(Boolean),
       pay: PAY_SET.has(slot && slot.pay) ? slot.pay : 'unpaid',
+      momoProvider: slot && (slot.momoProvider === 'telecel' || slot.momoProvider === 'mtn') ? slot.momoProvider : '',
       issued: !!(slot && slot.issued),
       voided: !!(slot && slot.voided),
       voidReason: String((slot && slot.voidReason) || ''),
@@ -412,7 +413,9 @@
   }
   function setPay(i,status){
     if(!slots[i] || slots[i].issued) return;
+    const provider = arguments.length > 2 && (arguments[2] === 'telecel' || arguments[2] === 'mtn') ? arguments[2] : '';
     slots[i].pay = PAY_SET.has(status) ? status : 'unpaid';
+    slots[i].momoProvider = slots[i].pay === 'momo' ? provider : '';
     slots[i].paidBy = slots[i].pay === 'unpaid' ? null : (window.BK_ACCESS && BK_ACCESS.operationalActor ? BK_ACCESS.operationalActor() : null);
     slots[i].paidAt = slots[i].pay === 'unpaid' ? 0 : Date.now();
     save();
