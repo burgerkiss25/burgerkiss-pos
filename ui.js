@@ -8,7 +8,7 @@
   const HISTORY_KEY = 'bk_order_history_v1';
   const CATEGORY_LABELS = { all:'All', burger:'Burger', wings:'Wings', fries:'Fries', salad:'Salad', extra:'Extra', drink:'Drink', sauce:'Sauce' };
   let historyFilterText = '';
-  let historyFilterToday = false;
+  let historyFilterRange = 'today';
   let selectedHistoryOrderId = null;
   const QUICK_NOTES = ['No onion', 'Extra onion', 'No lettuce', 'Extra spicy'];
   const PACK_RULES_KEY = 'bk_packaging_rules_v1';
@@ -1508,11 +1508,11 @@
   }
 
   function paymentDisplay(slot){
-    if(slot.issued) return { state:'locked', label:'Payment locked', detail:`${paymentLabel(slot.pay)} · Order issued` };
+    if(slot.issued) return { state:'locked', label:'Payment locked', detail:`${paymentLabel(slot.pay, slot.momoProvider)} · Order issued` };
     if(!Array.isArray(slot.items) || slot.items.length === 0) return { state:'empty', label:'Nothing to pay', detail:'Add products before taking payment' };
     if(isPrepaidPlatform(slot)) return { state:'paid', label:`Paid via ${platformLabel(slot.orderSource)}`, detail:`Online payment · ${slot.externalOrderNo || 'platform reference missing'}` };
     if(slot.pay === 'cash') return { state:'paid', label:'Paid by Cash', detail:slot.finalChannel === 'direct' ? 'Converted online order · direct payment' : 'Payment confirmed' };
-    if(slot.pay === 'momo') return { state:'paid', label:'Paid by MoMo', detail:slot.finalChannel === 'direct' ? 'Converted online order · direct payment' : 'Payment confirmed' };
+    if(slot.pay === 'momo') return { state:'paid', label:`Paid by ${momoProviderLabel(slot.momoProvider)}`, detail:slot.finalChannel === 'direct' ? 'Converted online order · direct payment' : 'Payment confirmed' };
     return { state:'pending', label:'Payment pending', detail:'Select the payment method after receiving payment' };
   }
 
@@ -1520,6 +1520,7 @@
     const st = BK_STATE.getState();
     const slot = st.slots[slotIndex];
     if(!slot || slot.issued || !Array.isArray(slot.items) || slot.items.length === 0 || !['unpaid','cash','momo'].includes(method)) return;
+    const momoProvider = method === 'momo' && arguments.length > 2 && (arguments[2] === 'telecel' || arguments[2] === 'mtn') ? arguments[2] : '';
     if(isWhatsapp(slot) && slot.fulfilment === 'delivery' && method === 'cash'){ infoDialog('WhatsApp delivery is MoMo only.'); return; }
     BK_STATE.setActive(slotIndex);
     renderSlotsBar();
@@ -1531,7 +1532,7 @@
       infoDialog('A supervisor or owner is required to reverse a confirmed payment.');
       return;
     }
-    const paymentName = method === 'momo' ? 'MoMo' : 'Cash';
+    const paymentName = method === 'momo' ? momoProviderLabel(momoProvider) : 'Cash';
     const title = isUnpaid ? 'Change payment status' : `Confirm ${paymentName} payment`;
     const message = isUnpaid
       ? `Mark ${slot.orderNo || slot.name} as unpaid? This will block handover.`
@@ -1540,7 +1541,7 @@
       cancelLabel: 'Cancel',
       confirmLabel: isUnpaid ? 'Mark as unpaid' : `Confirm ${paymentName} payment`
     }).then(ok=>{
-      if(ok) setSlotPayment(slotIndex, method);
+      if(ok) setSlotPayment(slotIndex, method, momoProvider);
     });
   }
 
@@ -1587,7 +1588,8 @@
           : s.pay === 'unpaid'
             ? `<div class="payment-methods" role="group" aria-label="Payment method for Order ${escapeHtml(shortOrderNumber(s.orderNo))}">
                 <button class="payment-method" ${(paymentDisabled || (isWhatsapp(s) && s.fulfilment === 'delivery')) ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${active},'cash');">Cash</button>
-                <button class="payment-method" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${active},'momo');">MoMo</button>
+                <button class="payment-method" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${active},'momo','telecel');">Telecel MoMo</button>
+                <button class="payment-method" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${active},'momo','mtn');">MTN MoMo</button>
               </div>`
             : `<button class="x change-payment-action" type="button">Change payment</button>`}
         <button type="button" class="workflow-next-button payment-next-action" ${payNext.disabled ? 'disabled' : ''}>${payNext.label}</button>
@@ -1621,10 +1623,11 @@
   }
 
   function setSlotPayment(slotIndex, method){
+    const provider = arguments.length > 2 && (arguments[2] === 'telecel' || arguments[2] === 'mtn') ? arguments[2] : '';
     const st = BK_STATE.getState();
     if(!st.slots[slotIndex] || !['unpaid','cash','momo'].includes(method)) return false;
     BK_STATE.setActive(slotIndex);
-    BK_STATE.setPay(slotIndex, method);
+    BK_STATE.setPay(slotIndex, method, provider);
     renderSlotsBar();
     renderPay();
     renderIssue();
@@ -1888,10 +1891,11 @@
   function isOnlineOrder(slot){ return !!(slot && ONLINE_PLATFORMS.has(slot.orderSource)); }
   function isPrepaidPlatform(slot){ return !!(slot && ['bolt','hubtel','chowdeck'].includes(slot.orderSource) && slot.finalChannel !== 'direct'); }
   function isWhatsapp(slot){ return !!(slot && slot.orderSource === 'whatsapp'); }
-  function paymentLabel(pay){ return ({unpaid:'Unpaid',cash:'Cash',momo:'MoMo',whatsapp:'WhatsApp',bolt:'Bolt',hubtel:'Hubtel',chowdeck:'Chowdeck'})[pay] || String(pay || 'Unknown'); }
+  function momoProviderLabel(provider){ return provider === 'mtn' ? 'MTN MoMo' : provider === 'telecel' ? 'Telecel MoMo' : 'MoMo'; }
+  function paymentLabel(pay, provider){ return pay === 'momo' ? momoProviderLabel(provider) : (({unpaid:'Unpaid',cash:'Cash',whatsapp:'WhatsApp',bolt:'Bolt',hubtel:'Hubtel',chowdeck:'Chowdeck'})[pay] || String(pay || 'Unknown')); }
   function orderChannelText(slot){
     if(!slot) return '';
-    if(slot.finalChannel === 'direct') return `${platformLabel(slot.originalSource || slot.orderSource)} → Direct ${paymentLabel(slot.pay)}`;
+    if(slot.finalChannel === 'direct') return `${platformLabel(slot.originalSource || slot.orderSource)} → Direct ${paymentLabel(slot.pay, slot.momoProvider)}`;
     return isOnlineOrder(slot) ? `${platformLabel(slot.orderSource)} · ${slot.externalOrderNo || 'No reference'}` : 'Walk-in';
   }
   function onlineOrderExists(platform, reference){
@@ -2006,6 +2010,7 @@
       orderNo,
       slotName: String(entry.slotName || '-'),
       pay: String(entry.pay || 'unpaid'),
+      momoProvider: entry.momoProvider === 'telecel' || entry.momoProvider === 'mtn' ? entry.momoProvider : '',
       orderSource: String(entry.orderSource || 'walkin'),
       externalOrderNo: String(entry.externalOrderNo || ''),
       originalSource: String(entry.originalSource || ''),
@@ -2112,6 +2117,7 @@
       orderNo: slot.orderNo || '-',
       slotName: slot.name || '-',
       pay: slot.pay || 'unpaid',
+      momoProvider: slot.momoProvider || '',
       orderSource: slot.orderSource || 'walkin',
       externalOrderNo: slot.externalOrderNo || '',
       originalSource: slot.originalSource || '',
@@ -2435,10 +2441,20 @@
   }
   function getFilteredHistory(){
     const text = historyFilterText.trim().toLowerCase();
-    const today = new Date();
-    today.setHours(0,0,0,0);
+    const current = window.BK_ACCESS && BK_ACCESS.current ? BK_ACCESS.current() : null;
+    const owner = current && current.role === 'owner';
+    const startOfDay = offset=>{ const d = new Date(); d.setDate(d.getDate() + offset); d.setHours(0,0,0,0); return d.getTime(); };
+    const todayStart = startOfDay(0);
+    const tomorrowStart = startOfDay(1);
+    const yesterdayStart = startOfDay(-1);
     return getHistory().filter(h=>{
-      if(historyFilterToday && Number(h.closedAt || 0) < today.getTime()) return false;
+      const closed = Number(h.closedAt || 0);
+      if(!(owner && historyFilterRange === 'all')){
+        const useYesterday = historyFilterRange === 'yesterday';
+        const from = useYesterday ? yesterdayStart : todayStart;
+        const to = useYesterday ? todayStart : tomorrowStart;
+        if(closed < from || closed >= to) return false;
+      }
       if(!text) return true;
       return String(h.orderNo || '').toLowerCase().includes(text)
         || String(h.slotName || '').toLowerCase().includes(text)
@@ -2452,12 +2468,16 @@
     openHistory();
   }
   function filterHistoryToday(){
-    historyFilterToday = !historyFilterToday;
+    historyFilterRange = 'today';
+    openHistory();
+  }
+  function filterHistoryYesterday(){
+    historyFilterRange = 'yesterday';
     openHistory();
   }
   function clearHistoryFilters(){
     historyFilterText = '';
-    historyFilterToday = false;
+    historyFilterRange = (window.BK_ACCESS && BK_ACCESS.current && (BK_ACCESS.current() || {}).role === 'owner') ? 'all' : 'today';
     const search = document.getElementById('hSearch');
     if(search) search.value = '';
     renderHistoryBody();
@@ -2589,7 +2609,9 @@
     return {
       date:selected, orders, completed, voided, netSales,
       cashTotal:sum(completed.filter(entry=>entry.pay === 'cash'), 'total'),
-      momoTotal:sum(completed.filter(entry=>entry.pay === 'momo'), 'total'),
+      momoTelecelTotal:sum(completed.filter(entry=>entry.pay === 'momo' && entry.momoProvider === 'telecel'), 'total'),
+      momoMtnTotal:sum(completed.filter(entry=>entry.pay === 'momo' && entry.momoProvider === 'mtn'), 'total'),
+      momoUnspecifiedTotal:sum(completed.filter(entry=>entry.pay === 'momo' && !entry.momoProvider), 'total'),
       boltTotal:sum(completed.filter(entry=>entry.pay === 'bolt'), 'total'),
       hubtelTotal:sum(completed.filter(entry=>entry.pay === 'hubtel'), 'total'),
       chowdeckTotal:sum(completed.filter(entry=>entry.pay === 'chowdeck'), 'total'),
@@ -2605,7 +2627,9 @@
       <div class="report-metrics">
         <div><small>Net sales</small><strong>${report.netSales} GHS</strong></div>
         <div><small>Cash</small><strong>${report.cashTotal} GHS</strong></div>
-        <div><small>MoMo</small><strong>${report.momoTotal} GHS</strong></div>
+        <div><small>Telecel MoMo</small><strong>${report.momoTelecelTotal} GHS</strong></div>
+        <div><small>MTN MoMo</small><strong>${report.momoMtnTotal} GHS</strong></div>
+        <div><small>MoMo unspecified</small><strong>${report.momoUnspecifiedTotal} GHS</strong></div>
         <div><small>Bolt</small><strong>${report.boltTotal} GHS</strong></div>
         <div><small>Hubtel</small><strong>${report.hubtelTotal} GHS</strong></div>
         <div><small>Chowdeck</small><strong>${report.chowdeckTotal} GHS</strong></div>
@@ -2617,7 +2641,7 @@
         <div class="void-metric"><small>Voided value</small><strong>${report.voidValue} GHS</strong></div>
       </div>
       <div class="report-orders"><h3>Order audit</h3>${report.orders.length ? report.orders.map(entry=>`
-        <div class="report-order ${entry.status === 'voided' ? 'voided' : ''}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(paymentLabel(entry.pay))}${entry.voidReason ? ` · ${escapeHtml(entry.voidReason)}` : ''}</small></span><strong>${entry.total} GHS</strong></div>`).join('') : '<div class="empty-state">No orders for this date.</div>'}</div>
+        <div class="report-order ${entry.status === 'voided' ? 'voided' : ''}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(paymentLabel(entry.pay, entry.momoProvider))}${entry.voidReason ? ` · ${escapeHtml(entry.voidReason)}` : ''}</small></span><strong>${entry.total} GHS</strong></div>`).join('') : '<div class="empty-state">No orders for this date.</div>'}</div>
     </div>`;
   }
   function openDailyReport(){
@@ -2634,9 +2658,9 @@
   function closeDailyReport(){ document.getElementById('modalDailyReport').classList.remove('open'); }
   function exportDailyReportCsv(){
     const report = dailyReportData(document.getElementById('reportDate').value);
-    const rows = [['orderNo','status','source','platformReference','payment','fulfilment','refundStatus','issuedAt','subtotal','discount','total','voidReason']];
-    report.orders.forEach(entry=>rows.push([entry.orderNo,entry.status,entry.orderSource,entry.externalOrderNo,entry.pay,entry.fulfilment,entry.refundStatus,new Date(entry.closedAt).toISOString(),entry.subtotal,entry.discount,entry.total,entry.voidReason]));
-    rows.push([],['SUMMARY'],['netSales',report.netSales],['cash',report.cashTotal],['momo',report.momoTotal],['bolt',report.boltTotal],['hubtel',report.hubtelTotal],['chowdeck',report.chowdeckTotal],['convertedOnlineOrders',report.convertedOrders],['discounts',report.discounts],['completedOrders',report.completed.length],['voidedOrders',report.voided.length],['voidedValue',report.voidValue]);
+    const rows = [['orderNo','status','source','platformReference','payment','momoProvider','fulfilment','refundStatus','issuedAt','subtotal','discount','total','voidReason']];
+    report.orders.forEach(entry=>rows.push([entry.orderNo,entry.status,entry.orderSource,entry.externalOrderNo,entry.pay,entry.momoProvider || '',entry.fulfilment,entry.refundStatus,new Date(entry.closedAt).toISOString(),entry.subtotal,entry.discount,entry.total,entry.voidReason]));
+    rows.push([],['SUMMARY'],['netSales',report.netSales],['cash',report.cashTotal],['telecelMomo',report.momoTelecelTotal],['mtnMomo',report.momoMtnTotal],['momoUnspecified',report.momoUnspecifiedTotal],['bolt',report.boltTotal],['hubtel',report.hubtelTotal],['chowdeck',report.chowdeckTotal],['convertedOnlineOrders',report.convertedOrders],['discounts',report.discounts],['completedOrders',report.completed.length],['voidedOrders',report.voided.length],['voidedValue',report.voidValue]);
     const csv = rows.map(row=>row.map(value=>`"${String(value == null ? '' : value).replace(/"/g,'""')}"`).join(',')).join('\n');
     downloadFile(`bk-daily-report-${report.date}.csv`, csv, 'text/csv');
   }
@@ -3025,7 +3049,7 @@
     renderAll, renderOrder, renderMake, renderPay, renderIssue, refreshTotals,
     renderStock,
     openSummary, closeSummary, openHistory, closeHistory, openHistoryOrder, closeHistoryOrder, reprintHistoryOrder, voidSelectedHistoryOrder,
-    exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, clearHistoryFilters,
+    exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, filterHistoryYesterday, clearHistoryFilters,
     openDailyReport, closeDailyReport, renderDailyReport, exportDailyReportCsv, printDailyReport, dailyReportData, voidHistoryOrder, archiveCompletedSlots, workflowNextState, buildHandoverPlan, handoverPlanHtml,
     openStockOverview, closeStockOverview,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
