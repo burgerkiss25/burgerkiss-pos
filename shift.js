@@ -31,7 +31,10 @@
     if(dateInput && !dateInput.value) dateInput.value = BK_REPORTS.dateInputValue(new Date());
     restrictDateInput();
     renderReport();
-    BK_REPORTS.refreshHistoryFromRemote().then(renderReport);
+    Promise.all([
+      BK_REPORTS.refreshHistoryFromRemote(),
+      window.BK_STOCK && BK_STOCK.loadRemoteOnce ? BK_STOCK.loadRemoteOnce() : Promise.resolve(false)
+    ]).then(renderReport);
   }
   function renderReport(){
     const date = document.getElementById('shiftReportDate').value;
@@ -49,10 +52,35 @@
     document.getElementById('shiftOrderDetailModal').classList.add('open');
   }
   function closeOrderDetail(){ document.getElementById('shiftOrderDetailModal').classList.remove('open'); }
+  function exportPurchaseHistory(){
+    const date = document.getElementById('shiftReportDate').value || BK_REPORTS.dateInputValue(new Date());
+    const report = BK_REPORTS.dailyReportData(date);
+    const rows = [['date','purchaser','item','quantity','unit','amount_ghs','payment_source','receipt_in_purse','note']];
+    report.purchases.forEach(entry=>rows.push([
+      entry.ts ? new Date(entry.ts).toISOString() : '',
+      entry.staff && entry.staff.name || '',
+      entry.ingredient_name || entry.ingredient_id || '',
+      entry.qty || '',
+      entry.unit || '',
+      entry.amount || 0,
+      entry.paymentSource || '',
+      entry.receiptInPurse ? 'yes' : 'no',
+      entry.note || ''
+    ]));
+    const csv = rows.map(row=>row.map(value=>`"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `bk-purchases-${date}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   document.addEventListener('bk-access-ready', renderShiftTools);
   document.getElementById('shiftReportDate').onchange = ()=>{ restrictDateInput(); renderReport(); };
   document.getElementById('historyToday').onclick = ()=>setReportDate(0);
   document.getElementById('historyYesterday').onclick = ()=>setReportDate(-1);
+  document.getElementById('purchaseHistoryExport').onclick = exportPurchaseHistory;
   document.getElementById('shiftOrderDetailClose').onclick = closeOrderDetail;
 })();

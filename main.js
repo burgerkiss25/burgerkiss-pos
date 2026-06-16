@@ -145,6 +145,11 @@
   document.getElementById('hSearch').oninput    = (e)=> BK_UI.filterHistoryText(e.target.value);
   document.getElementById('hExportJson').onclick= ()=>{ if(!window.BK_ACCESS || BK_ACCESS.can('history_export')) BK_UI.exportHistoryJson(); };
   document.getElementById('hExportCsv').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.can('history_export')) BK_UI.exportHistoryCsv(); };
+  document.getElementById('hPurge').onclick      = ()=>{ if(window.BK_ACCESS && BK_ACCESS.can('history_purge')) BK_UI.openHistoryPurge(); };
+  document.getElementById('hpClose').onclick     = ()=> BK_UI.closeHistoryPurge();
+  document.getElementById('hpLoad').onclick      = ()=> BK_UI.renderHistoryPurgeList();
+  document.getElementById('hpSelectAll').onclick = ()=> document.querySelectorAll('#hpList input[type="checkbox"]').forEach(input=>{ input.checked = true; });
+  document.getElementById('hpForm').onsubmit     = (event)=> BK_UI.submitHistoryPurge(event);
   document.getElementById('hdClose').onclick     = ()=> BK_UI.closeHistoryOrder();
   document.getElementById('hdReprint').onclick   = ()=> BK_UI.reprintHistoryOrder();
   document.getElementById('hdVoid').onclick      = ()=>{
