@@ -41,3 +41,28 @@ test('handover shows operational status and no prices in its checklist', () => {
   assert.doesNotMatch(renderIssue, /packagingControl\(s, i, true\)/);
   assert.doesNotMatch(renderIssue, /ACTIVE ORDER|Active order/);
 });
+
+test('walk-in MoMo payments are split by Telecel and MTN', () => {
+  const renderPay = ui.slice(ui.indexOf('function renderPay()'), ui.indexOf('function continueFromPayment'));
+  assert.match(renderPay, /Telecel MoMo/);
+  assert.match(renderPay, /MTN MoMo/);
+  assert.match(ui, /momoProviderLabel/);
+  assert.match(ui, /momoTelecelTotal/);
+  assert.match(ui, /momoMtnTotal/);
+});
+
+test('staff order history is limited to today or yesterday unless owner opens all', () => {
+  assert.match(html, /id="hYesterday"/);
+  assert.match(ui, /historyFilterRange = 'today'/);
+  assert.match(ui, /function filterHistoryYesterday/);
+  assert.match(ui, /owner && historyFilterRange === 'all'/);
+});
+
+
+test('shift order audit rows can open order detail modal', () => {
+  const shiftReports = fs.readFileSync(path.join(root, 'shift_reports.js'), 'utf8');
+  const shiftJs = fs.readFileSync(path.join(root, 'shift.js'), 'utf8');
+  assert.match(shiftReports, /data-history-id/);
+  assert.match(shiftReports, /function historyDetailHtml/);
+  assert.match(shiftJs, /openOrderDetail/);
+});
