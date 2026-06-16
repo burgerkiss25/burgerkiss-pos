@@ -41,3 +41,12 @@ test('handover shows operational status and no prices in its checklist', () => {
   assert.doesNotMatch(renderIssue, /packagingControl\(s, i, true\)/);
   assert.doesNotMatch(renderIssue, /ACTIVE ORDER|Active order/);
 });
+
+test('walk-in MoMo payments are split by Telecel and MTN', () => {
+  const renderPay = ui.slice(ui.indexOf('function renderPay()'), ui.indexOf('function continueFromPayment'));
+  assert.match(renderPay, /Telecel MoMo/);
+  assert.match(renderPay, /MTN MoMo/);
+  assert.match(ui, /momoProviderLabel/);
+  assert.match(ui, /momoTelecelTotal/);
+  assert.match(ui, /momoMtnTotal/);
+});

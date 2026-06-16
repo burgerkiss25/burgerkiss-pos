@@ -40,6 +40,8 @@ test('shift tools are isolated on a dedicated page without the order UI bundle',
   assert.match(shift, /Shift Tools/);
   assert.match(shift, /shift_reports\.js/);
   assert.match(shift, /shift\.js/);
+  assert.match(shift, /id="shiftPurchaseForm"/);
+  assert.match(shift, /Receipt is in purse/);
   assert.doesNotMatch(shift, /ui\.js|main\.js|id="buttons"|id="orderCart"/);
 });
 

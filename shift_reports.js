@@ -107,10 +107,11 @@
     const voided = orders.filter(entry=>entry.status === 'voided');
     const sum = (list, field)=>list.reduce((total, entry)=>total + Number(entry[field] || 0), 0);
     const cashTotal = sum(completed.filter(entry=>entry.pay === 'cash'), 'total');
-    const cashPurchases = 0;
+    const purchases = root.BK_STOCK && root.BK_STOCK.getPurchases ? root.BK_STOCK.getPurchases().filter(p=>dateInputValue(p.ts) === selected) : [];
+    const cashPurchases = sum(purchases.filter(p=>p.paymentSource === 'cash_wallet'), 'amount');
     const expectedWallet = CASH_FLOAT_GHS + cashTotal - cashPurchases;
     return {
-      date:selected, orders, completed, voided,
+      date:selected, orders, completed, voided, purchases,
       netSales:sum(completed, 'total'),
       cashTotal,
       momoTelecelTotal:sum(completed.filter(entry=>entry.pay === 'momo' && entry.momoProvider === 'telecel'), 'total'),
@@ -152,6 +153,10 @@
         <div class="report-order ${entry.status === 'voided' ? 'voided' : ''}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(paymentLabel(entry.pay, entry.momoProvider))}${entry.voidReason ? ` · ${escapeHtml(entry.voidReason)}` : ''}</small></span><strong>${entry.total} GHS</strong></div>`).join('') : '<div class="empty-state">No orders for this date.</div>'}</div>
     </div>`;
   }
+  function purchaseListHtml(items){
+    if(!items.length) return '<div class="empty-state">No purchases recorded yet.</div>';
+    return `<div class="report-orders"><h3>Purchase audit</h3>${items.slice().reverse().slice(0,50).map(entry=>`<div class="report-order"><span><b>${escapeHtml(entry.ingredient_name || entry.ingredientId)}</b><small>${escapeHtml(entry.qty)} ${escapeHtml(entry.unit)} · ${escapeHtml(entry.paymentSource)} · Receipt in purse</small></span><strong>${escapeHtml(entry.amount)} GHS</strong></div>`).join('')}</div>`;
+  }
   function historyListHtml(items){
     if(!items.length) return '<div class="empty-state">No completed orders in history yet.</div>';
     const completed = items.filter(entry=>entry.status !== 'voided');
@@ -160,6 +165,6 @@
       <div class="history-order-list">${items.slice(0,200).map(entry=>`<div class="history-order-row ${entry.status === 'voided' ? 'voided' : ''}"><span><strong>${escapeHtml(entry.orderNo)}</strong><small>${escapeHtml(entry.externalOrderNo || entry.slotName)} · ${escapeHtml(paymentLabel(entry.pay, entry.momoProvider))} · ${new Date(entry.closedAt).toLocaleString()}</small></span><span><b>${entry.total} GHS</b><small class="history-status">${entry.status === 'voided' ? 'Voided' : 'Completed'}</small></span></div>`).join('')}</div>`;
   }
 
-  root.BK_REPORTS = { CASH_FLOAT_GHS, dateInputValue, paymentLabel, getHistory, refreshHistoryFromRemote, dailyReportData, dailyReportHtml, historyListHtml };
+  root.BK_REPORTS = { CASH_FLOAT_GHS, escapeHtml, dateInputValue, paymentLabel, getHistory, refreshHistoryFromRemote, dailyReportData, dailyReportHtml, purchaseListHtml, historyListHtml };
   if(typeof module !== 'undefined' && module.exports) module.exports = root.BK_REPORTS;
 })(typeof window !== 'undefined' ? window : globalThis);

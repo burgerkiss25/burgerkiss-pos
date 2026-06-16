@@ -10,7 +10,7 @@
     body.shift-app{min-height:100dvh;background:radial-gradient(circle at top left,#161b22 0,#090a0f 42%,#07080c 100%);color:#f7f8fb}
     .shift-wrap{width:min(1180px,100%);margin:0 auto;padding:22px}
     .shift-header{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:14px;margin:-22px -22px 20px;padding:14px 22px;border-bottom:1px solid #27303b;background:rgba(9,11,16,.94);backdrop-filter:blur(14px)}
-    .shift-brand{display:flex;align-items:center;gap:12px}.shift-brand h1{margin:0;font-size:22px}.shift-brand small{display:block;color:#9eabba}.shift-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.shift-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.shift-card{padding:16px;border:1px solid #303948;border-radius:16px;background:#10151d}.shift-card h2{margin:0 0 12px;color:#fff2c7}.shift-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}.shift-toolbar input{min-height:40px;padding:8px;border:1px solid #384356;border-radius:9px;background:#101620;color:#edf3fa}@media(max-width:900px){.shift-grid{grid-template-columns:1fr}.shift-header{position:static;align-items:flex-start;flex-direction:column}.shift-actions{width:100%}}
+    .shift-brand{display:flex;align-items:center;gap:12px}.shift-purchase-form{display:grid;gap:10px}.shift-purchase-form label{display:grid;gap:5px;color:#dce5f1;font-weight:850}.shift-purchase-form input,.shift-purchase-form select{min-height:42px;padding:8px 10px;border:1px solid #384356;border-radius:9px;background:#101620;color:#edf3fa}.purchase-receipt{grid-template-columns:auto 1fr;align-items:center}.shift-brand h1{margin:0;font-size:22px}.shift-brand small{display:block;color:#9eabba}.shift-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.shift-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.shift-card{padding:16px;border:1px solid #303948;border-radius:16px;background:#10151d}.shift-card h2{margin:0 0 12px;color:#fff2c7}.shift-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}.shift-toolbar input{min-height:40px;padding:8px;border:1px solid #384356;border-radius:9px;background:#101620;color:#edf3fa}@media(max-width:900px){.shift-grid{grid-template-columns:1fr}.shift-header{position:static;align-items:flex-start;flex-direction:column}.shift-actions{width:100%}}
   </style>
 </head>
 <body class="shift-app app-loading">
@@ -23,6 +23,21 @@
       <article class="shift-card">
         <div class="shift-toolbar"><div><h2>Daily closeout</h2><small>The BurgerKiss purse must start each shift with 200 GHS change.</small></div><input id="shiftReportDate" type="date" /></div>
         <div id="shiftReportBody"></div>
+      </article>
+      <article class="shift-card">
+        <div class="shift-toolbar"><div><h2>Add purchase</h2><small>Enter emergency stock purchases and place the receipt in the purse.</small></div></div>
+        <form class="shift-purchase-form" id="shiftPurchaseForm">
+          <label>Item<input id="purchaseItem" name="name" list="purchaseItems" placeholder="Search or type item" required></label><datalist id="purchaseItems"></datalist>
+          <label>Quantity received<input name="qty" type="number" min="0" step="0.01" required></label>
+          <label>Unit<input name="unit" placeholder="pcs, heads, bottles" required></label>
+          <label>Amount paid<input name="amount" type="number" min="0" step="0.01" required></label>
+          <label>Payment source<select name="paymentSource"><option value="cash_wallet">Cash wallet</option><option value="staff_paid">Staff paid</option><option value="owner_paid">Owner paid</option><option value="momo">MoMo</option><option value="other">Other</option></select></label>
+          <label class="purchase-receipt"><input name="receiptInPurse" type="checkbox" required> Receipt is in purse</label>
+          <label>Note<input name="note" placeholder="Optional note"></label>
+          <button class="x admin-primary" type="submit">Save purchase</button>
+          <div class="access-error" id="purchaseMessage"></div>
+        </form>
+        <div id="shiftPurchaseBody"></div>
       </article>
       <article class="shift-card">
         <div class="shift-toolbar"><div><h2>Order history</h2><small>Recent completed and voided orders.</small></div></div>
@@ -40,8 +55,11 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
   <script src="./access.js?v=3"></script>
-  <script src="./shift_reports.js?v=1"></script>
+  <script src="./stock_data.js?v=14"></script>
+  <script src="./stock_utils.js?v=15"></script>
+  <script src="./stock.js?v=20"></script>
+  <script src="./shift_reports.js?v=2"></script>
   <script src="./shift.js?v=1"></script>
-  <script>BK_ACCESS.init();</script>
+  <script>BK_STOCK.load(); BK_ACCESS.init();</script>
 </body>
 </html>
