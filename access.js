@@ -161,7 +161,7 @@
   }
   function can(permission){
     const required = {
-      daily_report:'supervisor', void_order:'supervisor', high_discount:'supervisor',
+      daily_report:'employee', void_order:'supervisor', high_discount:'supervisor',
       admin:'owner', maintenance:'owner', history_export:'owner'
     }[permission] || 'employee';
     return hasRole(required);

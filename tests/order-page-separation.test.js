@@ -12,6 +12,7 @@ const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
 test('landing page is standalone and does not load the POS application', () => {
   assert.match(landing, /order\.html\?start=walkin/);
   assert.match(landing, /order\.html\?start=online/);
+  assert.match(landing, /order\.html\?start=shift/);
   assert.doesNotMatch(landing, /ui\.js|main\.js|firebase-app-compat|id="buttons"|id="orderCart"/);
 });
 
@@ -24,6 +25,8 @@ test('product catalog exists only on the order page', () => {
 test('order page consumes an explicit start mode after state and access are ready', () => {
   assert.match(main, /entryMode === 'walkin'/);
   assert.match(main, /entryMode === 'online'/);
+  assert.match(main, /entryMode === 'shift'/);
+  assert.match(main, /BK_UI\.openHistory\(\)/);
   assert.match(main, /document\.addEventListener\('bk-access-ready', handleOrderPageEntry\)/);
   assert.match(main, /window\.location\.replace\('index\.html'\)/);
 });
