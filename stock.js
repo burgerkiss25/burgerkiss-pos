@@ -133,6 +133,11 @@
     if(!Array.isArray(src)) return [];
     return src.filter(m=> m && typeof m === 'object' && m.ingredient_id && Number.isFinite(Number(m.qty))).slice(-200);
   }
+  function sanitizePurchases(raw){
+    const src = raw && Array.isArray(raw.items) ? raw.items : raw;
+    if(!Array.isArray(src)) return [];
+    return src.filter(p=> p && typeof p === 'object' && p.ingredient_id && Number.isFinite(Number(p.qty))).slice(-200);
+  }
   function usageForSlots(slots){
     const usage = {}; Object.keys(INGREDIENTS).forEach(k=>{ usage[k] = 0; });
     (slots || []).forEach(s=>{ (s.items || []).forEach(it=>{
@@ -169,20 +174,23 @@
   function renderPosIfAvailable(){
     if(window.BK_UI && typeof BK_UI.renderAll === 'function' && document.getElementById('buttons')) BK_UI.renderAll();
   }
-  function applyRemoteStock(rawIngredients, rawRecipes, rawTransfers, rawInventory, rawMovements){
+  function applyRemoteStock(rawIngredients, rawRecipes, rawTransfers, rawInventory, rawMovements, rawPurchases){
     const cleanIng = sanitizeIngredients(rawIngredients && rawIngredients.map ? rawIngredients.map : rawIngredients);
     const cleanRec = sanitizeRecipes(rawRecipes && rawRecipes.map ? rawRecipes.map : rawRecipes);
     const cleanTransfers = sanitizeTransfers(rawTransfers);
     const cleanMovements = sanitizeMovements(rawMovements);
+    const cleanPurchases = sanitizePurchases(rawPurchases);
     if(Object.keys(cleanIng).length) INGREDIENTS = applyInventoryLocations(rawInventory, cleanIng);
     if(Object.keys(cleanRec).length) RECIPES = cleanRec;
     if(cleanTransfers.length) TRANSFERS = cleanTransfers;
     if(cleanMovements.length) MOVEMENTS = cleanMovements;
+    if(cleanPurchases.length) PURCHASES = cleanPurchases;
     persist();
     persistTransfers();
     persistMovements();
+    persistPurchases();
     renderPosIfAvailable();
-    return !!(Object.keys(cleanIng).length || Object.keys(cleanRec).length || cleanTransfers.length || cleanMovements.length);
+    return !!(Object.keys(cleanIng).length || Object.keys(cleanRec).length || cleanTransfers.length || cleanMovements.length || cleanPurchases.length);
   }
   function loadRemoteOnce(){
     const database = db();
@@ -193,8 +201,9 @@
       database.ref(paths.recipes).get(),
       database.ref(paths.transfers).get(),
       database.ref(paths.inventory).get(),
-      database.ref(paths.movements).get()
-    ]).then(([ingSnap, recSnap, transferSnap, inventorySnap, movementSnap])=> applyRemoteStock(ingSnap.val(), recSnap.val(), transferSnap.val(), inventorySnap.val(), movementSnap.val()))
+      database.ref(paths.movements).get(),
+      database.ref(paths.purchases).get()
+    ]).then(([ingSnap, recSnap, transferSnap, inventorySnap, movementSnap, purchaseSnap])=> applyRemoteStock(ingSnap.val(), recSnap.val(), transferSnap.val(), inventorySnap.val(), movementSnap.val(), purchaseSnap.val()))
       .catch(e=>{
         console.warn('stock remote load failed:', e && e.message);
         return false;
@@ -269,7 +278,7 @@
   function loadPurchases(){
     try{
       const parsed = JSON.parse(localStorage.getItem(PURCHASES_KEY) || '[]');
-      PURCHASES = Array.isArray(parsed) ? parsed.filter(p=> p && typeof p === 'object').slice(-200) : [];
+      PURCHASES = sanitizePurchases(parsed);
     }catch(e){ PURCHASES = []; localStorage.removeItem(PURCHASES_KEY); }
   }
   function persistPurchases(){ localStorage.setItem(PURCHASES_KEY, JSON.stringify(PURCHASES.slice(-200))); }

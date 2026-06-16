@@ -75,6 +75,21 @@ test('daily sales date picker is restricted for non-owner staff', () => {
   assert.match(shiftJs, /dateInput\.max = today/);
 });
 
+
+test('daily sales shows and exports purchase audit with date and purchaser', () => {
+  const shift = fs.readFileSync(path.join(root, 'shift.html'), 'utf8');
+  const shiftJs = fs.readFileSync(path.join(root, 'shift.js'), 'utf8');
+  const shiftReports = fs.readFileSync(path.join(root, 'shift_reports.js'), 'utf8');
+  const stock = fs.readFileSync(path.join(root, 'stock.js'), 'utf8');
+  assert.match(shift, /purchaseHistoryExport/);
+  assert.match(shiftJs, /function exportPurchaseHistory/);
+  assert.match(shiftJs, /purchaser.*item.*quantity.*amount_ghs/);
+  assert.match(shiftReports, /Purchase audit/);
+  assert.match(shiftReports, /staffName/);
+  assert.match(shiftReports, /purchasedAt/);
+  assert.match(stock, /database\.ref\(paths\.purchases\)\.get\(\)/);
+});
+
 test('stock overview has search and sorted results', () => {
   assert.match(ui, /stockOverviewSearch/);
   assert.match(ui, /stockOverviewQuery/);
