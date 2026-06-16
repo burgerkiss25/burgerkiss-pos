@@ -150,7 +150,7 @@
       </div>
       <div class="report-heading"><span>Wallet note</span><strong>The BurgerKiss purse must start each shift with 200 GHS change.</strong></div>
       <div class="report-orders"><h3>Order audit</h3>${report.orders.length ? report.orders.map(entry=>`
-        <div class="report-order ${entry.status === 'voided' ? 'voided' : ''}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(paymentLabel(entry.pay, entry.momoProvider))}${entry.voidReason ? ` · ${escapeHtml(entry.voidReason)}` : ''}</small></span><strong>${entry.total} GHS</strong></div>`).join('') : '<div class="empty-state">No orders for this date.</div>'}</div>
+        <button type="button" class="report-order ${entry.status === 'voided' ? 'voided' : ''}" data-history-id="${escapeHtml(entry.id)}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(paymentLabel(entry.pay, entry.momoProvider))}${entry.voidReason ? ` · ${escapeHtml(entry.voidReason)}` : ''}</small></span><strong>${entry.total} GHS</strong></button>`).join('') : '<div class="empty-state">No orders for this date.</div>'}</div>
     </div>`;
   }
 

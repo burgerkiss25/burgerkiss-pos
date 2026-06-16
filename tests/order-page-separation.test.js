@@ -38,7 +38,7 @@ test('order page consumes only order start modes after state and access are read
 });
 
 test('shift tools are isolated on a dedicated page without the order UI bundle', () => {
-  assert.match(shift, /Shift Tools/);
+  assert.match(shift, /Daily Sales/);
   assert.match(shift, /shift_reports\.js/);
   assert.match(shift, /shift\.js/);
   assert.match(shift, /shiftOrderDetailModal/);
