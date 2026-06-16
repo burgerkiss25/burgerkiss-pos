@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BurgerKiss – Purchases</title>
+  <link rel="stylesheet" href="./style.css?v=53" />
+  <script src="./firebase-config.js?v=2"></script>
+  <style>
+    body.purchase-app{min-height:100dvh;background:radial-gradient(circle at top left,#151923 0,#080a0f 42%,#07080c 100%);color:#f7f8fb}.purchase-wrap{width:min(920px,100%);margin:0 auto;padding:22px}.purchase-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}.purchase-card{display:grid;gap:14px;padding:18px;border:1px solid #303948;border-radius:16px;background:#10151d}.purchase-form{display:grid;gap:10px}.purchase-form label{display:grid;gap:5px;color:#dce5f1;font-weight:850}.purchase-form input,.purchase-form select{min-height:42px;padding:8px 10px;border:1px solid #384356;border-radius:9px;background:#101620;color:#edf3fa}.purchase-receipt{grid-template-columns:auto 1fr;align-items:center}.purchase-auth-ok{padding:10px 12px;border:1px solid #326e46;border-radius:10px;background:#11251a;color:#d8ffe3;font-weight:900}.hidden{display:none!important}
+  </style>
+</head>
+<body class="purchase-app app-loading">
+  <main class="purchase-wrap">
+    <header class="purchase-header"><div class="brand-mark">BK</div><div><h1>Emergency purchases</h1><p>Confirm the purchaser with their own PIN before entering stock and costs.</p></div><a class="x" href="shift.html">Shift Tools</a></header>
+    <section class="purchase-card" id="purchaseAuthCard">
+      <h2>Who made this purchase?</h2>
+      <form class="purchase-form" id="purchaseAuthForm">
+        <label>Purchaser<select name="staffId" id="purchaseStaff"></select></label>
+        <label>Personal PIN<input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" required></label>
+        <button class="x admin-primary" type="submit">Confirm purchaser</button>
+        <div class="access-error" id="purchaseAuthMessage"></div>
+      </form>
+    </section>
+    <section class="purchase-card hidden" id="purchaseEntryCard">
+      <div class="purchase-auth-ok" id="purchaseActor"></div>
+      <div class="shift-actions"><button class="x" id="purchaseToday" type="button">Today</button><button class="x" id="purchaseYesterday" type="button">Yesterday</button><button class="x" id="purchaseExport" type="button">Export CSV</button></div>
+      <form class="purchase-form" id="purchaseEntryForm">
+        <label>Item<input id="purchaseItem" name="name" list="purchaseItems" placeholder="Search or type item" required></label><datalist id="purchaseItems"></datalist>
+        <label>Quantity received<input name="qty" type="number" min="0" step="0.01" required></label>
+        <label>Unit<input name="unit" placeholder="pcs, heads, bottles" required></label>
+        <label>Amount paid<input name="amount" type="number" min="0" step="0.01" required></label>
+        <label>Payment source<select name="paymentSource"><option value="cash_wallet">Cash wallet</option><option value="staff_paid">Staff paid</option><option value="owner_paid">Owner paid</option><option value="momo">MoMo</option><option value="other">Other</option></select></label>
+        <label class="purchase-receipt"><input name="receiptInPurse" type="checkbox" required> Receipt is in purse</label>
+        <label>Note<input name="note" placeholder="Optional note"></label>
+        <button class="x admin-primary" type="submit">Save purchase</button>
+        <div class="access-error" id="purchaseMessage"></div>
+      </form>
+      <div id="purchaseHistory"></div>
+    </section>
+  </main>
+  <script>if(!window.FIREBASE_CONFIG){ console.warn('Firebase config missing: online database is disabled until firebase-config.js is filled.'); }</script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <script src="./access.js?v=4"></script>
+  <script src="./stock_data.js?v=14"></script>
+  <script src="./stock_utils.js?v=15"></script>
+  <script src="./stock.js?v=21"></script>
+  <script src="./shift_reports.js?v=3"></script>
+  <script src="./purchases.js?v=2"></script>
+  <script>BK_STOCK.load(); BK_ACCESS.init();</script>
+</body>
+</html>
