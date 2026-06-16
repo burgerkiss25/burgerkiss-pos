@@ -170,14 +170,19 @@
     if(!items.length) return '<div class="empty-state">No purchases recorded yet.</div>';
     return `<div class="report-orders"><h3>Purchase audit</h3>${items.slice().reverse().slice(0,50).map(entry=>`<div class="report-order"><span><b>${escapeHtml(entry.ingredient_name || entry.ingredientId)}</b><small>${escapeHtml(entry.qty)} ${escapeHtml(entry.unit)} · ${escapeHtml(entry.paymentSource)} · Receipt in purse</small></span><strong>${escapeHtml(entry.amount)} GHS</strong></div>`).join('')}</div>`;
   }
+  function historyDetailHtml(entry){
+    if(!entry) return '<div class="empty-state">Order not found.</div>';
+    const rows = Array.isArray(entry.items) && entry.items.length ? entry.items.map(item=>`<div class="history-item"><div class="history-item-main"><span><b>${escapeHtml(item.name || item.itemId || 'Item')}</b><small>${escapeHtml(item.note || '')}</small></span><strong>${escapeHtml(item.qty || 1)}</strong></div></div>`).join('') : '<div class="empty-state">No item detail saved for this order.</div>';
+    return `<div class="history-detail-meta"><div><small>Order</small><strong>${escapeHtml(entry.orderNo)}</strong></div><div><small>Payment</small><strong>${escapeHtml(paymentLabel(entry.pay, entry.momoProvider))}</strong></div><div><small>Closed</small><strong>${new Date(entry.closedAt).toLocaleString()}</strong></div><div><small>Total</small><strong>${entry.total} GHS</strong></div><div><small>Source</small><strong>${escapeHtml(entry.orderSource || 'walkin')}</strong></div><div><small>Status</small><strong>${escapeHtml(entry.status)}</strong></div></div><h3>Items</h3><div class="history-item-list">${rows}</div>`;
+  }
   function historyListHtml(items){
     if(!items.length) return '<div class="empty-state">No completed orders in history yet.</div>';
     const completed = items.filter(entry=>entry.status !== 'voided');
     const totalSales = completed.reduce((total, entry)=>total + Number(entry.total || 0), 0);
     return `<div class="history-summary"><span><b>Orders:</b> ${completed.length}</span><span><b>Cash:</b> ${completed.filter(entry=>entry.pay === 'cash').length}</span><span><b>MoMo:</b> ${completed.filter(entry=>entry.pay === 'momo').length}</span><span><b>Online:</b> ${completed.filter(entry=>ONLINE_PLATFORMS.has(entry.orderSource)).length}</span><span class="history-summary-total"><b>Net sales:</b> ${totalSales} GHS</span></div>
-      <div class="history-order-list">${items.slice(0,200).map(entry=>`<div class="history-order-row ${entry.status === 'voided' ? 'voided' : ''}"><span><strong>${escapeHtml(entry.orderNo)}</strong><small>${escapeHtml(entry.externalOrderNo || entry.slotName)} · ${escapeHtml(paymentLabel(entry.pay, entry.momoProvider))} · ${new Date(entry.closedAt).toLocaleString()}</small></span><span><b>${entry.total} GHS</b><small class="history-status">${entry.status === 'voided' ? 'Voided' : 'Completed'}</small></span></div>`).join('')}</div>`;
+      <div class="history-order-list">${items.slice(0,200).map(entry=>`<button type="button" class="history-order-row ${entry.status === 'voided' ? 'voided' : ''}" data-history-id="${escapeHtml(entry.id)}"><span><strong>${escapeHtml(entry.orderNo)}</strong><small>${escapeHtml(entry.externalOrderNo || entry.slotName)} · ${escapeHtml(paymentLabel(entry.pay, entry.momoProvider))} · ${new Date(entry.closedAt).toLocaleString()}</small></span><span><b>${entry.total} GHS</b><small class="history-status">${entry.status === 'voided' ? 'Voided' : 'Completed'}</small></span></button>`).join('')}</div>`;
   }
 
-  root.BK_REPORTS = { CASH_FLOAT_GHS, escapeHtml, dateInputValue, paymentLabel, getHistory, refreshHistoryFromRemote, dailyReportData, dailyReportHtml, visibleHistory, purchaseListHtml, historyListHtml };
+  root.BK_REPORTS = { CASH_FLOAT_GHS, escapeHtml, dateInputValue, paymentLabel, getHistory, refreshHistoryFromRemote, dailyReportData, dailyReportHtml, visibleHistory, purchaseListHtml, historyDetailHtml, historyListHtml };
   if(typeof module !== 'undefined' && module.exports) module.exports = root.BK_REPORTS;
 })(typeof window !== 'undefined' ? window : globalThis);
