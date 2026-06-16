@@ -31,8 +31,24 @@
       packGroupId: typeof it.packGroupId === 'string' ? it.packGroupId : ''
     };
   }
+  function normalizeAmendment(entry){
+    if(!entry || typeof entry !== 'object') return null;
+    const text = String(entry.text || '').trim();
+    if(!text) return null;
+    return {
+      id: String(entry.id || `note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`),
+      targetType: ['menuGroup','item','order'].includes(entry.targetType) ? entry.targetType : 'order',
+      targetId: String(entry.targetId || ''),
+      title: String(entry.title || ''),
+      text,
+      createdAt: Number(entry.createdAt) || Date.now(),
+      createdBy: (entry.createdBy && typeof entry.createdBy === 'object') ? entry.createdBy : null,
+      status: entry.status === 'seen' ? 'seen' : 'new'
+    };
+  }
   function normalizeSlot(slot, idx){
     const rawItems = Array.isArray(slot && slot.items) ? slot.items : [];
+    const rawAmendments = Array.isArray(slot && slot.amendments) ? slot.amendments : [];
     return {
       name: (slot && typeof slot.name==='string' && slot.name.trim()) ? slot.name.trim() : `SN${idx+1}`,
       items: rawItems.map(normalizeItem).filter(Boolean),
@@ -68,7 +84,8 @@
       preferredPayment: String((slot && slot.preferredPayment) || ''),
       riderType: String((slot && slot.riderType) || ''),
       deliveryStatus: String((slot && slot.deliveryStatus) || ''),
-      stockConsumed: !!(slot && slot.stockConsumed)
+      stockConsumed: !!(slot && slot.stockConsumed),
+      amendments: rawAmendments.map(normalizeAmendment).filter(Boolean)
     };
   }
   function normalizeState(st){
@@ -391,6 +408,25 @@
     const next = s.items.filter(it => !(it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId)));
     if(next.length !== s.items.length){ s.items = next; s.packAsked=false; s.sentToKitchen=false; clearSlotDiscount(s); save(); }
   }
+  function replaceMenuGroup(menuGroupId, nextItems){
+    const s = slots[active]; if(!s || s.issued || !menuGroupId) return false;
+    const replacements = Array.isArray(nextItems) ? nextItems : [];
+    s.items = s.items
+      .filter(it => (it.menuGroupId || '') !== menuGroupId)
+      .concat(replacements.map(it => ({
+        itemId:it.itemId,
+        note:(it.note || '').trim(),
+        done:false,
+        menuGroupId,
+        menuName:typeof it.menuName === 'string' ? it.menuName : '',
+        menuRole:typeof it.menuRole === 'string' ? it.menuRole : '',
+        menuNoSauce:!!it.menuNoSauce,
+        customerGroupId:typeof it.customerGroupId === 'string' ? it.customerGroupId : '',
+        packGroupId:typeof it.packGroupId === 'string' ? it.packGroupId : ''
+      })));
+    s.packAsked=false; s.sentToKitchen=false; clearSlotDiscount(s); save();
+    return true;
+  }
   function setPay(i,status){
     if(!slots[i] || slots[i].issued) return;
     slots[i].pay = PAY_SET.has(status) ? status : 'unpaid';
@@ -432,6 +468,23 @@
     if(changed) save();
   }
 
+  function addKitchenAmendment(slotIndex, entry){
+    const index = clamp(Number(slotIndex), 0, Math.max(0, slots.length-1));
+    const slot = slots[index];
+    if(!slot || slot.issued || !slot.sentToKitchen) return false;
+    const actor = window.BK_ACCESS && BK_ACCESS.operationalActor ? BK_ACCESS.operationalActor() : null;
+    const amendment = normalizeAmendment(Object.assign({}, entry || {}, {
+      createdAt: Date.now(),
+      createdBy: actor,
+      status: 'new'
+    }));
+    if(!amendment) return false;
+    slot.amendments = Array.isArray(slot.amendments) ? slot.amendments : [];
+    slot.amendments.push(amendment);
+    save();
+    return true;
+  }
+
   function setDiscount(r, approval){
     const slot = slots[active];
     if(!slot || slot.issued) return false;
@@ -458,7 +511,7 @@
     load, save, clearAll, clearStorage,
     addSlot, renameActive, deleteActive, setActive, updateSlot,
     setActiveName,
-    addItem, addItemForKey, undo, decItemForKey, removeItemForKey, setPay, setIssued, toggleDone, setDoneForKey,
+    addItem, addItemForKey, undo, decItemForKey, removeItemForKey, replaceMenuGroup, setPay, setIssued, toggleDone, setDoneForKey, addKitchenAmendment,
     setPackMode,
     setDiscount,
     getState, setState, whenReady, allocateOrderNo, repairOrderNumbers, formatOrderNo, flushRemote:saveRemoteNow
