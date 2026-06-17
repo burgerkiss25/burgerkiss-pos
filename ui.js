@@ -1187,7 +1187,7 @@
   }
 
   function choosePackaging(slotIndex){
-    return packingAssignmentDialog(slotIndex);
+    return packingAssignmentDialog(slotIndex, true);
   }
 
   function packagingControl(slot, slotIndex, compact){
@@ -1396,10 +1396,33 @@
     });
   }
 
-  function packingAssignmentDialog(slotIndex){
+  function defaultPackingItems(slot){
+    if(!slot || !window.BK_PACKING) return [];
+    return (slot.items || []).map(item=>{
+      const copy = Object.assign({}, item);
+      if(copy.menuGroupId){
+        copy.customerGroupId = copy.menuGroupId;
+        copy.packGroupId = copy.menuGroupId;
+      }else if(BK_PACKING.isExtra(copy, BK_DATA.BASE) && !BK_PACKING.isDrink(copy, BK_DATA.BASE) && !copy.customerGroupId){
+        copy.customerGroupId = 'shared-single';
+        copy.packGroupId = 'shared-single';
+      }
+      return copy;
+    });
+  }
+
+  function packingAssignmentDialog(slotIndex, forceReview){
     const slot = BK_STATE.getState().slots[slotIndex];
-    if(!slot || !window.BK_PACKING || !BK_PACKING.needsPackingReview(slot, BK_DATA.BASE)){
+    if(!slot || !window.BK_PACKING){
       if(slot) BK_STATE.updateSlot(slotIndex, {packAsked:true, sentToKitchen:true});
+      return Promise.resolve(true);
+    }
+    if(!forceReview && !BK_PACKING.needsDrinkChoice(slot, BK_DATA.BASE)){
+      BK_STATE.updateSlot(slotIndex, {items:defaultPackingItems(slot), drinkPackMode:slot.drinkPackMode || 'shared', packAsked:true, sentToKitchen:true});
+      return Promise.resolve(true);
+    }
+    if(!forceReview && !BK_PACKING.needsPackingReview(slot, BK_DATA.BASE)){
+      BK_STATE.updateSlot(slotIndex, {items:defaultPackingItems(slot), drinkPackMode:slot.drinkPackMode || 'shared', packAsked:true, sentToKitchen:true});
       return Promise.resolve(true);
     }
     return new Promise(resolve=>{
@@ -1407,26 +1430,27 @@
       const assignable = BK_PACKING.assignableItems(slot, BK_DATA.BASE);
       const host = ensureDialogHost();
       const groupOptions = groups.length
-        ? groups.map((group,index)=>`<option value="${escapeHtml(group.id)}">Bag ${index+1} — ${escapeHtml(group.label)}</option>`).join('')
-        : '<option value="shared-single">Shared food/drink group</option>';
+        ? '<option value="shared-single">Together with other single items</option>' + groups.map((group,index)=>`<option value="${escapeHtml(group.id)}">Bag ${index+1} — ${escapeHtml(group.label)}</option>`).join('')
+        : '<option value="shared-single">Together in one single-items bag</option>';
       const rows = assignable.map((entry,index)=>{
-        const current = entry.item.customerGroupId || '';
-        return `<label class="packing-assignment-row"><span><b>${escapeHtml(entry.product.name || entry.item.itemId)}</b><small>${BK_PACKING.isDrink(entry.item, BK_DATA.BASE) ? 'Drink' : 'Single item'}</small></span><select class="dialog-field packing-assignment" data-item-index="${entry.index}"><option value="">Choose customer / bag…</option>${groupOptions}<option value="separate-${index}">Separate bag / customer</option></select></label>`;
+        const current = entry.item.customerGroupId || entry.item.packGroupId || 'shared-single';
+        return `<label class="packing-assignment-row"><span><b>${escapeHtml(entry.product.name || entry.item.itemId)}</b><small>${BK_PACKING.isDrink(entry.item, BK_DATA.BASE) ? 'Drink' : 'Single item'}</small></span><select class="dialog-field packing-assignment" data-item-index="${entry.index}" data-current="${escapeHtml(current)}">${groupOptions}<option value="separate-${index}">Separate bag / customer</option></select></label>`;
       }).join('');
       const drinkCount = (slot.items || []).filter(item=>BK_PACKING.isDrink(item, BK_DATA.BASE)).length;
       const drinkChoice = drinkCount > 1 ? `<fieldset class="modifier-section"><legend>Drink packaging</legend><p>Ask whether the customers are leaving together.</p><label class="staff-choice"><input type="radio" name="drinkPackMode" value="shared" checked><span><b>Together — fewer bags</b><small>Combine drinks from different customers where capacity allows.</small></span></label><label class="staff-choice"><input type="radio" name="drinkPackMode" value="by-customer"><span><b>By customer</b><small>Keep drink bags separated by customer group.</small></span></label></fieldset>` : '';
       document.getElementById('appDialogTitle').textContent = 'Assign items to bags';
       document.getElementById('appDialogBody').innerHTML = `
-        <p>Every menu stays in its own food bag. Assign each extra item to the correct menu/customer or keep it separate.</p>
+        <p>Every menu stays in its own food bag. Single items are packed together by default; only change an item here when it needs its own separate bag.</p>
         <div class="packing-assignment-list">${rows}</div>
         ${drinkChoice}
         <div id="packingError" class="field-error"></div>
         <div class="dialog-actions"><button class="x" id="dlgCancel">Back to Order</button><button class="x modifier-primary" id="dlgConfirm">Confirm & Send to Kitchen</button></div>`;
       host.classList.add('open');
+      document.querySelectorAll('.packing-assignment').forEach(select=>{ if(select.dataset.current) select.value = select.dataset.current; });
       document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(false); };
       document.getElementById('dlgConfirm').onclick = ()=>{
         const selects = Array.from(document.querySelectorAll('.packing-assignment'));
-        if(selects.some(select=>!select.value)){ document.getElementById('packingError').textContent = 'Assign every extra item before continuing.'; return; }
+        if(selects.some(select=>!select.value)){ document.getElementById('packingError').textContent = 'Choose a packaging option for every extra item before continuing.'; return; }
         const latest = BK_STATE.getState().slots[slotIndex];
         if(!latest) return;
         const items = latest.items.map(item=>Object.assign({}, item));
@@ -1450,7 +1474,7 @@
     if(!slot || !slot.items.length) return;
     whatsappOrderSetup(slotIndex).then(ok=>{
       if(!ok) return false;
-      return packingAssignmentDialog(slotIndex);
+      return packingAssignmentDialog(slotIndex, false);
     }).then(ok=>{ if(ok) goTab('make'); });
   }
 

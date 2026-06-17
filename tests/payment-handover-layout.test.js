@@ -95,6 +95,14 @@ test('modifier sheet uses horizontal section scrolling instead of one long verti
   assert.match(css, /\.modifier-actions\{[^}]*position:sticky/);
 });
 
+
+test('single food items default to shared packaging unless changed manually', () => {
+  assert.match(ui, /function defaultPackingItems/);
+  assert.match(ui, /customerGroupId = 'shared-single'/);
+  assert.match(ui, /Single items are packed together by default/);
+  assert.match(ui, /packingAssignmentDialog\(slotIndex, true\)/);
+});
+
 test('owner-only history purge requires date range, selected orders and owner PIN', () => {
   const order = fs.readFileSync(path.join(root, 'order.html'), 'utf8');
   const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
