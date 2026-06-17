@@ -78,6 +78,14 @@ test('daily sales date picker is restricted for non-owner staff', () => {
 
 
 
+
+test('open dropdown menus close when another area is clicked', () => {
+  const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+  assert.match(main, /const closeOpenMenusExcept/);
+  assert.match(main, /document\.addEventListener\('click'/);
+  assert.match(main, /details\.more-menu\[open\], details\.tool-menu\[open\], details\.staff-session-menu\[open\]/);
+});
+
 test('modifier sheet uses horizontal section scrolling instead of one long vertical sheet', () => {
   assert.match(css, /#appDialog \.sheet\{[^}]*overflow:hidden/);
   assert.match(css, /\.modifier-grid\{[^}]*display:flex[^}]*overflow-x:auto/);

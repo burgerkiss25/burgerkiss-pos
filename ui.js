@@ -680,28 +680,55 @@
     });
   }
 
+  function friesModifierSections(initial){
+    const selected = initial || {};
+    return [
+      { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one free sauce for this fries item.', options:includedSauceOptions().map(option=>Object.assign({}, option, {checked:option.value === (selected.includedSauce || '')})) },
+      { title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add several paid extra sauces.', options:paidSauceOptions() }
+    ];
+  }
+  function wingsModifierSections(initial){
+    const selected = initial || {};
+    return [
+      { title:'Included sauce', name:'wingsSauce', type:'radio', help:'Choose one included sauce for the wings.', options:[
+        {label:'No Sauce Wanted', value:'', checked: selected.wingsSauce === ''},
+        {label:'Chicken Wings Sauce', value:'i_sauce_chicken_wings', checked: selected.wingsSauce === 'i_sauce_chicken_wings'},
+        {label:'Chipotle', value:'i_sauce_chipotle', checked: selected.wingsSauce === 'i_sauce_chipotle'}
+      ]},
+      { title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add paid extra sauces.', options:paidSauceOptions() }
+    ];
+  }
+  function singleProductItems(product, picked){
+    const rows = [{itemId:product.id, note:picked.itemNote || ''}];
+    if(['fries_standard', 'fries_large', 'fries_family'].includes(product.id)){
+      if(picked.includedSauce) rows.push({itemId:picked.includedSauce, note:modifierLinkNote('included', product.name, picked.itemNote)});
+      rows.push(...expandQuantityItems(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote)));
+    }else if(isBurgerBase(product)){
+      const addonNote = modifierLinkNote('for', product.name, picked.itemNote);
+      rows.push(...expandQuantityItems(picked.burgerExtras, addonNote));
+      rows.push(...expandQuantityItems(picked.eggExtras, addonNote));
+    }else if(isWingsBase(product)){
+      if(picked.wingsSauce) rows.push({itemId:picked.wingsSauce, note:modifierLinkNote('included', product.name, picked.itemNote)});
+      rows.push(...expandQuantityItems(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote)));
+    }
+    return rows;
+  }
+  function addSingleProductRows(product, picked){
+    singleProductItems(product, picked).forEach(row=> BK_STATE.addItem(row.itemId, row.note, row));
+  }
+  function isEditableSingleProduct(product){
+    return !!(product && (['fries_standard', 'fries_large', 'fries_family'].includes(product.id) || isBurgerBase(product) || isWingsBase(product)));
+  }
   async function addSingleProductWithModifiers(product, pendingNote){
     if(['fries_standard', 'fries_large', 'fries_family'].includes(product.id)){
-      const picked = await openModifierSheet(`${product.name} options`, [
-        { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one free sauce for this fries item.', options:includedSauceOptions() },
-        { title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add several paid extra sauces.', options:paidSauceOptions() }
-      ], { note: pendingNote });
-      BK_STATE.addItem(product.id, picked.itemNote);
-      if(picked.includedSauce) BK_STATE.addItem(picked.includedSauce, modifierLinkNote('included', product.name, picked.itemNote));
-      addQuantities(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote));
+      const picked = await openModifierSheet(`${product.name} options`, friesModifierSections(), { note: pendingNote });
+      addSingleProductRows(product, picked);
     }else if(isBurgerBase(product)){
       const picked = await openModifierSheet(`${product.name} add-ons`, burgerExtraSections(product), { note: pendingNote });
-      addBurgerExtras(product, picked);
+      addSingleProductRows(product, picked);
     }else if(isWingsBase(product)){
-      const picked = await openModifierSheet(`${product.name} sauce`, [
-        { title:'Included sauce', name:'wingsSauce', type:'radio', help:'Choose one included sauce for the wings.', options:[
-          {label:'No Sauce Wanted', value:''},
-          {label:'Chicken Wings Sauce', value:'i_sauce_chicken_wings'},
-          {label:'Chipotle', value:'i_sauce_chipotle'}
-        ]},
-        { title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add paid extra sauces.', options:paidSauceOptions() }
-      ], { note: pendingNote });
-      addWingsExtras(product, picked);
+      const picked = await openModifierSheet(`${product.name} sauce`, wingsModifierSections(), { note: pendingNote });
+      addSingleProductRows(product, picked);
     }else{
       BK_STATE.addItem(product.id, pendingNote);
     }
@@ -1002,6 +1029,53 @@
     return updated;
   }
 
+  function currentSingleSelection(entry, product){
+    const selection = { burgerExtras:{}, eggExtras:{}, extraSauce:{} };
+    selection.itemNote = baseCustomerNote(entry.note || '');
+    (entry.children || []).forEach(child=>{
+      const id = String(child.id || (BK_LOGIC.parseItemKey(child.key)[0]) || '');
+      const qty = Math.max(1, Number(child.qty) || 1);
+      if(id.startsWith('x_sauce_')) selection.extraSauce[id] = (selection.extraSauce[id] || 0) + qty;
+      else if(id.startsWith('i_sauce_')){
+        if(isWingsBase(product)) selection.wingsSauce = id;
+        else selection.includedSauce = id;
+      }else if(id.includes('egg')) selection.eggExtras[id] = (selection.eggExtras[id] || 0) + qty;
+      else if(id) selection.burgerExtras[id] = (selection.burgerExtras[id] || 0) + qty;
+    });
+    return selection;
+  }
+  function singleModifierSections(product, initial){
+    if(['fries_standard', 'fries_large', 'fries_family'].includes(product.id)) return friesModifierSections(initial);
+    if(isBurgerBase(product)) return burgerExtraSections(product);
+    if(isWingsBase(product)) return wingsModifierSections(initial);
+    return [];
+  }
+  async function editSingleEntry(slot, entry){
+    if(!slot || slot.issued || !entry || entry.menuGroupId) return false;
+    const product = entryProduct(entry);
+    if(!isEditableSingleProduct(product)) return false;
+    const initial = currentSingleSelection(entry, product);
+    const picked = await openModifierSheet(`Edit ${product.name}`, singleModifierSections(product, initial), {
+      note: initial.itemNote || '',
+      initialValues: initial,
+      cancelLabel: 'Keep current item',
+      confirmLabel: 'Update item',
+      cancelValue: null
+    });
+    if(!picked) return false;
+    const repeats = Math.max(1, Number(entry.qty) || 1);
+    (entry.children || []).forEach(child=> BK_STATE.removeItemForKey(child.key));
+    BK_STATE.removeItemForKey(entry.key);
+    const rows = singleProductItems(product, picked);
+    for(let i=0; i<repeats; i++) rows.forEach(row=> BK_STATE.addItem(row.itemId, row.note, row));
+    renderSlotsBar();
+    renderOrder();
+    renderMake();
+    renderIssue();
+    refreshTotals();
+    return true;
+  }
+
   function adjustCartChild(slot, child, direction, refresh){
     if(!slot || slot.issued || !child) return;
     if(direction > 0) BK_STATE.addItemForKey(child.key);
@@ -1198,10 +1272,11 @@
 
       const detail = document.createElement('div');
       detail.className = 'cart-detail';
-      if(isMenuGroup && !s.issued){
+      const canEditSingle = !isMenuGroup && !s.issued && isEditableSingleProduct(prod);
+      if((isMenuGroup || canEditSingle) && !s.issued){
         detail.classList.add('cart-detail-editable');
-        detail.title = 'Edit this menu';
-        detail.onclick = ()=> editMenuEntry(s, entry);
+        detail.title = isMenuGroup ? 'Edit this menu' : 'Edit this item';
+        detail.onclick = ()=> isMenuGroup ? editMenuEntry(s, entry) : editSingleEntry(s, entry);
       }
       const title = document.createElement('b');
       title.textContent = entry.menuGroupId && entry.menuName ? entry.menuName : (prod ? prod.name : id);
@@ -1248,12 +1323,12 @@
         }
         detail.appendChild(childLine);
       });
-      if(isMenuGroup && !s.issued){
+      if((isMenuGroup || canEditSingle) && !s.issued){
         const editMenu = document.createElement('button');
         editMenu.type = 'button';
         editMenu.className = 'mini edit-menu-line';
-        editMenu.textContent = 'Edit menu';
-        editMenu.onclick = event=>{ event.stopPropagation(); editMenuEntry(s, entry); };
+        editMenu.textContent = isMenuGroup ? 'Edit menu' : 'Edit item';
+        editMenu.onclick = event=>{ event.stopPropagation(); isMenuGroup ? editMenuEntry(s, entry) : editSingleEntry(s, entry); };
         detail.appendChild(editMenu);
       }
 

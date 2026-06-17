@@ -129,6 +129,15 @@
   document.getElementById('btnPayBack').onclick = ()=> showTab('make');
   document.getElementById('btnIssueBack').onclick = ()=> showTab('pay');
 
+  const closeOpenMenusExcept = activeDetails=>{
+    document.querySelectorAll('details.more-menu[open], details.tool-menu[open], details.staff-session-menu[open]').forEach(details=>{
+      if(details !== activeDetails) details.removeAttribute('open');
+    });
+  };
+  document.addEventListener('click', event=>{
+    const activeDetails = event.target.closest('details.more-menu, details.tool-menu, details.staff-session-menu');
+    closeOpenMenusExcept(activeDetails || null);
+  });
   document.querySelectorAll('.more-panel button, .more-panel a, .tool-panel button').forEach(el=>{
     el.addEventListener('click', ()=> el.closest('details')?.removeAttribute('open'));
   });
