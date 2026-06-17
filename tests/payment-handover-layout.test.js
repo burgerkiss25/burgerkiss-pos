@@ -87,7 +87,9 @@ test('open dropdown menus close when another area is clicked', () => {
 });
 
 test('modifier sheet uses horizontal section scrolling instead of one long vertical sheet', () => {
-  assert.match(css, /#appDialog \.sheet\{[^}]*overflow:hidden/);
+  assert.match(css, /#appDialog\.modifier-dialog \.sheet\{[^}]*overflow:hidden/);
+  assert.match(ui, /host\.classList\.add\('modifier-dialog'\)/);
+  assert.match(ui, /classList\.remove\('open', 'modifier-dialog'\)/);
   assert.match(css, /\.modifier-grid\{[^}]*display:flex[^}]*overflow-x:auto/);
   assert.match(css, /\.modifier-group\{[^}]*flex:0 0[^}]*overflow-y:auto/);
   assert.match(css, /\.modifier-actions\{[^}]*position:sticky/);

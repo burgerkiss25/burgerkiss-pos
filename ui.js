@@ -111,7 +111,7 @@
 
   function closeDialog(){
     const host = document.getElementById('appDialog');
-    if(host) host.classList.remove('open');
+    if(host) host.classList.remove('open', 'modifier-dialog');
   }
 
   function infoDialog(message){
@@ -324,6 +324,7 @@
 
   function openModifierSheet(title, sections, opts){
     const host = ensureDialogHost();
+    host.classList.add('modifier-dialog');
     const settings = opts || {};
     const showNote = Object.prototype.hasOwnProperty.call(settings, 'note');
     const cancelLabel = settings.cancelLabel || 'Skip add-ons';
