@@ -33,10 +33,8 @@
   }
   function needsDrinkChoice(slot, products){ return drinkGroupIds(slot, products).length > 1; }
   function needsAssignment(slot, products){
-    const groups = menuGroups(slot);
-    const assignable = assignableItems(slot, products);
-    if(groups.length) return assignable.length > 0;
-    return assignable.length > 1;
+    if(!menuGroups(slot).length) return false;
+    return assignableItems(slot, products).some(entry=>!customerGroupFor(entry.item));
   }
   function needsPackingReview(slot, products){ return needsAssignment(slot, products) || needsDrinkChoice(slot, products); }
   function drinkBagCount(slot, products, capacity){
