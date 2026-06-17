@@ -133,6 +133,11 @@
     if(!Array.isArray(src)) return [];
     return src.filter(m=> m && typeof m === 'object' && m.ingredient_id && Number.isFinite(Number(m.qty))).slice(-200);
   }
+  function sanitizePurchases(raw){
+    const src = raw && Array.isArray(raw.items) ? raw.items : raw;
+    if(!Array.isArray(src)) return [];
+    return src.filter(p=> p && typeof p === 'object' && p.ingredient_id && Number.isFinite(Number(p.qty))).slice(-200);
+  }
   function usageForSlots(slots){
     const usage = {}; Object.keys(INGREDIENTS).forEach(k=>{ usage[k] = 0; });
     (slots || []).forEach(s=>{ (s.items || []).forEach(it=>{
@@ -169,20 +174,23 @@
   function renderPosIfAvailable(){
     if(window.BK_UI && typeof BK_UI.renderAll === 'function' && document.getElementById('buttons')) BK_UI.renderAll();
   }
-  function applyRemoteStock(rawIngredients, rawRecipes, rawTransfers, rawInventory, rawMovements){
+  function applyRemoteStock(rawIngredients, rawRecipes, rawTransfers, rawInventory, rawMovements, rawPurchases){
     const cleanIng = sanitizeIngredients(rawIngredients && rawIngredients.map ? rawIngredients.map : rawIngredients);
     const cleanRec = sanitizeRecipes(rawRecipes && rawRecipes.map ? rawRecipes.map : rawRecipes);
     const cleanTransfers = sanitizeTransfers(rawTransfers);
     const cleanMovements = sanitizeMovements(rawMovements);
+    const cleanPurchases = sanitizePurchases(rawPurchases);
     if(Object.keys(cleanIng).length) INGREDIENTS = applyInventoryLocations(rawInventory, cleanIng);
     if(Object.keys(cleanRec).length) RECIPES = cleanRec;
     if(cleanTransfers.length) TRANSFERS = cleanTransfers;
     if(cleanMovements.length) MOVEMENTS = cleanMovements;
+    if(cleanPurchases.length) PURCHASES = cleanPurchases;
     persist();
     persistTransfers();
     persistMovements();
+    persistPurchases();
     renderPosIfAvailable();
-    return !!(Object.keys(cleanIng).length || Object.keys(cleanRec).length || cleanTransfers.length || cleanMovements.length);
+    return !!(Object.keys(cleanIng).length || Object.keys(cleanRec).length || cleanTransfers.length || cleanMovements.length || cleanPurchases.length);
   }
   function loadRemoteOnce(){
     const database = db();
@@ -193,8 +201,9 @@
       database.ref(paths.recipes).get(),
       database.ref(paths.transfers).get(),
       database.ref(paths.inventory).get(),
-      database.ref(paths.movements).get()
-    ]).then(([ingSnap, recSnap, transferSnap, inventorySnap, movementSnap])=> applyRemoteStock(ingSnap.val(), recSnap.val(), transferSnap.val(), inventorySnap.val(), movementSnap.val()))
+      database.ref(paths.movements).get(),
+      database.ref(paths.purchases).get()
+    ]).then(([ingSnap, recSnap, transferSnap, inventorySnap, movementSnap, purchaseSnap])=> applyRemoteStock(ingSnap.val(), recSnap.val(), transferSnap.val(), inventorySnap.val(), movementSnap.val(), purchaseSnap.val()))
       .catch(e=>{
         console.warn('stock remote load failed:', e && e.message);
         return false;
@@ -269,7 +278,7 @@
   function loadPurchases(){
     try{
       const parsed = JSON.parse(localStorage.getItem(PURCHASES_KEY) || '[]');
-      PURCHASES = Array.isArray(parsed) ? parsed.filter(p=> p && typeof p === 'object').slice(-200) : [];
+      PURCHASES = sanitizePurchases(parsed);
     }catch(e){ PURCHASES = []; localStorage.removeItem(PURCHASES_KEY); }
   }
   function persistPurchases(){ localStorage.setItem(PURCHASES_KEY, JSON.stringify(PURCHASES.slice(-200))); }
@@ -524,9 +533,21 @@
   function ingredientCategoryLabel(category){
     return String(category || 'general').replace(/(^|[_-])([a-z])/g,(_,separator,letter)=>`${separator ? ' ' : ''}${letter.toUpperCase()}`);
   }
-  function renderIngredientGroups(body){
-    const entries = Object.entries(INGREDIENTS);
+  function normalizeIngredientSearch(value){
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function renderIngredientGroups(body, query){
+    const search = normalizeIngredientSearch(query);
+    const entries = Object.entries(INGREDIENTS).filter(([id, def])=>{
+      if(!search) return true;
+      return [id, def.name, def.category, def.unit].some(value=>String(value || '').toLowerCase().includes(search));
+    });
     const categories = Array.from(new Set(entries.map(([, def])=>String(def.category || 'general')))).sort();
+    if(!entries.length){
+      body.innerHTML = '<div class="empty-state">No matching ingredients.</div>';
+      return;
+    }
     body.innerHTML = categories.map(category=>{
       const rows = entries
         .filter(([, def])=>String(def.category || 'general') === category)
@@ -541,7 +562,9 @@
 
   function readIngredientsFromEditor(body){
     if(!body || !body.querySelector('[data-ing-row]')) return null;
-    const ingNext = {};
+    const searchInput = body.querySelector('#stockIngredientSearch');
+    const hasActiveSearch = !!(searchInput && normalizeIngredientSearch(searchInput.value));
+    const ingNext = hasActiveSearch ? clone(INGREDIENTS) : {};
     body.querySelectorAll('[data-ing-row]').forEach(row=>{
       const id = normalizeId(row.querySelector('[data-field="id"]').value);
       if(!id) return;
@@ -666,13 +689,11 @@
     const titleEl = config.titleId ? document.getElementById(config.titleId) : document.getElementById('stockModalTitle');
     const productList = Array.isArray(window.BK_DATA && BK_DATA.BASE) ? BK_DATA.BASE : [];
     const activeMode = mode || 'stock';
-    const showIngredients = activeMode === 'stock' || activeMode === 'ingredients';
+    const showIngredients = activeMode === 'stock';
     const showTransfers = activeMode === 'stock';
     const showRecipes = activeMode === 'recipes' || activeMode === 'addons';
     if(titleEl){
-      titleEl.textContent = activeMode === 'ingredients'
-        ? 'Ingredients'
-        : activeMode === 'recipes'
+      titleEl.textContent = activeMode === 'recipes'
           ? 'Product recipes'
           : activeMode === 'addons'
             ? 'Add-ons'
@@ -685,7 +706,7 @@
       ${showIngredients ? `<div class="stock-editor-intro">
         <div>
           <h4>Stock locations</h4>
-          <p>${showTransfers ? 'Review stock at both locations and transfer inventory to the Block Factory.' : 'Manage ingredient details, units, locations, and minimum stock levels.'}</p>
+          <p>Review stock at both locations, transfer inventory to the Block Factory, and maintain ingredient details in one place.</p>
         </div>
         <div class="stock-tabs" aria-label="Stock location sections">
           <span>BurgerKiss Store</span>
@@ -697,7 +718,10 @@
           <h4>Ingredients</h4>
           <p>Each ingredient has separate stock and minimum levels for the main warehouse and the Block Factory.</p>
         </div>
-        <button class="x" id="sAddIngredient">+ Ingredient</button>
+        <div class="stock-search-actions">
+          <label class="stock-search"><span class="sr-only">Search ingredients</span><input id="stockIngredientSearch" type="search" placeholder="Search ingredients..." autocomplete="off"></label>
+          <button class="x" id="sAddIngredient">+ Ingredient</button>
+        </div>
       </div>
       ${showTransfers ? transferPanelHtml() : ''}
       <div id="stockIngredients" class="stock-ingredients-list"></div>` : ''}
@@ -705,8 +729,13 @@
     `;
     if(showIngredients){
       const ingWrap = document.getElementById('stockIngredients');
-      renderIngredientGroups(ingWrap);
-      bindIngredientActions(ingWrap);
+      const searchInput = document.getElementById('stockIngredientSearch');
+      const refreshIngredients = ()=>{
+        renderIngredientGroups(ingWrap, searchInput && searchInput.value);
+        bindIngredientActions(ingWrap);
+      };
+      refreshIngredients();
+      if(searchInput) searchInput.oninput = refreshIngredients;
       if(showTransfers) bindTransferActions(body);
       document.getElementById('sAddIngredient').onclick = ()=>{
         let generalGroup = ingWrap.querySelector('[data-ingredient-category="general"] .stock-ingredient-category');
