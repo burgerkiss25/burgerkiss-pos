@@ -2094,6 +2094,20 @@
     });
   }
 
+  function deleteHistoryRemote(entries){
+    const database = historyDb();
+    if(!database || !entries.length) return Promise.resolve(false);
+    const updates = {};
+    entries.forEach(entry=>{
+      const clean = sanitizeHistoryEntry(entry);
+      if(clean) updates[`${historyDateKey(clean.closedAt)}/${clean.id}`] = null;
+    });
+    if(!Object.keys(updates).length) return Promise.resolve(false);
+    return database.ref(historyRemotePath()).update(updates)
+      .then(()=>true)
+      .catch(e=>{ console.warn('history remote delete failed:', e && e.message); return false; });
+  }
+
 
   function getHistory(){
     try{
@@ -2403,7 +2417,76 @@
       </div>`;
     }).join('')}</div>`;
   }
+  function isOwnerSession(){
+    const current = window.BK_ACCESS && BK_ACCESS.current ? BK_ACCESS.current() : null;
+    return !!(current && current.role === 'owner');
+  }
+  function historyDateInput(ts){
+    return historyDateKey(Number(ts) || Date.now());
+  }
+  function historyPurgeCandidates(){
+    const from = document.getElementById('hpFrom').value;
+    const to = document.getElementById('hpTo').value;
+    if(!from || !to) return [];
+    const start = new Date(`${from}T00:00:00`).getTime();
+    const end = new Date(`${to}T23:59:59.999`).getTime();
+    if(!Number.isFinite(start) || !Number.isFinite(end) || start > end) return [];
+    return getHistory().filter(entry=>{
+      const closed = Number(entry.closedAt || 0);
+      return closed >= start && closed <= end;
+    }).sort((a,b)=>Number(b.closedAt||0)-Number(a.closedAt||0));
+  }
+  function renderHistoryPurgeList(){
+    const list = document.getElementById('hpList');
+    const message = document.getElementById('hpMessage');
+    if(!list) return;
+    const entries = historyPurgeCandidates();
+    if(message) message.textContent = '';
+    if(!entries.length){
+      list.innerHTML = '<div class="empty-state">No orders found for this date range.</div>';
+      return;
+    }
+    list.innerHTML = entries.map(entry=>`<label class="history-purge-row"><input type="checkbox" value="${escapeHtml(entry.id)}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(entry.externalOrderNo || entry.slotName)} · ${escapeHtml(paymentLabel(entry.pay))} · ${new Date(entry.closedAt).toLocaleString()}</small></span><strong>${Number(entry.total || entry.subtotal || 0)} GHS</strong></label>`).join('');
+  }
+  function openHistoryPurge(){
+    if(!isOwnerSession()) return infoDialog('Only the owner can delete order history.');
+    const today = historyDateInput(Date.now());
+    document.getElementById('hpFrom').value = today;
+    document.getElementById('hpTo').value = today;
+    document.getElementById('hpPin').value = '';
+    document.getElementById('hpMessage').textContent = '';
+    renderHistoryPurgeList();
+    document.getElementById('modalHistoryPurge').classList.add('open');
+    refreshHistoryFromRemote().then(renderHistoryPurgeList);
+  }
+  function closeHistoryPurge(){ document.getElementById('modalHistoryPurge').classList.remove('open'); }
+  function selectedHistoryPurgeEntries(){
+    const checked = Array.from(document.querySelectorAll('#hpList input[type="checkbox"]:checked')).map(input=>input.value);
+    const ids = new Set(checked);
+    return historyPurgeCandidates().filter(entry=>ids.has(entry.id));
+  }
+  async function submitHistoryPurge(event){
+    event.preventDefault();
+    const message = document.getElementById('hpMessage');
+    if(!isOwnerSession()){ message.textContent = 'Only the owner can delete order history.'; return; }
+    const entries = selectedHistoryPurgeEntries();
+    if(!entries.length){ message.textContent = 'Select at least one order to delete.'; return; }
+    const pin = document.getElementById('hpPin').value;
+    const owner = window.BK_ACCESS && BK_ACCESS.authorizeOwnerPin ? await BK_ACCESS.authorizeOwnerPin(pin) : null;
+    if(!owner){ message.textContent = 'Owner PIN confirmation failed.'; return; }
+    const ok = await confirmDialog('Delete selected history?', `This permanently deletes ${entries.length} order(s) locally and from Firebase when online.`);
+    if(!ok) return;
+    const deleteIds = new Set(entries.map(entry=>entry.id));
+    saveHistory(getHistory().filter(entry=>!deleteIds.has(entry.id)));
+    const remoteDeleted = await deleteHistoryRemote(entries);
+    message.textContent = remoteDeleted ? `${entries.length} order(s) deleted locally and from Firebase.` : `${entries.length} order(s) deleted locally. Firebase was not reachable or had no matching remote data.`;
+    document.getElementById('hpPin').value = '';
+    renderHistoryPurgeList();
+    renderHistoryBody();
+  }
   function renderHistoryBody(){
+    const purgeButton = document.getElementById('hPurge');
+    if(purgeButton) purgeButton.classList.toggle('access-hidden', !isOwnerSession());
     const body = document.getElementById('historyBody');
     const hist = getFilteredHistory();
     if(hist.length===0){
@@ -3060,7 +3143,7 @@
   window.BK_UI = {
     renderAll, renderOrder, renderMake, renderPay, renderIssue, refreshTotals,
     renderStock,
-    openSummary, closeSummary, openHistory, closeHistory, openHistoryOrder, closeHistoryOrder, reprintHistoryOrder, voidSelectedHistoryOrder,
+    openSummary, closeSummary, openHistory, closeHistory, openHistoryPurge, closeHistoryPurge, submitHistoryPurge, renderHistoryPurgeList, openHistoryOrder, closeHistoryOrder, reprintHistoryOrder, voidSelectedHistoryOrder,
     exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, filterHistoryYesterday, clearHistoryFilters,
     openDailyReport, closeDailyReport, renderDailyReport, exportDailyReportCsv, printDailyReport, dailyReportData, voidHistoryOrder, archiveCompletedSlots, workflowNextState, buildHandoverPlan, handoverPlanHtml,
     openStockOverview, closeStockOverview,
