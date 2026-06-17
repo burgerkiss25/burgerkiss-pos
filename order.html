@@ -29,17 +29,6 @@
 
       <button class="chip workflow-new-order" id="btnWorkflowNewOrder" type="button">+ New Order</button>
 
-      <details class="more-menu">
-        <summary class="x more-trigger">Tools</summary>
-        <div class="more-panel">
-          <button class="x" id="btnStockOverview">Stock <span class="stock-alert-badge hidden" id="stockAlertBadge">0</span></button>
-          <button class="x" id="btnHistory">History</button>
-          <button class="x" id="btnReceipt">Receipt</button>
-          <button class="x" id="btnDailyReport" data-permission="daily_report">Daily Report</button>
-          <button class="x" id="btnClearStorage" data-permission="maintenance">Clear Storage</button>
-          <a class="x admin-link" href="admin.html" data-permission="admin">Admin</a>
-        </div>
-      </details>
     </header>
 
     <div class="hud-rows compact-actions">
@@ -305,7 +294,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
   <!-- ====================== App-Skripte ====================== -->
-  <script src="./access.js?v=3"></script>
+  <script src="./access.js?v=4"></script>
   <script src="./data.js?v=14"></script>
   <script src="./prices.js?v=15"></script>
   <script src="./products.js?v=15"></script>
@@ -318,7 +307,7 @@
   <script src="./logic.js?v=15"></script>
   <script src="./packing.js?v=2"></script>
   <script src="./ui.js?v=57"></script>
-  <script src="./main.js?v=26"></script>
+  <script src="./main.js?v=27"></script>
   <script>BK_ACCESS.init();</script>
 
   <!-- =============== Live-Sync (Variante B, Polling) =============== -->

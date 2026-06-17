@@ -7,18 +7,21 @@ const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'order.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
+const access = fs.readFileSync(path.join(root, 'access.js'), 'utf8');
+const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 
 test('order header no longer duplicates cart totals or technical order context', () => {
   assert.doesNotMatch(html, /id="grand"|id="combosPill"|id="discountTag"|id="activeSlotLabel"/);
   assert.match(html, /id="currentOrderMeta"/);
 });
 
-test('employee tools contain only stock, history and receipt', () => {
-  const tools = html.slice(html.indexOf('<div class="more-panel">'), html.indexOf('</div>', html.indexOf('<div class="more-panel">')));
-  assert.match(tools, /id="btnStockOverview"/);
-  assert.match(tools, /id="btnHistory"/);
-  assert.match(tools, /id="btnReceipt"/);
-  assert.doesNotMatch(tools, /Summary|Group Ticket|\+ Online Order|Reset Order/);
+test('employee tools live inside the staff session menu', () => {
+  assert.doesNotMatch(html, /class="more-menu"/);
+  assert.match(access, /id="btnStockOverview"/);
+  assert.match(access, /id="btnHistory"/);
+  assert.match(access, /id="btnReceipt"/);
+  assert.match(access, /id="btnDailyReport"/);
+  assert.match(main, /closest\('#btnStockOverview, #btnHistory, #btnReceipt, #btnDailyReport, #btnClearStorage'\)/);
 });
 
 test('discount controls and active order identity live in Current order', () => {

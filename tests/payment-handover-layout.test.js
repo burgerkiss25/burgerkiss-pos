@@ -19,8 +19,8 @@ test('payment and handover have compact local headers', () => {
 });
 
 test('pay and issue workflows hide ordering controls', () => {
-  assert.match(css, /\.workflow-pay \.hud-rows,\.workflow-pay \.catbar,\.workflow-pay \.totals,\.workflow-pay \.more-menu/);
-  assert.match(css, /\.workflow-issue \.hud-rows,\.workflow-issue \.catbar,\.workflow-issue \.totals,\.workflow-issue \.more-menu/);
+  assert.match(css, /\.workflow-pay \.hud-rows,\.workflow-pay \.catbar,\.workflow-pay \.totals/);
+  assert.match(css, /\.workflow-issue \.hud-rows,\.workflow-issue \.catbar,\.workflow-issue \.totals/);
 });
 
 test('payment focuses on one active order and one compact total', () => {
@@ -83,7 +83,7 @@ test('open dropdown menus close when another area is clicked', () => {
   const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
   assert.match(main, /const closeOpenMenusExcept/);
   assert.match(main, /document\.addEventListener\('click'/);
-  assert.match(main, /details\.more-menu\[open\], details\.tool-menu\[open\], details\.staff-session-menu\[open\]/);
+  assert.match(main, /details\.tool-menu\[open\], details\.staff-session-menu\[open\]/);
 });
 
 test('modifier sheet uses horizontal section scrolling instead of one long vertical sheet', () => {

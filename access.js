@@ -183,9 +183,10 @@
     const host = document.getElementById('staffSession');
     if(!host || !session) return;
     const status = salesStatus();
-    host.innerHTML = `<details class="staff-session-menu"><summary class="staff-session-button"><b>${escapeHtml(session.name)}</b><span>${escapeHtml(session.roleLabel)} · ${escapeHtml(session.shiftLabel)}</span></summary><div class="staff-session-dropdown"><a href="shift.html">Shift Tools</a><button type="button" id="btnStaffSwitch">Switch staff / Sign out</button></div></details><span class="sales-status ${status.state}"><b>${escapeHtml(status.label)}</b><small>${escapeHtml(status.detail)}</small></span>`;
+    host.innerHTML = `<details class="staff-session-menu"><summary class="staff-session-button"><b>${escapeHtml(session.name)}</b><span>${escapeHtml(session.roleLabel)} · ${escapeHtml(session.shiftLabel)}</span></summary><div class="staff-session-dropdown"><button type="button" id="btnStockOverview">Stock <span class="stock-alert-badge hidden" id="stockAlertBadge">0</span></button><button type="button" id="btnHistory">History</button><button type="button" id="btnReceipt">Receipt</button><button type="button" id="btnDailyReport" data-permission="daily_report">Daily Report</button><button type="button" id="btnClearStorage" data-permission="maintenance">Clear Storage</button><a href="shift.html">Shift Tools</a><a href="admin.html" data-permission="admin">Admin</a><button type="button" id="btnStaffSwitch">Switch staff / Sign out</button></div></details><span class="sales-status ${status.state}"><b>${escapeHtml(status.label)}</b><small>${escapeHtml(status.detail)}</small></span>`;
     const signOutButton = document.getElementById('btnStaffSwitch');
     if(signOutButton) signOutButton.onclick = signOut;
+    if(root.BK_UI && typeof BK_UI.renderStock === 'function') BK_UI.renderStock();
   }
   function escapeHtml(value){
     return String(value || '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
