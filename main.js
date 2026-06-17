@@ -63,7 +63,7 @@
   // Protect against invalid merge duplicates in order.html.
   removeDuplicateIds([
     'tabOrder','tabMake','tabPay','tabIssue',
-    'btnStockOverview','btnHistory','btnDailyReport','btnReceipt','btnPrices','btnProducts','btnImages','btnOnlineOrder',
+    'btnStockOverview','btnHistory','btnReceipt','btnPrices','btnProducts','btnImages','btnOnlineOrder',
     'btnClearDisc','btnClearStorage',
     'btnAddSlot',
     'modalProducts','modalImages','modalGroup','modalPrices','modalSummary','modalHistory','modalHistoryDetail','modalDailyReport','modalReceipt','modalStockOverview'
@@ -134,16 +134,12 @@
     closeOpenMenusExcept(activeDetails || null);
   });
   document.addEventListener('click', event=>{
-    const action = event.target.closest('#btnStockOverview, #btnHistory, #btnReceipt, #btnDailyReport, #btnClearStorage');
+    const action = event.target.closest('#btnStockOverview, #btnHistory, #btnReceipt, #btnClearStorage');
     if(!action) return;
     action.closest('details')?.removeAttribute('open');
     if(action.id === 'btnStockOverview') BK_UI.openStockOverview();
     if(action.id === 'btnHistory') BK_UI.openHistory();
     if(action.id === 'btnReceipt') BK_UI.openReceipt();
-    if(action.id === 'btnDailyReport'){
-      if(window.BK_ACCESS && !BK_ACCESS.can('daily_report')) return BK_UI.infoDialog('Staff access is required to open the daily report.');
-      BK_UI.openDailyReport();
-    }
     if(action.id === 'btnClearStorage'){
       if(window.BK_ACCESS && !BK_ACCESS.can('maintenance')) return BK_UI.infoDialog('Owner access is required.');
       BK_UI.clearStorageWithConfirm();
@@ -161,6 +157,10 @@
   document.getElementById('hYesterday').onclick = ()=> BK_UI.filterHistoryYesterday();
   document.getElementById('hClear').onclick     = ()=> BK_UI.clearHistoryFilters();
   document.getElementById('hSearch').oninput    = (e)=> BK_UI.filterHistoryText(e.target.value);
+  document.getElementById('hDailyReport').onclick = ()=>{
+    if(window.BK_ACCESS && !BK_ACCESS.can('daily_report')) return BK_UI.infoDialog('Staff access is required to open the daily report.');
+    BK_UI.openDailyReport();
+  };
   document.getElementById('hExportJson').onclick= ()=>{ if(!window.BK_ACCESS || BK_ACCESS.can('history_export')) BK_UI.exportHistoryJson(); };
   document.getElementById('hExportCsv').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.can('history_export')) BK_UI.exportHistoryCsv(); };
   document.getElementById('hPurge').onclick      = ()=>{ if(window.BK_ACCESS && BK_ACCESS.can('history_purge')) BK_UI.openHistoryPurge(); };

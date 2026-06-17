@@ -20,8 +20,10 @@ test('employee tools live inside the staff session menu', () => {
   assert.match(access, /id="btnStockOverview"/);
   assert.match(access, /id="btnHistory"/);
   assert.match(access, /id="btnReceipt"/);
-  assert.match(access, /id="btnDailyReport"/);
-  assert.match(main, /closest\('#btnStockOverview, #btnHistory, #btnReceipt, #btnDailyReport, #btnClearStorage'\)/);
+  assert.doesNotMatch(access, /id="btnDailyReport"/);
+  assert.match(access, /History \/ Daily Report/);
+  assert.match(html, /id="hDailyReport"/);
+  assert.match(main, /closest\('#btnStockOverview, #btnHistory, #btnReceipt, #btnClearStorage'\)/);
 });
 
 test('discount controls and active order identity live in Current order', () => {
