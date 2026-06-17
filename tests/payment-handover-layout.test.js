@@ -19,8 +19,8 @@ test('payment and handover have compact local headers', () => {
 });
 
 test('pay and issue workflows hide ordering controls', () => {
-  assert.match(css, /\.workflow-pay \.hud-rows,\.workflow-pay \.catbar,\.workflow-pay \.totals,\.workflow-pay \.more-menu/);
-  assert.match(css, /\.workflow-issue \.hud-rows,\.workflow-issue \.catbar,\.workflow-issue \.totals,\.workflow-issue \.more-menu/);
+  assert.match(css, /\.workflow-pay \.hud-rows,\.workflow-pay \.catbar,\.workflow-pay \.totals/);
+  assert.match(css, /\.workflow-issue \.hud-rows,\.workflow-issue \.catbar,\.workflow-issue \.totals/);
 });
 
 test('payment focuses on one active order and one compact total', () => {
@@ -73,6 +73,56 @@ test('daily sales date picker is restricted for non-owner staff', () => {
   assert.match(shiftJs, /function restrictDateInput/);
   assert.match(shiftJs, /dateInput\.min = yesterday/);
   assert.match(shiftJs, /dateInput\.max = today/);
+});
+
+
+
+
+
+test('open dropdown menus close when another area is clicked', () => {
+  const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+  assert.match(main, /const closeOpenMenusExcept/);
+  assert.match(main, /document\.addEventListener\('click'/);
+  assert.match(main, /details\.tool-menu\[open\], details\.staff-session-menu\[open\]/);
+});
+
+test('modifier sheet uses horizontal section scrolling instead of one long vertical sheet', () => {
+  assert.match(css, /#appDialog\.modifier-dialog \.sheet\{[^}]*overflow:hidden/);
+  assert.match(ui, /host\.classList\.add\('modifier-dialog'\)/);
+  assert.match(ui, /classList\.remove\('open', 'modifier-dialog'\)/);
+  assert.match(css, /\.modifier-grid\{[^}]*display:flex[^}]*overflow-x:auto/);
+  assert.match(css, /\.modifier-group\{[^}]*flex:0 0[^}]*overflow-y:auto/);
+  assert.match(css, /\.modifier-actions\{[^}]*position:sticky/);
+});
+
+test('owner-only history purge requires date range, selected orders and owner PIN', () => {
+  const order = fs.readFileSync(path.join(root, 'order.html'), 'utf8');
+  const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+  const access = fs.readFileSync(path.join(root, 'access.js'), 'utf8');
+  assert.match(order, /id="hPurge"/);
+  assert.match(order, /id="modalHistoryPurge"/);
+  assert.match(order, /id="hpFrom"/);
+  assert.match(order, /id="hpTo"/);
+  assert.match(order, /id="hpPin"/);
+  assert.match(main, /BK_UI\.openHistoryPurge/);
+  assert.match(access, /history_purge:'owner'/);
+  assert.match(ui, /function deleteHistoryRemote/);
+  assert.match(ui, /authorizeOwnerPin\(pin\)/);
+  assert.match(ui, /selectedHistoryPurgeEntries/);
+});
+
+test('daily sales shows and exports purchase audit with date and purchaser', () => {
+  const shift = fs.readFileSync(path.join(root, 'shift.html'), 'utf8');
+  const shiftJs = fs.readFileSync(path.join(root, 'shift.js'), 'utf8');
+  const shiftReports = fs.readFileSync(path.join(root, 'shift_reports.js'), 'utf8');
+  const stock = fs.readFileSync(path.join(root, 'stock.js'), 'utf8');
+  assert.match(shift, /purchaseHistoryExport/);
+  assert.match(shiftJs, /function exportPurchaseHistory/);
+  assert.match(shiftJs, /purchaser.*item.*quantity.*amount_ghs/);
+  assert.match(shiftReports, /Purchase audit/);
+  assert.match(shiftReports, /staffName/);
+  assert.match(shiftReports, /purchasedAt/);
+  assert.match(stock, /database\.ref\(paths\.purchases\)\.get\(\)/);
 });
 
 test('stock overview has search and sorted results', () => {

@@ -151,6 +151,7 @@
       <div class="report-heading"><span>Wallet note</span><strong>The BurgerKiss purse must start each shift with 200 GHS change.</strong></div>
       <div class="report-orders"><h3>Order audit</h3>${report.orders.length ? report.orders.map(entry=>`
         <button type="button" class="report-order ${entry.status === 'voided' ? 'voided' : ''}" data-history-id="${escapeHtml(entry.id)}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(paymentLabel(entry.pay, entry.momoProvider))}${entry.voidReason ? ` · ${escapeHtml(entry.voidReason)}` : ''}</small></span><strong>${entry.total} GHS</strong></button>`).join('') : '<div class="empty-state">No orders for this date.</div>'}</div>
+      ${purchaseListHtml(report.purchases)}
     </div>`;
   }
 
@@ -167,8 +168,13 @@
   }
 
   function purchaseListHtml(items){
-    if(!items.length) return '<div class="empty-state">No purchases recorded yet.</div>';
-    return `<div class="report-orders"><h3>Purchase audit</h3>${items.slice().reverse().slice(0,50).map(entry=>`<div class="report-order"><span><b>${escapeHtml(entry.ingredient_name || entry.ingredientId)}</b><small>${escapeHtml(entry.qty)} ${escapeHtml(entry.unit)} · ${escapeHtml(entry.paymentSource)} · Receipt in purse</small></span><strong>${escapeHtml(entry.amount)} GHS</strong></div>`).join('')}</div>`;
+    if(!items.length) return '<div class="report-orders"><h3>Purchase audit</h3><div class="empty-state">No purchases recorded yet.</div></div>';
+    return `<div class="report-orders"><h3>Purchase audit</h3>${items.slice().reverse().slice(0,50).map(entry=>{
+      const staffName = entry.staff && entry.staff.name ? entry.staff.name : 'Unknown purchaser';
+      const purchasedAt = entry.ts ? new Date(entry.ts).toLocaleString() : 'No date saved';
+      const receipt = entry.receiptInPurse ? 'Receipt in purse' : 'Receipt missing';
+      return `<div class="report-order purchase-audit-row"><span><b>${escapeHtml(entry.ingredient_name || entry.ingredientId)}</b><small>${escapeHtml(purchasedAt)} · ${escapeHtml(staffName)}</small><small>${escapeHtml(entry.qty)} ${escapeHtml(entry.unit)} · ${escapeHtml(entry.paymentSource)} · ${receipt}${entry.note ? ` · ${escapeHtml(entry.note)}` : ''}</small></span><strong>${escapeHtml(entry.amount)} GHS</strong></div>`;
+    }).join('')}</div>`;
   }
   function historyDetailHtml(entry){
     if(!entry) return '<div class="empty-state">Order not found.</div>';

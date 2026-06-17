@@ -75,11 +75,6 @@
     BK_UI.requestDiscountApproval(rate);
   });
   document.getElementById('btnClearDisc').onclick = ()=> BK_UI.requestDiscountApproval(0);
-  document.getElementById('btnClearStorage').onclick = ()=>{
-    if(window.BK_ACCESS && !BK_ACCESS.can('maintenance')) return BK_UI.infoDialog('Owner access is required.');
-    BK_UI.clearStorageWithConfirm();
-  };
-
   document.getElementById('btnAddSlot').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot(); };
   document.getElementById('btnWorkflowNewOrder').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.guardNewSale()) BK_UI.addNewOrderSlot(); };
 
@@ -129,15 +124,38 @@
   document.getElementById('btnPayBack').onclick = ()=> showTab('make');
   document.getElementById('btnIssueBack').onclick = ()=> showTab('pay');
 
-  document.querySelectorAll('.more-panel button, .more-panel a, .tool-panel button').forEach(el=>{
+  const closeOpenMenusExcept = activeDetails=>{
+    document.querySelectorAll('details.more-menu[open], details.tool-menu[open], details.staff-session-menu[open]').forEach(details=>{
+      if(details !== activeDetails) details.removeAttribute('open');
+    });
+  };
+  document.addEventListener('click', event=>{
+    const activeDetails = event.target.closest('details.more-menu, details.tool-menu, details.staff-session-menu');
+    closeOpenMenusExcept(activeDetails || null);
+  });
+  document.addEventListener('click', event=>{
+    const action = event.target.closest('#btnStockOverview, #btnHistory, #btnReceipt, #btnDailyReport, #btnClearStorage');
+    if(!action) return;
+    action.closest('details')?.removeAttribute('open');
+    if(action.id === 'btnStockOverview') BK_UI.openStockOverview();
+    if(action.id === 'btnHistory') BK_UI.openHistory();
+    if(action.id === 'btnReceipt') BK_UI.openReceipt();
+    if(action.id === 'btnDailyReport'){
+      if(window.BK_ACCESS && !BK_ACCESS.can('daily_report')) return BK_UI.infoDialog('Staff access is required to open the daily report.');
+      BK_UI.openDailyReport();
+    }
+    if(action.id === 'btnClearStorage'){
+      if(window.BK_ACCESS && !BK_ACCESS.can('maintenance')) return BK_UI.infoDialog('Owner access is required.');
+      BK_UI.clearStorageWithConfirm();
+    }
+  });
+  document.querySelectorAll('.tool-panel button').forEach(el=>{
     el.addEventListener('click', ()=> el.closest('details')?.removeAttribute('open'));
   });
 
   // Summary
-  document.getElementById('btnStockOverview').onclick = ()=> BK_UI.openStockOverview();
   document.getElementById('stockOverviewClose').onclick = ()=> BK_UI.closeStockOverview();
   document.getElementById('sumClose').onclick   = ()=> BK_UI.closeSummary();
-  document.getElementById('btnHistory').onclick = ()=> BK_UI.openHistory();
   document.getElementById('hClose').onclick     = ()=> BK_UI.closeHistory();
   document.getElementById('hToday').onclick     = ()=> BK_UI.filterHistoryToday();
   document.getElementById('hYesterday').onclick = ()=> BK_UI.filterHistoryYesterday();
@@ -145,15 +163,16 @@
   document.getElementById('hSearch').oninput    = (e)=> BK_UI.filterHistoryText(e.target.value);
   document.getElementById('hExportJson').onclick= ()=>{ if(!window.BK_ACCESS || BK_ACCESS.can('history_export')) BK_UI.exportHistoryJson(); };
   document.getElementById('hExportCsv').onclick = ()=>{ if(!window.BK_ACCESS || BK_ACCESS.can('history_export')) BK_UI.exportHistoryCsv(); };
+  document.getElementById('hPurge').onclick      = ()=>{ if(window.BK_ACCESS && BK_ACCESS.can('history_purge')) BK_UI.openHistoryPurge(); };
+  document.getElementById('hpClose').onclick     = ()=> BK_UI.closeHistoryPurge();
+  document.getElementById('hpLoad').onclick      = ()=> BK_UI.renderHistoryPurgeList();
+  document.getElementById('hpSelectAll').onclick = ()=> document.querySelectorAll('#hpList input[type="checkbox"]').forEach(input=>{ input.checked = true; });
+  document.getElementById('hpForm').onsubmit     = (event)=> BK_UI.submitHistoryPurge(event);
   document.getElementById('hdClose').onclick     = ()=> BK_UI.closeHistoryOrder();
   document.getElementById('hdReprint').onclick   = ()=> BK_UI.reprintHistoryOrder();
   document.getElementById('hdVoid').onclick      = ()=>{
     if(window.BK_ACCESS && !BK_ACCESS.can('void_order')) return BK_UI.infoDialog('A supervisor or owner is required to void an order.');
     BK_UI.voidSelectedHistoryOrder();
-  };
-  document.getElementById('btnDailyReport').onclick = ()=>{
-    if(window.BK_ACCESS && !BK_ACCESS.can('daily_report')) return BK_UI.infoDialog('Staff access is required to open the daily report.');
-    BK_UI.openDailyReport();
   };
   document.getElementById('reportDate').onchange = ()=> BK_UI.renderDailyReport();
   document.getElementById('reportExport').onclick = ()=> BK_UI.exportDailyReportCsv();
@@ -161,7 +180,6 @@
   document.getElementById('reportClose').onclick = ()=> BK_UI.closeDailyReport();
 
   // Receipt
-  document.getElementById('btnReceipt').onclick = ()=> BK_UI.openReceipt();
   document.getElementById('rClose').onclick     = ()=> BK_UI.closeReceipt();
   document.getElementById('rCopy').onclick      = ()=> BK_UI.copyReceipt();
   document.getElementById('rWA').onclick        = ()=> BK_UI.shareWA();

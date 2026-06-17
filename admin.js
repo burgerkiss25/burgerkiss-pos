@@ -329,8 +329,7 @@
   BK_STOCK.load();
   let activeStockMode = 'stock';
   const stockEditorCopy = {
-    stock: { title:'Stock overview', description:'Review inventory levels, locations, and transfers', label:'Stock', reset:'Reset stock to defaults' },
-    ingredients: { title:'Ingredients', description:'Manage ingredient details, units, locations, and minimum levels', label:'Ingredients', reset:'Reset ingredients to defaults' }
+    stock: { title:'Stock overview', description:'Review inventory levels, locations, transfers, and ingredient details', label:'Stock', reset:'Reset stock to defaults' }
   };
   function closeWorkspaceModals(){
     ['modalCatalog','modalMenus','modalStock','modalPackagingRules'].forEach(id=>{
@@ -352,8 +351,7 @@
     document.getElementById('stockModalTitle').textContent = copy.title;
     document.getElementById('stockModalDescription').textContent = copy.description;
     document.getElementById('sReset').textContent = copy.reset;
-    const activeId = activeStockMode === 'stock' ? 'btnStock' : 'btnIngredients';
-    document.querySelectorAll('#modalStock .admin-workspace-nav button').forEach(button=>button.classList.toggle('active', button.id === activeId));
+    document.querySelectorAll('#modalStock .admin-workspace-nav button').forEach(button=>button.classList.toggle('active', button.id === 'btnStock'));
     openEditorModal('modalStock', ()=>BK_STOCK.openEditor(activeStockMode, {bodyId:'stockBody', modalId:'modalStock', titleId:'stockModalTitle'}));
   }
   function openStockEditor(mode){ return guardWorkspaceChange(()=>showStockEditor(mode)); }
@@ -378,7 +376,6 @@
 
 
   document.getElementById('btnStock').onclick = ()=> openStockEditor('stock');
-  document.getElementById('btnIngredients').onclick = ()=> openStockEditor('ingredients');
   document.getElementById('packClose').onclick = ()=> closeEditorSafely('modalPackagingRules', closePackagingRules);
   document.getElementById('packSave').onclick = async ()=>{ if(await saveWithFeedback(savePackagingRulesFromModal, 'Packaging rules')) markEditorSaved('modalPackagingRules'); };
   document.getElementById('packReset').onclick = ()=> resetWithConfirmation(()=>{ savePackagingRules(PACK_RULES_DEFAULT); openPackagingRules(); }, 'Packaging rules');
