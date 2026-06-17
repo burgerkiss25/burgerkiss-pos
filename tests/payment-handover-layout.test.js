@@ -77,6 +77,14 @@ test('daily sales date picker is restricted for non-owner staff', () => {
 
 
 
+
+test('modifier sheet uses horizontal section scrolling instead of one long vertical sheet', () => {
+  assert.match(css, /#appDialog \.sheet\{[^}]*overflow:hidden/);
+  assert.match(css, /\.modifier-grid\{[^}]*display:flex[^}]*overflow-x:auto/);
+  assert.match(css, /\.modifier-group\{[^}]*flex:0 0[^}]*overflow-y:auto/);
+  assert.match(css, /\.modifier-actions\{[^}]*position:sticky/);
+});
+
 test('owner-only history purge requires date range, selected orders and owner PIN', () => {
   const order = fs.readFileSync(path.join(root, 'order.html'), 'utf8');
   const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');

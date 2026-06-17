@@ -174,9 +174,7 @@ button:focus-visible,.chip:focus-visible,input:focus-visible,a:focus-visible,sum
 @media (max-width:640px){.cart-row{grid-template-columns:auto 1fr auto}.cart-row .remove-line{grid-column:2 / -1;justify-self:start}.cart-price{font-size:var(--fz-sm)}}
 
 /* Product modifier sheet */
-.modifier-sheet{display:grid;gap:14px}
-.modifier-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
-.modifier-group{margin:0;padding:12px;border:1px solid #2c3440;border-radius:var(--radius-lg);background:#111620}
+.modifier-sheet{display:flex;flex-direction:column;gap:14px;min-height:0;max-height:calc(90vh - 92px)}#appDialog .sheet{width:min(1320px,96vw);overflow:hidden;display:flex;flex-direction:column}#appDialog .body{min-height:0;overflow:hidden}.modifier-grid{flex:1 1 auto;min-height:0;display:flex;gap:12px;overflow-x:auto;overflow-y:hidden;padding-bottom:8px;scroll-snap-type:x proximity}.modifier-group{flex:0 0 min(310px,76vw);max-height:min(58vh,620px);overflow-y:auto;scroll-snap-align:start;margin:0;padding:12px;border:1px solid #2c3440;border-radius:var(--radius-lg);background:#111620}
 .modifier-group legend{padding:0 6px;color:#fff6d8;font-weight:900}
 .modifier-help{margin:2px 0 10px;color:#aeb7c4;font-size:var(--fz-sm)}
 .modifier-note{display:grid;gap:6px;padding:12px;border:1px solid #2c3440;border-radius:var(--radius-lg);background:#111620;font-weight:900;color:#fff6d8}
@@ -187,7 +185,7 @@ button:focus-visible,.chip:focus-visible,input:focus-visible,a:focus-visible,sum
 .choice-row{display:flex;align-items:center;gap:10px;min-height:42px;padding:9px 10px;margin-top:8px;border:1px solid #2b3340;border-radius:var(--radius-md);background:#171b24;cursor:pointer;font-weight:800;color:#edf2f7}
 .choice-row:hover{filter:brightness(1.08)}
 .choice-row input{width:18px;height:18px;accent-color:var(--accent)}
-.qty-row{justify-content:space-between;gap:12px}
+.qty-row{justify-content:space-between;gap:12px}.modifier-actions{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:8px;padding-top:10px;background:#101217}
 .qty-controls{display:inline-flex;align-items:center;gap:8px;margin-left:auto}
 .qty-btn{width:34px;height:34px;border-radius:10px;border:1px solid #3a4352;background:#202633;color:#fff6d8;font-size:20px;font-weight:950;cursor:pointer}
 .qty-btn:hover{filter:brightness(1.12)}
