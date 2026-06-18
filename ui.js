@@ -554,6 +554,33 @@
     ];
   }
 
+  function configuredAddonOptions(product, fallback, categories){
+    const selected = Array.isArray(product && product.addons) ? product.addons : [];
+    const ids = selected.length ? selected : (fallback || []);
+    return ids.map(id=>productById(id)).filter(addon=>addon && addon.active !== false && (!categories || categories.includes(addon.cat))).map(addon=>({
+      label:addon.name,
+      value:addon.id,
+      cat:addon.cat
+    }));
+  }
+
+  function productAddonSections(product, fallback){
+    const choices = configuredAddonOptions(product, fallback, ['extra','fries','drink']);
+    const groups = [
+      ['extra', 'Upgrade add-ons', 'productAddons'],
+      ['fries', 'Sides', 'productSides'],
+      ['drink', 'Drinks', 'productDrinks']
+    ];
+    return groups.map(([cat, title, name])=>{
+      const options = choices.filter(choice=>choice.cat === cat);
+      return options.length ? { title, name, type:'quantity', help:'Use + / − to add paid extras to this single item.', options } : null;
+    }).filter(Boolean);
+  }
+
+  function selectedProductAddonRows(picked, note, meta){
+    return ['productAddons','productSides','productDrinks'].flatMap(name=>expandQuantityItems(picked && picked[name], note, meta));
+  }
+
   function burgerExtraSections(product){
     const askCheeseDefault = product.id !== 'cheeseburger' && product.id !== 'double_cheeseburger';
     const fallback = [
