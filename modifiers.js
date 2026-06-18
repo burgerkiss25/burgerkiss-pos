@@ -53,6 +53,33 @@
       }));
   }
 
+  function configuredList(product, field, fallback){
+    const selected = Array.isArray(product && product[field]) ? product[field] : [];
+    return selected.length ? selected.slice() : (Array.isArray(fallback) ? fallback.slice() : []);
+  }
+  function optionsFromIds(ids, productById, predicate, mapper){
+    return ids.map(id=>productById(id)).filter(product=>product && predicate(product)).map(mapper);
+  }
+  function sectionDefinitions(product, fallbackAddons, productById){
+    const addons = optionsFromIds(configuredList(product, 'addons', fallbackAddons), productById, BK_ADDONS.isAddonProduct, BK_ADDONS.optionFromProduct);
+    const sides = optionsFromIds(configuredList(product, 'sides', []), productById, BK_SIDES.isSideProduct, BK_SIDES.optionFromProduct);
+    const drinks = optionsFromIds(configuredList(product, 'drinks', []), productById, BK_DRINKS.isDrinkProduct, BK_DRINKS.optionFromProduct);
+    return [
+      addons.length ? {title:'Product add-ons', name:'productAddons', type:'quantity', help:'Use + / − to customize the main product.', options:addons} : null,
+      sides.length ? {title:'Suggested sides', name:'productSides', type:'quantity', help:'Use + / − to add paid side items.', options:sides} : null,
+      drinks.length ? {title:'Suggested drinks', name:'productDrinks', type:'quantity', help:'Use + / − to add paid drinks.', options:drinks} : null
+    ].filter(Boolean);
+  }
+  function selectedRows(picked, expandQuantityItems, note, meta){
+    return ['productAddons','productSides','productDrinks'].flatMap(name=>expandQuantityItems(picked && picked[name], note, meta));
+  }
+  function bucketForProduct(addonProduct, selection){
+    if(BK_SIDES.isSideProduct(addonProduct)) return selection.productSides;
+    if(BK_DRINKS.isDrinkProduct(addonProduct)) return selection.productDrinks;
+    return selection.productAddons;
+  }
+  function emptySelection(){ return {productAddons:{}, productSides:{}, productDrinks:{}}; }
+
   window.BK_MODIFIERS = {
     BURGER_BASE_IDS,
     WINGS_BASE_IDS,
@@ -67,6 +94,10 @@
     isFriesProduct,
     isFriesId,
     burgerFallbackAddons,
-    preferredDrinkOptions
+    preferredDrinkOptions,
+    sectionDefinitions,
+    selectedRows,
+    bucketForProduct,
+    emptySelection
   };
 })();

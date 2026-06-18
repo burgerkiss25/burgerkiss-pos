@@ -6,6 +6,8 @@ const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
 const addonsCode = fs.readFileSync(path.join(root, 'addons.js'), 'utf8');
+const sidesCode = fs.readFileSync(path.join(root, 'sides.js'), 'utf8');
+const drinksCode = fs.readFileSync(path.join(root, 'drinks.js'), 'utf8');
 const dataCode = fs.readFileSync(path.join(root, 'data.js'), 'utf8');
 const logicCode = fs.readFileSync(path.join(root, 'logic.js'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
@@ -17,6 +19,8 @@ function loadPricingContext(){
   context.window = context;
   vm.createContext(context);
   vm.runInContext(addonsCode, context);
+  vm.runInContext(sidesCode, context);
+  vm.runInContext(drinksCode, context);
   vm.runInContext(dataCode, context);
   context.BK_PRICES = {getPrice(id){
     const product = context.BK_DATA.BASE.find(entry=>entry.id === id);

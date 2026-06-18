@@ -541,35 +541,15 @@
     return BK_MODIFIERS.paidSauceOptions();
   }
 
-  function configuredAddonOptions(product, fallback, categories){
-    const selected = Array.isArray(product && product.addons) ? product.addons : [];
-    const ids = selected.length ? selected : (fallback || []);
-    return ids.map(id=>productById(id)).filter(addon=>addon && addon.active !== false && (!categories || categories.includes(addon.cat))).map(addon=>({
-      label:addon.name,
-      value:addon.id,
-      cat:addon.cat
-    }));
+  function hasProductModifiers(product){
+    return !!(product && ['addons','sides','drinks'].some(field=>Array.isArray(product[field]) && product[field].length));
   }
-
-  function productAddonSections(product, fallback){
-    const choices = configuredAddonOptions(product, fallback, ['extra','fries','drink']);
-    const groups = [
-      ['extra', 'Upgrade add-ons', 'productAddons'],
-      ['fries', 'Sides', 'productSides'],
-      ['drink', 'Drinks', 'productDrinks']
-    ];
-    return groups.map(([cat, title, name])=>{
-      const options = choices.filter(choice=>choice.cat === cat);
-      return options.length ? { title, name, type:'quantity', help:'Use + / − to add paid extras to this single item.', options } : null;
-    }).filter(Boolean);
-  }
-
-  function selectedProductAddonRows(picked, note, meta){
-    return ['productAddons','productSides','productDrinks'].flatMap(name=>expandQuantityItems(picked && picked[name], note, meta));
+  function hasConfiguredModifier(product, itemId){
+    return !!(product && ['addons','sides','drinks'].some(field=>Array.isArray(product[field]) && product[field].includes(itemId)));
   }
 
   function burgerExtraSections(product){
-    return BK_ADDONS.sectionDefinitions(product, BK_MODIFIERS.burgerFallbackAddons(product), productById);
+    return BK_MODIFIERS.sectionDefinitions(product, BK_MODIFIERS.burgerFallbackAddons(product), productById);
   }
 
   function addBurgerExtras(product, picked, meta){
@@ -613,7 +593,7 @@
       {label:'Chipotle', value:'i_sauce_chipotle', checked: defaultWingsSauce === 'i_sauce_chipotle'}
     ]});
     sections.push({ title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add paid extra sauces.', options:paidSauceOptions() });
-    if(!isBurgerBase(product) && Array.isArray(product.addons) && product.addons.length) sections.push(...BK_ADDONS.sectionDefinitions(product, null, productById));
+    if(!isBurgerBase(product) && hasProductModifiers(product)) sections.push(...BK_MODIFIERS.sectionDefinitions(product, null, productById));
     return sections;
   }
 
@@ -635,7 +615,7 @@
       rows.push(...expandQuantityItems(picked.burgerExtras, addonNote, {menuGroupId, menuName, menuRole:'addon'}));
       rows.push(...expandQuantityItems(picked.eggExtras, addonNote, {menuGroupId, menuName, menuRole:'addon'}));
     }
-    rows.push(...BK_ADDONS.selectedRows(picked, expandQuantityItems, addonNote, {menuGroupId, menuName, menuRole:'addon'}));
+    rows.push(...BK_MODIFIERS.selectedRows(picked, expandQuantityItems, addonNote, {menuGroupId, menuName, menuRole:'addon'}));
     if(isWingsBase(product) && picked.wingsSauce) rows.push({itemId:picked.wingsSauce, note:modifierLinkNote('included', product.name, picked.itemNote), menuGroupId, menuName, menuRole:'sauce'});
     if(picked.menuFries) rows.push({itemId:picked.menuFries, note:menuNote, menuGroupId, menuName, menuRole:'fries'});
     if(picked.menuFriesSauce) rows.push({itemId:picked.menuFriesSauce, note:menuNote, menuGroupId, menuName, menuRole:'included-sauce'});
@@ -684,7 +664,7 @@
       { title:'Included sauce', name:'includedSauce', type:'radio', help:'Choose one free sauce for this fries item.', options:includedSauceOptions().map(option=>Object.assign({}, option, {checked:option.value === (selected.includedSauce || '')})) },
       { title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add several paid extra sauces.', options:paidSauceOptions() }
     ];
-    if(Array.isArray(product && product.addons) && product.addons.length) sections.push(...BK_ADDONS.sectionDefinitions(product, null, productById));
+    if(hasProductModifiers(product)) sections.push(...BK_MODIFIERS.sectionDefinitions(product, null, productById));
     return sections;
   }
   function wingsModifierSections(product, initial){
@@ -697,7 +677,7 @@
       ]},
       { title:'Paid extra sauces (+5 GHS each)', name:'extraSauce', type:'quantity', help:'Use + / − to add paid extra sauces.', options:paidSauceOptions() }
     ];
-    if(Array.isArray(product && product.addons) && product.addons.length) sections.push(...BK_ADDONS.sectionDefinitions(product, null, productById));
+    if(hasProductModifiers(product)) sections.push(...BK_MODIFIERS.sectionDefinitions(product, null, productById));
     return sections;
   }
   function singleProductItems(product, picked){
@@ -705,18 +685,18 @@
     if(BK_MODIFIERS.isFriesProduct(product)){
       if(picked.includedSauce) rows.push({itemId:picked.includedSauce, note:modifierLinkNote('included', product.name, picked.itemNote)});
       rows.push(...expandQuantityItems(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote)));
-      rows.push(...BK_ADDONS.selectedRows(picked, expandQuantityItems, modifierLinkNote('for', product.name, picked.itemNote)));
+      rows.push(...BK_MODIFIERS.selectedRows(picked, expandQuantityItems, modifierLinkNote('for', product.name, picked.itemNote)));
     }else if(isBurgerBase(product)){
       const addonNote = modifierLinkNote('for', product.name, picked.itemNote);
       rows.push(...expandQuantityItems(picked.burgerExtras, addonNote));
       rows.push(...expandQuantityItems(picked.eggExtras, addonNote));
-      rows.push(...BK_ADDONS.selectedRows(picked, expandQuantityItems, addonNote));
+      rows.push(...BK_MODIFIERS.selectedRows(picked, expandQuantityItems, addonNote));
     }else if(isWingsBase(product)){
       if(picked.wingsSauce) rows.push({itemId:picked.wingsSauce, note:modifierLinkNote('included', product.name, picked.itemNote)});
       rows.push(...expandQuantityItems(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote)));
-      rows.push(...BK_ADDONS.selectedRows(picked, expandQuantityItems, modifierLinkNote('for', product.name, picked.itemNote)));
+      rows.push(...BK_MODIFIERS.selectedRows(picked, expandQuantityItems, modifierLinkNote('for', product.name, picked.itemNote)));
     }else{
-      rows.push(...BK_ADDONS.selectedRows(picked, expandQuantityItems, modifierLinkNote('for', product.name, picked.itemNote)));
+      rows.push(...BK_MODIFIERS.selectedRows(picked, expandQuantityItems, modifierLinkNote('for', product.name, picked.itemNote)));
     }
     return rows;
   }
@@ -724,7 +704,7 @@
     singleProductItems(product, picked).forEach(row=> BK_STATE.addItem(row.itemId, row.note, row));
   }
   function isEditableSingleProduct(product){
-    return !!(product && (BK_MODIFIERS.isFriesProduct(product) || isBurgerBase(product) || isWingsBase(product) || (Array.isArray(product.addons) && product.addons.length)));
+    return !!(product && (BK_MODIFIERS.isFriesProduct(product) || isBurgerBase(product) || isWingsBase(product) || (hasProductModifiers(product))));
   }
   async function addSingleProductWithModifiers(product, pendingNote){
     if(BK_MODIFIERS.isFriesProduct(product)){
@@ -736,8 +716,8 @@
     }else if(isWingsBase(product)){
       const picked = await openModifierSheet(`${product.name} sauce`, wingsModifierSections(product), { note: pendingNote });
       addSingleProductRows(product, picked);
-    }else if(Array.isArray(product.addons) && product.addons.length){
-      const picked = await openModifierSheet(`${product.name} add-ons`, BK_ADDONS.sectionDefinitions(product, null, productById), { note: pendingNote });
+    }else if(hasProductModifiers(product)){
+      const picked = await openModifierSheet(`${product.name} add-ons`, BK_MODIFIERS.sectionDefinitions(product, null, productById), { note: pendingNote });
       addSingleProductRows(product, picked);
     }else{
       BK_STATE.addItem(product.id, pendingNote);
@@ -995,7 +975,7 @@
   }
 
   function currentMenuSelection(slot, menuGroupId, product){
-    const selection = Object.assign({ burgerExtras:{}, eggExtras:{}, extraSauce:{} }, BK_ADDONS.emptySelection());
+    const selection = Object.assign({ burgerExtras:{}, eggExtras:{}, extraSauce:{} }, BK_MODIFIERS.emptySelection());
     const groupItems = (slot.items || []).filter(item=>item.menuGroupId === menuGroupId);
     const main = groupItems.find(item=>item.menuRole === 'main') || groupItems.find(item=>item.itemId === product.id) || {};
     selection.itemNote = baseCustomerNote(main.note || '');
@@ -1007,10 +987,10 @@
       else if(item.menuRole === 'sauce') selection.wingsSauce = item.itemId;
       else if(item.menuRole === 'extra-sauce') selection.extraSauce[item.itemId] = (selection.extraSauce[item.itemId] || 0) + 1;
       else if(item.menuRole === 'addon'){
-        const configured = Array.isArray(product && product.addons) && product.addons.includes(item.itemId);
+        const configured = hasConfiguredModifier(product, item.itemId);
         const addonProduct = productById(item.itemId);
         const bucket = configured
-          ? BK_ADDONS.bucketForProduct(addonProduct, selection)
+          ? BK_MODIFIERS.bucketForProduct(addonProduct, selection)
           : (String(item.itemId || '').includes('egg') ? selection.eggExtras : selection.burgerExtras);
         bucket[item.itemId] = (bucket[item.itemId] || 0) + 1;
       }
@@ -1044,7 +1024,7 @@
   }
 
   function currentSingleSelection(entry, product){
-    const selection = Object.assign({ burgerExtras:{}, eggExtras:{}, extraSauce:{} }, BK_ADDONS.emptySelection());
+    const selection = Object.assign({ burgerExtras:{}, eggExtras:{}, extraSauce:{} }, BK_MODIFIERS.emptySelection());
     selection.itemNote = baseCustomerNote(entry.note || '');
     (entry.children || []).forEach(child=>{
       const id = String(child.id || (BK_LOGIC.parseItemKey(child.key)[0]) || '');
@@ -1054,9 +1034,9 @@
         if(isWingsBase(product)) selection.wingsSauce = id;
         else selection.includedSauce = id;
       }else if(id.includes('egg')) selection.eggExtras[id] = (selection.eggExtras[id] || 0) + qty;
-      else if(Array.isArray(product && product.addons) && product.addons.includes(id)){
+      else if(hasConfiguredModifier(product, id)){
         const addonProduct = productById(id);
-        const bucket = BK_ADDONS.bucketForProduct(addonProduct, selection);
+        const bucket = BK_MODIFIERS.bucketForProduct(addonProduct, selection);
         bucket[id] = (bucket[id] || 0) + qty;
       }
       else if(id) selection.burgerExtras[id] = (selection.burgerExtras[id] || 0) + qty;
@@ -1067,7 +1047,7 @@
     if(BK_MODIFIERS.isFriesProduct(product)) return friesModifierSections(product, initial);
     if(isBurgerBase(product)) return burgerExtraSections(product);
     if(isWingsBase(product)) return wingsModifierSections(product, initial);
-    return BK_ADDONS.sectionDefinitions(product, null, productById);
+    return BK_MODIFIERS.sectionDefinitions(product, null, productById);
   }
   async function editSingleEntry(slot, entry){
     if(!slot || slot.issued || !entry || entry.menuGroupId) return false;
