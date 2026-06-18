@@ -38,12 +38,12 @@
     return Object.entries(BK_STOCK.getIngredients()).map(([id, ingredient])=>`<option value="${esc(id)}">${esc(ingredient.name || id)} (${esc(id)})</option>`).join('');
   }
   function addonChoices(currentId){
-    return DRAFT.filter(product=>product.active !== false && product.id !== currentId && ['extra','fries','drink'].includes(product.cat))
+    return DRAFT.filter(product=>product.id !== currentId && BK_ADDONS.isCatalogAddonProduct(product))
       .sort((a,b)=>String(categoryLabel(a.cat)).localeCompare(String(categoryLabel(b.cat))) || String(a.name).localeCompare(String(b.name)))
       .map(product=>({id:product.id, name:product.name, price:Number(product.price) || 0, cat:product.cat}));
   }
   function addonEditor(item, index){
-    if(item.cat === 'extra' || item.cat === 'sauce' || item.cat === 'drink') return '<p class="muted">Add-ons are configured on main products like burgers, fries, wings, and salads.</p>';
+    if(!BK_ADDONS.isConfigurableProduct(item)) return '<p class="muted">Add-ons are configured on main products like burgers, fries, wings, and salads.</p>';
     const selected = new Set(Array.isArray(item.addons) ? item.addons : []);
     const choices = addonChoices(item.id);
     if(!choices.length) return '<p class="muted">Create active add-on products first, then attach them here.</p>';
