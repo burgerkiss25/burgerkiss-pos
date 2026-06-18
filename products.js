@@ -58,7 +58,8 @@
       out.push({
         id, name, price, cat, categoryOrder, active,
         archivedAt:active ? null : Number(r && r.archivedAt) || Date.now(),
-        archivedBy:active ? null : String((r && r.archivedBy) || '')
+        archivedBy:active ? null : String((r && r.archivedBy) || ''),
+        addons:Array.isArray(r && r.addons) ? r.addons.map(normalizeId).filter(Boolean) : []
       });
     });
     return out;
