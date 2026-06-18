@@ -55,10 +55,17 @@
       const categoryOrder = Number.isFinite(Number(r && r.categoryOrder)) ? Number(r.categoryOrder) : fallbackOrder;
       const active = r && r.active !== false;
       categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+      const defaultProduct = (window.BK_DATA.DEFAULT_BASE || []).find(product=>product.id === id) || {};
+      const sourceAddons = Array.isArray(r && r.addons) ? r.addons : (Array.isArray(defaultProduct.addons) ? defaultProduct.addons : []);
+      const sourceSides = Array.isArray(r && r.sides) ? r.sides : (Array.isArray(defaultProduct.sides) ? defaultProduct.sides : []);
+      const sourceDrinks = Array.isArray(r && r.drinks) ? r.drinks : (Array.isArray(defaultProduct.drinks) ? defaultProduct.drinks : []);
       out.push({
         id, name, price, cat, categoryOrder, active,
         archivedAt:active ? null : Number(r && r.archivedAt) || Date.now(),
-        archivedBy:active ? null : String((r && r.archivedBy) || '')
+        archivedBy:active ? null : String((r && r.archivedBy) || ''),
+        addons:sourceAddons.map(normalizeId).filter(Boolean),
+        sides:sourceSides.map(normalizeId).filter(Boolean),
+        drinks:sourceDrinks.map(normalizeId).filter(Boolean)
       });
     });
     return out;

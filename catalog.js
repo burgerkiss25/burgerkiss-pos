@@ -37,6 +37,24 @@
   function ingredientOptions(){
     return Object.entries(BK_STOCK.getIngredients()).map(([id, ingredient])=>`<option value="${esc(id)}">${esc(ingredient.name || id)} (${esc(id)})</option>`).join('');
   }
+  function catalogChoices(kind, currentId){
+    const predicate = kind === 'addons' ? BK_ADDONS.isAddonProduct : (kind === 'sides' ? BK_SIDES.isSideProduct : BK_DRINKS.isDrinkProduct);
+    return DRAFT.filter(product=>product.id !== currentId && predicate(product))
+      .sort((a,b)=>String(a.name).localeCompare(String(b.name)))
+      .map(product=>({id:product.id, name:product.name, price:Number(product.price) || 0, cat:product.cat}));
+  }
+  function choiceEditor(item, kind, title, emptyText){
+    const selected = new Set(Array.isArray(item[kind]) ? item[kind] : []);
+    const choices = catalogChoices(kind, item.id);
+    if(!choices.length) return `<p class="muted">${emptyText}</p>`;
+    return `<div class="catalog-addon-editor" data-choice-editor="${kind}">${choices.map(choice=>`<label class="catalog-addon-choice"><input type="checkbox" data-choice-kind="${kind}" data-addon-choice="${esc(choice.id)}" ${selected.has(choice.id) ? 'checked' : ''}><span>${esc(choice.name)}</span><small>${esc(title)} · ${choice.price} GHS · ${esc(choice.id)}</small></label>`).join('')}</div>`;
+  }
+  function modifierEditor(item){
+    if(!BK_ADDONS.isConfigurableProduct(item)) return '<p class="muted">Modifiers are configured on main products like burgers, fries, wings, and salads.</p>';
+    return `<section><h5>Product add-ons</h5><p class="muted">Choose only upgrades that customize the main product.</p>${choiceEditor(item,'addons','Add-on','Create active add-on products first, then attach them here.')}</section>
+            <section><h5>Suggested sides</h5><p class="muted">Choose paid side suggestions shown separately from add-ons.</p>${choiceEditor(item,'sides','Side','Create active side products first, then attach them here.')}</section>
+            <section><h5>Suggested drinks</h5><p class="muted">Choose paid drink suggestions shown separately from add-ons.</p>${choiceEditor(item,'drinks','Drink','Create active drink products first, then attach them here.')}</section>`;
+  }
   function loadDraft(){
     DRAFT = (BK_DATA.BASE || []).map(product=>({
       id:product.id,
@@ -49,7 +67,10 @@
       archivedAt:product.archivedAt || null,
       archivedBy:product.archivedBy || null,
       image:BK_IMAGES.get(product.id),
-      recipe:BK_STOCK.getRecipe(product.id)
+      recipe:BK_STOCK.getRecipe(product.id),
+      addons:Array.isArray(product.addons) ? product.addons.slice() : [],
+      sides:Array.isArray(product.sides) ? product.sides.slice() : [],
+      drinks:Array.isArray(product.drinks) ? product.drinks.slice() : []
     }));
     initialIds = DRAFT.map(item=>item.id);
     baseline = new Map(DRAFT.map(item=>[item.originalId, JSON.stringify(item)]));
@@ -113,7 +134,7 @@
       }
       const before = JSON.parse(rawBefore);
       const fields = [];
-      [['name','name'],['price','price'],['category','cat'],['image','image'],['recipe','recipe'],['display order','categoryOrder'],['product ID','id']].forEach(([label,key])=>{
+      [['name','name'],['price','price'],['category','cat'],['image','image'],['recipe','recipe'],['add-ons','addons'],['sides','sides'],['drinks','drinks'],['display order','categoryOrder'],['product ID','id']].forEach(([label,key])=>{
         if(JSON.stringify(before[key]) !== JSON.stringify(item[key])) fields.push({field:label, before:auditValue(key,before[key]), after:auditValue(key,item[key])});
       });
       const action = before.active !== false && item.active === false ? 'archived'
@@ -166,6 +187,10 @@
       item.price = Number(card.querySelector('[data-field="price"]').value);
       item.cat = card.querySelector('[data-field="cat"]').value;
       item.id = card.querySelector('[data-field="id"]').value.trim().toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_-]/g,'');
+      ['addons','sides','drinks'].forEach(kind=>{
+        const boxes = card.querySelectorAll(`[data-choice-kind="${kind}"]`);
+        item[kind] = boxes.length ? Array.from(boxes).filter(input=>input.checked).map(input=>input.dataset.addonChoice) : [];
+      });
     });
   }
   function recipeChips(item, index){
@@ -195,6 +220,7 @@
           <div class="catalog-detail-grid">
             <section><h5>Image</h5><div class="catalog-detail-image">${image}</div><label class="x admin-upload-button">Replace image<input class="sr-only" type="file" accept="image/*" data-image-file></label><button class="mini" type="button" data-image-remove>Remove image</button></section>
             <section><h5>Recipe</h5><div class="recipe-ingredient-list" data-recipe-list>${recipeChips(item,index)}</div><div class="recipe-add-row"><select data-recipe-ingredient>${ingredientOptions()}</select><input data-recipe-quantity type="number" min="0.25" step="0.25" value="1"><button class="x" type="button" data-recipe-add>Add ingredient</button></div></section>
+            ${modifierEditor(item)}
             <section><h5>Technical details</h5><label><span>Product ID</span><input data-field="id" value="${esc(item.id)}"><small class="catalog-field-error" data-error-for="id"></small></label><h5>History</h5>${productHistory(item)}<button class="mini ${item.active === false ? '' : 'admin-row-danger'}" type="button" data-archive-product>${item.active === false ? 'Restore product' : 'Archive product'}</button></section>
           </div>
         </details>
@@ -258,7 +284,7 @@
         collectDraft();
         render();
       };
-      card.querySelectorAll('[data-field="name"],[data-field="price"],[data-field="id"]').forEach(input=>{
+      card.querySelectorAll('[data-field="name"],[data-field="price"],[data-field="id"],[data-addon-choice]').forEach(input=>{
         input.oninput = ()=>{
           collectDraft();
           updateSaveButton();
@@ -340,7 +366,7 @@
     const category = 'extra';
     const count = DRAFT.filter(item=>item.cat === category).length;
     const id = `new_product_${Date.now()}`;
-    DRAFT.push({id,originalId:id,name:'New product',cat:category,price:0,categoryOrder:(count+1)*10,active:true,archivedAt:null,archivedBy:null,image:'',recipe:{}});
+    DRAFT.push({id,originalId:id,name:'New product',cat:category,price:0,categoryOrder:(count+1)*10,active:true,archivedAt:null,archivedBy:null,image:'',recipe:{},addons:[],sides:[],drinks:[]});
     filter = 'active';
     render();
     const cards = document.querySelectorAll('#catalogBody [data-catalog-product]');
@@ -379,7 +405,7 @@
       }
       ids.add(item.id);
     }
-    const rows = DRAFT.map(item=>({id:item.id,name:item.name,price:item.price,cat:item.cat,categoryOrder:item.categoryOrder,active:item.active !== false,archivedAt:item.archivedAt,archivedBy:item.archivedBy}));
+    const rows = DRAFT.map(item=>({id:item.id,name:item.name,price:item.price,cat:item.cat,categoryOrder:item.categoryOrder,active:item.active !== false,archivedAt:item.archivedAt,archivedBy:item.archivedBy,addons:Array.isArray(item.addons) ? item.addons.slice() : [],sides:Array.isArray(item.sides) ? item.sides.slice() : [],drinks:Array.isArray(item.drinks) ? item.drinks.slice() : []}));
     const prices = Object.fromEntries(DRAFT.map(item=>[item.id,item.price]));
     const recipes = Object.fromEntries(DRAFT.map(item=>[item.id,item.recipe]));
     const currentIds = new Set(DRAFT.map(item=>item.id));

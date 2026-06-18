@@ -1,12 +1,12 @@
 // Products and menu rules
 window.BK_DATA = {
   BASE: [
-    {id:'hamburger', name:'Hamburger', price:95, cat:'burger'},
-    {id:'cheeseburger', name:'Cheeseburger', price:110, cat:'burger'},
-    {id:'double_burger', name:'Double Burger', price:130, cat:'burger'},
-    {id:'double_cheeseburger', name:'Double Cheeseburger', price:160, cat:'burger'},
-    {id:'chicken_burger', name:'Chicken Burger', price:85, cat:'burger'},
-    {id:'chicken_shawarma_burger', name:'Chicken Shawarma Burger', price:85, cat:'burger'},
+    {id:'hamburger', name:'Hamburger', price:95, cat:'burger', addons:BK_ADDONS.defaultBurgerAddons(), sides:BK_SIDES.defaultBurgerSides(), drinks:BK_DRINKS.defaultBurgerDrinks()},
+    {id:'cheeseburger', name:'Cheeseburger', price:110, cat:'burger', addons:BK_ADDONS.defaultBurgerAddons(), sides:BK_SIDES.defaultBurgerSides(), drinks:BK_DRINKS.defaultBurgerDrinks()},
+    {id:'double_burger', name:'Double Burger', price:130, cat:'burger', addons:BK_ADDONS.defaultBurgerAddons(), sides:BK_SIDES.defaultBurgerSides(), drinks:BK_DRINKS.defaultBurgerDrinks()},
+    {id:'double_cheeseburger', name:'Double Cheeseburger', price:160, cat:'burger', addons:BK_ADDONS.defaultBurgerAddons(), sides:BK_SIDES.defaultBurgerSides(), drinks:BK_DRINKS.defaultBurgerDrinks()},
+    {id:'chicken_burger', name:'Chicken Burger', price:85, cat:'burger', addons:BK_ADDONS.defaultBurgerAddons(), sides:BK_SIDES.defaultBurgerSides(), drinks:BK_DRINKS.defaultBurgerDrinks()},
+    {id:'chicken_shawarma_burger', name:'Chicken Shawarma Burger', price:85, cat:'burger', addons:BK_ADDONS.defaultBurgerAddons(), sides:BK_SIDES.defaultBurgerSides(), drinks:BK_DRINKS.defaultBurgerDrinks()},
 
     {id:'wings_6',  name:'Wings 6 pcs', price:45,  cat:'wings', pcs:6},
     {id:'wings_12', name:'Wings 12 pcs',price:85,  cat:'wings', pcs:12},
@@ -16,8 +16,8 @@ window.BK_DATA = {
     {id:'fries_large',    name:'Fries Large',    price:30, cat:'fries', size:'lg'},
     {id:'fries_family',   name:'Fries Family',   price:95, cat:'fries', size:'family'},
 
-    {id:'salad_standard', name:'Salad Standard', price:55, cat:'salad'},
-    {id:'salad_large',    name:'Salad Large',    price:75, cat:'salad'},
+    {id:'salad_standard', name:'Salad Standard', price:55, cat:'salad', addons:BK_ADDONS.defaultSaladAddons(), sides:BK_SIDES.defaultSaladSides(), drinks:BK_DRINKS.defaultSaladDrinks()},
+    {id:'salad_large',    name:'Salad Large',    price:75, cat:'salad', addons:BK_ADDONS.defaultSaladAddons(), sides:BK_SIDES.defaultSaladSides(), drinks:BK_DRINKS.defaultSaladDrinks()},
 
     {id:'x_beef_patty', name:'Extra Beef Patty', price:35, cat:'extra'},
     {id:'x_chicken_patty', name:'Extra Chicken Patty', price:30, cat:'extra'},
@@ -26,6 +26,9 @@ window.BK_DATA = {
     {id:'x_bacon',  name:'Bacon (per slice)', price:20, cat:'extra'},
     {id:'x_fried_egg', name:'Fried Egg', price:20, cat:'extra'},
     {id:'x_omelette',  name:'Omelette',  price:30, cat:'extra'},
+    {id:'x_caramelized_onions', name:'Caramelized Onions', price:10, cat:'extra'},
+    {id:'x_minced_meat', name:'Minced Meat', price:25, cat:'extra'},
+    {id:'x_salad_chicken_wings', name:'Chicken Wings Salad Add-on', price:30, cat:'extra'},
 
     {id:'i_sauce_ketchup', name:'Ketchup', price:0, cat:'sauce', sauce_type:'s_ketchup'},
     {id:'i_sauce_mayonnaise', name:'Mayonnaise', price:0, cat:'sauce', sauce_type:'s_mayonnaise'},
