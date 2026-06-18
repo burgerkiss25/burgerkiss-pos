@@ -37,6 +37,18 @@
   function ingredientOptions(){
     return Object.entries(BK_STOCK.getIngredients()).map(([id, ingredient])=>`<option value="${esc(id)}">${esc(ingredient.name || id)} (${esc(id)})</option>`).join('');
   }
+  function addonChoices(currentId){
+    return DRAFT.filter(product=>product.active !== false && product.id !== currentId && ['extra','fries','drink'].includes(product.cat))
+      .sort((a,b)=>String(categoryLabel(a.cat)).localeCompare(String(categoryLabel(b.cat))) || String(a.name).localeCompare(String(b.name)))
+      .map(product=>({id:product.id, name:product.name, price:Number(product.price) || 0, cat:product.cat}));
+  }
+  function addonEditor(item, index){
+    if(item.cat === 'extra' || item.cat === 'sauce' || item.cat === 'drink') return '<p class="muted">Add-ons are configured on main products like burgers, fries, wings, and salads.</p>';
+    const selected = new Set(Array.isArray(item.addons) ? item.addons : []);
+    const choices = addonChoices(item.id);
+    if(!choices.length) return '<p class="muted">Create active add-on products first, then attach them here.</p>';
+    return `<div class="catalog-addon-editor" data-addon-editor="${index}">${choices.map(choice=>`<label class="catalog-addon-choice"><input type="checkbox" data-addon-choice="${esc(choice.id)}" ${selected.has(choice.id) ? 'checked' : ''}><span>${esc(choice.name)}</span><small>${esc(categoryLabel(choice.cat))} · ${choice.price} GHS · ${esc(choice.id)}</small></label>`).join('')}</div>`;
+  }
   function loadDraft(){
     DRAFT = (BK_DATA.BASE || []).map(product=>({
       id:product.id,
@@ -49,7 +61,8 @@
       archivedAt:product.archivedAt || null,
       archivedBy:product.archivedBy || null,
       image:BK_IMAGES.get(product.id),
-      recipe:BK_STOCK.getRecipe(product.id)
+      recipe:BK_STOCK.getRecipe(product.id),
+      addons:Array.isArray(product.addons) ? product.addons.slice() : []
     }));
     initialIds = DRAFT.map(item=>item.id);
     baseline = new Map(DRAFT.map(item=>[item.originalId, JSON.stringify(item)]));
@@ -113,7 +126,7 @@
       }
       const before = JSON.parse(rawBefore);
       const fields = [];
-      [['name','name'],['price','price'],['category','cat'],['image','image'],['recipe','recipe'],['display order','categoryOrder'],['product ID','id']].forEach(([label,key])=>{
+      [['name','name'],['price','price'],['category','cat'],['image','image'],['recipe','recipe'],['add-ons','addons'],['display order','categoryOrder'],['product ID','id']].forEach(([label,key])=>{
         if(JSON.stringify(before[key]) !== JSON.stringify(item[key])) fields.push({field:label, before:auditValue(key,before[key]), after:auditValue(key,item[key])});
       });
       const action = before.active !== false && item.active === false ? 'archived'
@@ -166,6 +179,8 @@
       item.price = Number(card.querySelector('[data-field="price"]').value);
       item.cat = card.querySelector('[data-field="cat"]').value;
       item.id = card.querySelector('[data-field="id"]').value.trim().toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_-]/g,'');
+      const addonBoxes = card.querySelectorAll('[data-addon-choice]');
+      item.addons = addonBoxes.length ? Array.from(addonBoxes).filter(input=>input.checked).map(input=>input.dataset.addonChoice) : [];
     });
   }
   function recipeChips(item, index){
@@ -195,6 +210,7 @@
           <div class="catalog-detail-grid">
             <section><h5>Image</h5><div class="catalog-detail-image">${image}</div><label class="x admin-upload-button">Replace image<input class="sr-only" type="file" accept="image/*" data-image-file></label><button class="mini" type="button" data-image-remove>Remove image</button></section>
             <section><h5>Recipe</h5><div class="recipe-ingredient-list" data-recipe-list>${recipeChips(item,index)}</div><div class="recipe-add-row"><select data-recipe-ingredient>${ingredientOptions()}</select><input data-recipe-quantity type="number" min="0.25" step="0.25" value="1"><button class="x" type="button" data-recipe-add>Add ingredient</button></div></section>
+            <section><h5>Product add-ons</h5><p class="muted">Choose the paid add-ons, sides, and drinks the POS app should offer for this product.</p>${addonEditor(item,index)}</section>
             <section><h5>Technical details</h5><label><span>Product ID</span><input data-field="id" value="${esc(item.id)}"><small class="catalog-field-error" data-error-for="id"></small></label><h5>History</h5>${productHistory(item)}<button class="mini ${item.active === false ? '' : 'admin-row-danger'}" type="button" data-archive-product>${item.active === false ? 'Restore product' : 'Archive product'}</button></section>
           </div>
         </details>
@@ -258,7 +274,7 @@
         collectDraft();
         render();
       };
-      card.querySelectorAll('[data-field="name"],[data-field="price"],[data-field="id"]').forEach(input=>{
+      card.querySelectorAll('[data-field="name"],[data-field="price"],[data-field="id"],[data-addon-choice]').forEach(input=>{
         input.oninput = ()=>{
           collectDraft();
           updateSaveButton();
@@ -340,7 +356,7 @@
     const category = 'extra';
     const count = DRAFT.filter(item=>item.cat === category).length;
     const id = `new_product_${Date.now()}`;
-    DRAFT.push({id,originalId:id,name:'New product',cat:category,price:0,categoryOrder:(count+1)*10,active:true,archivedAt:null,archivedBy:null,image:'',recipe:{}});
+    DRAFT.push({id,originalId:id,name:'New product',cat:category,price:0,categoryOrder:(count+1)*10,active:true,archivedAt:null,archivedBy:null,image:'',recipe:{},addons:[]});
     filter = 'active';
     render();
     const cards = document.querySelectorAll('#catalogBody [data-catalog-product]');
@@ -379,7 +395,7 @@
       }
       ids.add(item.id);
     }
-    const rows = DRAFT.map(item=>({id:item.id,name:item.name,price:item.price,cat:item.cat,categoryOrder:item.categoryOrder,active:item.active !== false,archivedAt:item.archivedAt,archivedBy:item.archivedBy}));
+    const rows = DRAFT.map(item=>({id:item.id,name:item.name,price:item.price,cat:item.cat,categoryOrder:item.categoryOrder,active:item.active !== false,archivedAt:item.archivedAt,archivedBy:item.archivedBy,addons:Array.isArray(item.addons) ? item.addons.slice() : []}));
     const prices = Object.fromEntries(DRAFT.map(item=>[item.id,item.price]));
     const recipes = Object.fromEntries(DRAFT.map(item=>[item.id,item.recipe]));
     const currentIds = new Set(DRAFT.map(item=>item.id));
