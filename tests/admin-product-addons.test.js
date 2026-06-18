@@ -2,6 +2,7 @@ const assert = require('assert');
 const fs = require('fs');
 
 const addons = fs.readFileSync('addons.js', 'utf8');
+const modifiers = fs.readFileSync('modifiers.js', 'utf8');
 const catalog = fs.readFileSync('catalog.js', 'utf8');
 const products = fs.readFileSync('products.js', 'utf8');
 const ui = fs.readFileSync('ui.js', 'utf8');
@@ -18,6 +19,9 @@ assert.match(addons, /title:'Drinks'/);
 assert.match(addons, /x_caramelized_onions/);
 assert.match(addons, /x_minced_meat/);
 assert.match(addons, /x_salad_chicken_wings/);
+assert.match(modifiers, /window\.BK_MODIFIERS/);
+assert.match(modifiers, /function preferredDrinkOptions/);
+assert.match(modifiers, /function burgerFallbackAddons/);
 assert.match(catalog, /BK_ADDONS\.isCatalogAddonProduct/);
 assert.match(catalog, /data-addon-choice/);
 assert.match(catalog, /paid add-ons, sides, and drinks/);
@@ -30,7 +34,7 @@ assert.match(ui, /BK_ADDONS\.bucketForProduct/);
 assert.match(css, /\.catalog-addon-editor/);
 assert.match(data, /BK_ADDONS\.defaultBurgerAddons\(\)/);
 assert.match(data, /BK_ADDONS\.defaultSaladAddons\(\)/);
-assert.match(orderHtml, /addons\.js\?v=1[\s\S]*data\.js/);
-assert.match(adminHtml, /addons\.js\?v=1[\s\S]*data\.js/);
+assert.match(orderHtml, /addons\.js\?v=1[\s\S]*modifiers\.js\?v=1[\s\S]*data\.js/);
+assert.match(adminHtml, /addons\.js\?v=1[\s\S]*modifiers\.js\?v=1[\s\S]*data\.js/);
 
 console.log('Product-specific add-on module checks passed.');

@@ -518,40 +518,27 @@
   }
 
   function mealBasePrice(product){
-    return Number(BK_DATA.MENU && BK_DATA.MENU[product.id]) || 0;
+    return BK_MODIFIERS.mealBasePrice(product, BK_DATA.MENU);
   }
 
   function isMealBase(product){
-    return !!(product && mealBasePrice(product) > 0);
+    return BK_MODIFIERS.isMealBase(product, BK_DATA.MENU);
   }
 
   function isBurgerBase(product){
-    return !!(product && ['hamburger', 'cheeseburger', 'double_burger', 'double_cheeseburger', 'chicken_burger', 'chicken_shawarma_burger'].includes(product.id));
+    return BK_MODIFIERS.isBurgerBase(product);
   }
 
   function isWingsBase(product){
-    return !!(product && ['wings_6','wings_12','wings_24'].includes(product.id));
+    return BK_MODIFIERS.isWingsBase(product);
   }
 
   function includedSauceOptions(){
-    return [
-      {label:'No Sauce Wanted', value:''},
-      {label:'Ketchup', value:'i_sauce_ketchup'},
-      {label:'Mayonnaise', value:'i_sauce_mayonnaise'},
-      {label:'Chipotle', value:'i_sauce_chipotle'},
-      {label:'Dutch Special', value:'i_sauce_dutch_special'},
-      {label:'Chicken Wings Sauce', value:'i_sauce_chicken_wings'}
-    ];
+    return BK_MODIFIERS.includedSauceOptions();
   }
 
   function paidSauceOptions(){
-    return [
-      {label:'Extra Ketchup', value:'x_sauce_ketchup'},
-      {label:'Extra Mayonnaise', value:'x_sauce_mayonnaise'},
-      {label:'Extra Chipotle', value:'x_sauce_chipotle'},
-      {label:'Extra Dutch Special', value:'x_sauce_dutch_special'},
-      {label:'Extra Chicken Wings Sauce', value:'x_sauce_chicken_wings'}
-    ];
+    return BK_MODIFIERS.paidSauceOptions();
   }
 
   function configuredAddonOptions(product, fallback, categories){
@@ -582,18 +569,7 @@
   }
 
   function burgerExtraSections(product){
-    const askCheeseDefault = product.id !== 'cheeseburger' && product.id !== 'double_cheeseburger';
-    const fallback = [
-      'x_beef_patty',
-      ...(askCheeseDefault ? ['x_cheese'] : []),
-      'x_bacon',
-      'x_chicken_patty',
-      'x_chicken_shawarma_patty',
-      'x_fried_egg',
-      'x_omelette',
-      'x_caramelized_onions'
-    ];
-    return BK_ADDONS.sectionDefinitions(product, fallback, productById);
+    return BK_ADDONS.sectionDefinitions(product, BK_MODIFIERS.burgerFallbackAddons(product), productById);
   }
 
   function addBurgerExtras(product, picked, meta){
@@ -624,15 +600,7 @@
       {label: optionLabel('fries_standard', 'Fries Standard'), value:'fries_standard', checked: defaultFries === 'fries_standard'},
       {label: `${optionLabel('fries_large', 'Fries Large')} · upgrade +${Math.max(0, BK_PRICES.getPrice('fries_large') - BK_DATA.MENU.included.fries)} GHS`, value:'fries_large', checked: defaultFries === 'fries_large'}
     ].filter(opt=>productById(opt.value));
-    const preferredDrinks = ['d_cola','d_sprite','d_fanta_orange','d_fanta_coktail','d_biggoo_grape','d_coconut_fresh','d_coconut_water_bottle','d_iced_tea_lime','d_iced_tea_ginger','d_iced_tea_strawberry','d_iced_tea_pineapple','d_iced_tea_mint','d_iced_tea_apple','d_iced_tea_green_mint','d_iced_tea_vannile','d_club_beer_std','d_club_beer_large','d_guinness'];
-    const drinkOptions = preferredDrinks
-      .map(id=>productById(id))
-      .filter(Boolean)
-      .map((p, idx)=>({
-        label: `${p.name}${Math.max(0, BK_PRICES.getPrice(p.id) - BK_DATA.MENU.included.drink) ? ` · upgrade +${Math.max(0, BK_PRICES.getPrice(p.id) - BK_DATA.MENU.included.drink)} GHS` : ''}`,
-        value: p.id,
-        checked: p.id === defaultDrink || (!defaultDrink && idx === 0)
-      }));
+    const drinkOptions = BK_MODIFIERS.preferredDrinkOptions(productById, id=>BK_PRICES.getPrice(id), BK_DATA.MENU.included.drink, defaultDrink);
     const sections = [
       { title:'Menu fries', name:'menuFries', type:'radio', help:'Standard fries are included; large fries add the upgrade difference.', options:friesOptions },
       { title:'Menu fries sauce', name:'menuFriesSauce', type:'radio', help:'Choose the included menu sauce. Ketchup is selected unless the customer asks for another sauce or no sauce.', options:includedSauceOptions().map(option=>Object.assign({}, option, {checked:option.value === defaultFriesSauce})) },
@@ -734,7 +702,7 @@
   }
   function singleProductItems(product, picked){
     const rows = [{itemId:product.id, note:picked.itemNote || ''}];
-    if(['fries_standard', 'fries_large', 'fries_family'].includes(product.id)){
+    if(BK_MODIFIERS.isFriesProduct(product)){
       if(picked.includedSauce) rows.push({itemId:picked.includedSauce, note:modifierLinkNote('included', product.name, picked.itemNote)});
       rows.push(...expandQuantityItems(picked.extraSauce, modifierLinkNote('extra', product.name, picked.itemNote)));
       rows.push(...BK_ADDONS.selectedRows(picked, expandQuantityItems, modifierLinkNote('for', product.name, picked.itemNote)));
@@ -756,10 +724,10 @@
     singleProductItems(product, picked).forEach(row=> BK_STATE.addItem(row.itemId, row.note, row));
   }
   function isEditableSingleProduct(product){
-    return !!(product && (['fries_standard', 'fries_large', 'fries_family'].includes(product.id) || isBurgerBase(product) || isWingsBase(product) || (Array.isArray(product.addons) && product.addons.length)));
+    return !!(product && (BK_MODIFIERS.isFriesProduct(product) || isBurgerBase(product) || isWingsBase(product) || (Array.isArray(product.addons) && product.addons.length)));
   }
   async function addSingleProductWithModifiers(product, pendingNote){
-    if(['fries_standard', 'fries_large', 'fries_family'].includes(product.id)){
+    if(BK_MODIFIERS.isFriesProduct(product)){
       const picked = await openModifierSheet(`${product.name} options`, friesModifierSections(product), { note: pendingNote });
       addSingleProductRows(product, picked);
     }else if(isBurgerBase(product)){
@@ -1096,7 +1064,7 @@
     return selection;
   }
   function singleModifierSections(product, initial){
-    if(['fries_standard', 'fries_large', 'fries_family'].includes(product.id)) return friesModifierSections(product, initial);
+    if(BK_MODIFIERS.isFriesProduct(product)) return friesModifierSections(product, initial);
     if(isBurgerBase(product)) return burgerExtraSections(product);
     if(isWingsBase(product)) return wingsModifierSections(product, initial);
     return BK_ADDONS.sectionDefinitions(product, null, productById);
