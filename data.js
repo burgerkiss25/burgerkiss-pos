@@ -1,4 +1,9 @@
 // Products and menu rules
+const BK_BURGER_ADDONS = ['x_beef_patty','x_cheese','x_bacon','x_chicken_patty','x_chicken_shawarma_patty','x_fried_egg','x_omelette','x_caramelized_onions'];
+const BK_SINGLE_SIDES = ['fries_standard','fries_large','fries_family'];
+const BK_SINGLE_DRINKS = ['d_cola','d_sprite','d_fanta_orange','d_fanta_coktail','d_biggoo_grape','d_coconut_fresh','d_coconut_water_bottle','d_iced_tea_lime','d_iced_tea_ginger','d_iced_tea_strawberry','d_iced_tea_pineapple','d_iced_tea_mint','d_iced_tea_apple','d_iced_tea_green_mint','d_iced_tea_vannile','d_club_beer_std','d_club_beer_large','d_guinness'];
+const BK_SALAD_ADDONS = ['x_beef_patty','x_minced_meat','x_salad_chicken_wings'];
+
 window.BK_DATA = {
   BASE: [
     {id:'hamburger', name:'Hamburger', price:95, cat:'burger', addons:BK_ADDONS.defaultBurgerAddons(), sides:BK_SIDES.defaultBurgerSides(), drinks:BK_DRINKS.defaultBurgerDrinks()},
