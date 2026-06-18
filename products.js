@@ -55,11 +55,13 @@
       const categoryOrder = Number.isFinite(Number(r && r.categoryOrder)) ? Number(r.categoryOrder) : fallbackOrder;
       const active = r && r.active !== false;
       categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+      const defaultProduct = (window.BK_DATA.DEFAULT_BASE || []).find(product=>product.id === id) || {};
+      const sourceAddons = Array.isArray(r && r.addons) ? r.addons : (Array.isArray(defaultProduct.addons) ? defaultProduct.addons : []);
       out.push({
         id, name, price, cat, categoryOrder, active,
         archivedAt:active ? null : Number(r && r.archivedAt) || Date.now(),
         archivedBy:active ? null : String((r && r.archivedBy) || ''),
-        addons:Array.isArray(r && r.addons) ? r.addons.map(normalizeId).filter(Boolean) : []
+        addons:sourceAddons.map(normalizeId).filter(Boolean)
       });
     });
     return out;
