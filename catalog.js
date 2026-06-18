@@ -49,11 +49,15 @@
     if(!choices.length) return `<p class="muted">${emptyText}</p>`;
     return `<div class="catalog-addon-editor" data-choice-editor="${kind}">${choices.map(choice=>`<label class="catalog-addon-choice"><input type="checkbox" data-choice-kind="${kind}" data-addon-choice="${esc(choice.id)}" ${selected.has(choice.id) ? 'checked' : ''}><span>${esc(choice.name)}</span><small>${esc(title)} · ${choice.price} GHS · ${esc(choice.id)}</small></label>`).join('')}</div>`;
   }
-  function modifierEditor(item){
+  function modifierEditor(item, kind, heading, description, title, emptyText){
     if(!BK_ADDONS.isConfigurableProduct(item)) return '<p class="muted">Modifiers are configured on main products like burgers, fries, wings, and salads.</p>';
-    return `<section><h5>Product add-ons</h5><p class="muted">Choose only upgrades that customize the main product.</p>${choiceEditor(item,'addons','Add-on','Create active add-on products first, then attach them here.')}</section>
-            <section><h5>Suggested sides</h5><p class="muted">Choose paid side suggestions shown separately from add-ons.</p>${choiceEditor(item,'sides','Side','Create active side products first, then attach them here.')}</section>
-            <section><h5>Suggested drinks</h5><p class="muted">Choose paid drink suggestions shown separately from add-ons.</p>${choiceEditor(item,'drinks','Drink','Create active drink products first, then attach them here.')}</section>`;
+    return `<h5>${heading}</h5><p class="muted">${description}</p>${choiceEditor(item,kind,title,emptyText)}`;
+  }
+  function detailTab(id, label, meta, active){
+    return `<button class="catalog-detail-tab ${active ? 'active' : ''}" type="button" data-detail-tab="${id}" aria-selected="${active ? 'true' : 'false'}"><span>${label}</span>${meta ? `<small>${meta}</small>` : ''}</button>`;
+  }
+  function detailPanel(id, active, content){
+    return `<section class="catalog-detail-panel" data-detail-panel="${id}" ${active ? '' : 'hidden'}>${content}</section>`;
   }
   function loadDraft(){
     DRAFT = (BK_DATA.BASE || []).map(product=>({
@@ -204,6 +208,9 @@
   }
   function productCard(item, index){
     const recipeCount = Object.keys(item.recipe || {}).length;
+    const addonCount = Array.isArray(item.addons) ? item.addons.length : 0;
+    const sideCount = Array.isArray(item.sides) ? item.sides.length : 0;
+    const drinkCount = Array.isArray(item.drinks) ? item.drinks.length : 0;
     const state = changeState(item);
     const image = item.image
       ? `<img src="${esc(item.image)}" alt="${esc(item.name)}">`
@@ -217,11 +224,23 @@
         <label><span>Category</span><select data-field="cat">${categoryOptions(item.cat)}</select></label>
         <div class="catalog-product-status">${item.active === false ? '<span class="catalog-archive-badge">Archived</span>' : ''}${state ? `<span class="catalog-change-badge">${state}</span>` : ''}<span class="admin-count-badge">${recipeCount} ingredient${recipeCount === 1 ? '' : 's'}</span><small>${item.image ? 'Image ready' : 'Image missing'}</small></div>
         <details class="catalog-product-details"><summary>Edit details</summary>
-          <div class="catalog-detail-grid">
-            <section><h5>Image</h5><div class="catalog-detail-image">${image}</div><label class="x admin-upload-button">Replace image<input class="sr-only" type="file" accept="image/*" data-image-file></label><button class="mini" type="button" data-image-remove>Remove image</button></section>
-            <section><h5>Recipe</h5><div class="recipe-ingredient-list" data-recipe-list>${recipeChips(item,index)}</div><div class="recipe-add-row"><select data-recipe-ingredient>${ingredientOptions()}</select><input data-recipe-quantity type="number" min="0.25" step="0.25" value="1"><button class="x" type="button" data-recipe-add>Add ingredient</button></div></section>
-            ${modifierEditor(item)}
-            <section><h5>Technical details</h5><label><span>Product ID</span><input data-field="id" value="${esc(item.id)}"><small class="catalog-field-error" data-error-for="id"></small></label><h5>History</h5>${productHistory(item)}<button class="mini ${item.active === false ? '' : 'admin-row-danger'}" type="button" data-archive-product>${item.active === false ? 'Restore product' : 'Archive product'}</button></section>
+          <div class="catalog-detail-workspace">
+            <nav class="catalog-detail-tabs" aria-label="Product detail sections">
+              ${detailTab('image','Image',item.image ? 'Ready' : 'Missing',false)}
+              ${detailTab('recipe','Recipe',`${recipeCount} item${recipeCount === 1 ? '' : 's'}`,true)}
+              ${detailTab('addons','Add-ons',`${addonCount} selected`,false)}
+              ${detailTab('sides','Sides',`${sideCount} selected`,false)}
+              ${detailTab('drinks','Drinks',`${drinkCount} selected`,false)}
+              ${detailTab('technical','Technical','ID & history',false)}
+            </nav>
+            <div class="catalog-detail-panels">
+              ${detailPanel('image',false,`<h5>Image</h5><div class="catalog-detail-image">${image}</div><label class="x admin-upload-button">Replace image<input class="sr-only" type="file" accept="image/*" data-image-file></label><button class="mini" type="button" data-image-remove>Remove image</button>`)}
+              ${detailPanel('recipe',true,`<h5>Recipe</h5><div class="recipe-ingredient-list" data-recipe-list>${recipeChips(item,index)}</div><div class="recipe-add-row"><select data-recipe-ingredient>${ingredientOptions()}</select><input data-recipe-quantity type="number" min="0.25" step="0.25" value="1"><button class="x" type="button" data-recipe-add>Add ingredient</button></div>`)}
+              ${detailPanel('addons',false,modifierEditor(item,'addons','Product add-ons','Choose only upgrades that customize the main product.','Add-on','Create active add-on products first, then attach them here.'))}
+              ${detailPanel('sides',false,modifierEditor(item,'sides','Suggested sides','Choose paid side suggestions shown separately from add-ons.','Side','Create active side products first, then attach them here.'))}
+              ${detailPanel('drinks',false,modifierEditor(item,'drinks','Suggested drinks','Choose paid drink suggestions shown separately from add-ons.','Drink','Create active drink products first, then attach them here.'))}
+              ${detailPanel('technical',false,`<h5>Technical details</h5><label><span>Product ID</span><input data-field="id" value="${esc(item.id)}"><small class="catalog-field-error" data-error-for="id"></small></label><h5>History</h5>${productHistory(item)}<button class="mini ${item.active === false ? '' : 'admin-row-danger'}" type="button" data-archive-product>${item.active === false ? 'Restore product' : 'Archive product'}</button>`)}
+            </div>
           </div>
         </details>
         <div class="catalog-row-error" role="alert"></div>
@@ -279,6 +298,19 @@
     body.querySelectorAll('[data-catalog-product]').forEach(card=>{
       const index = Number(card.dataset.index);
       const item = DRAFT[index];
+      card.querySelectorAll('[data-detail-tab]').forEach(button=>{
+        button.onclick = ()=>{
+          const tab = button.dataset.detailTab;
+          card.querySelectorAll('[data-detail-tab]').forEach(tabButton=>{
+            const active = tabButton === button;
+            tabButton.classList.toggle('active', active);
+            tabButton.setAttribute('aria-selected', active ? 'true' : 'false');
+          });
+          card.querySelectorAll('[data-detail-panel]').forEach(panel=>{
+            panel.hidden = panel.dataset.detailPanel !== tab;
+          });
+        };
+      });
       const categorySelect = card.querySelector('[data-field="cat"]');
       categorySelect.onchange = ()=>{
         collectDraft();
@@ -395,7 +427,11 @@
           card.classList.add('catalog-product-invalid');
           card.querySelector('.catalog-row-error').textContent = message;
           const details = card.querySelector('details');
-          if(field === 'id') details.open = true;
+          if(field === 'id'){
+            details.open = true;
+            const technicalTab = card.querySelector('[data-detail-tab="technical"]');
+            if(technicalTab) technicalTab.click();
+          }
           const input = card.querySelector(`[data-field="${field}"]`);
           input.setAttribute('aria-invalid','true');
           input.focus();
