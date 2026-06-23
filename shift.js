@@ -29,6 +29,7 @@
     document.body.classList.remove('app-loading');
     const dateInput = document.getElementById('shiftReportDate');
     if(dateInput && !dateInput.value) dateInput.value = BK_REPORTS.dateInputValue(new Date());
+    initShiftTabs();
     initPlanner();
     initAbsences();
     initPayroll();
@@ -55,6 +56,29 @@
     document.getElementById('shiftOrderDetailModal').classList.add('open');
   }
   function closeOrderDetail(){ document.getElementById('shiftOrderDetailModal').classList.remove('open'); }
+  function setShiftView(view){
+    const next = view || 'schedule';
+    document.querySelectorAll('[data-shift-panel]').forEach(panel=>{
+      panel.hidden = panel.dataset.shiftPanel !== next;
+    });
+    document.querySelectorAll('[data-shift-view]').forEach(button=>{
+      const active = button.dataset.shiftView === next;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    try{ localStorage.setItem('bk_shift_tools_view_v1', next); }catch(e){}
+  }
+  function initShiftTabs(){
+    if(initShiftTabs.done) return;
+    initShiftTabs.done = true;
+    document.querySelectorAll('[data-shift-view]').forEach(button=>{
+      button.onclick = ()=>setShiftView(button.dataset.shiftView);
+    });
+    let saved = '';
+    try{ saved = localStorage.getItem('bk_shift_tools_view_v1') || ''; }catch(e){}
+    if(!document.querySelector(`[data-shift-panel="${saved}"]`)) saved = 'schedule';
+    setShiftView(saved);
+  }
   function escapeHtml(value){ return BK_REPORTS && BK_REPORTS.escapeHtml ? BK_REPORTS.escapeHtml(value) : String(value || '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
   function currentActor(){ return window.BK_ACCESS && BK_ACCESS.actor ? BK_ACCESS.actor() : null; }
   function canManagePlanner(){ return window.BK_SHIFT_PLANNER && BK_SHIFT_PLANNER.canManageSchedule(currentActor()); }
@@ -240,8 +264,8 @@
 
   document.addEventListener('bk-access-ready', renderShiftTools);
   document.getElementById('shiftReportDate').onchange = ()=>{ restrictDateInput(); renderReport(); };
-  document.getElementById('historyToday').onclick = ()=>setReportDate(0);
-  document.getElementById('historyYesterday').onclick = ()=>setReportDate(-1);
-  document.getElementById('purchaseHistoryExport').onclick = exportPurchaseHistory;
+  document.getElementById('historyToday').onclick = ()=>{ setShiftView('closeout'); setReportDate(0); };
+  document.getElementById('historyYesterday').onclick = ()=>{ setShiftView('closeout'); setReportDate(-1); };
+  document.getElementById('purchaseHistoryExport').onclick = ()=>{ setShiftView('closeout'); exportPurchaseHistory(); };
   document.getElementById('shiftOrderDetailClose').onclick = closeOrderDetail;
 })();
