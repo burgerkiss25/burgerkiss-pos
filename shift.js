@@ -56,6 +56,12 @@
     document.getElementById('shiftOrderDetailModal').classList.add('open');
   }
   function closeOrderDetail(){ document.getElementById('shiftOrderDetailModal').classList.remove('open'); }
+  function refreshShiftView(view){
+    if(view === 'schedule') renderPlanner();
+    else if(view === 'absences') renderAbsences();
+    else if(view === 'payroll') renderPayroll();
+    else if(view === 'closeout') renderReport();
+  }
   function setShiftView(view){
     const next = view || 'schedule';
     document.querySelectorAll('[data-shift-panel]').forEach(panel=>{
@@ -67,6 +73,7 @@
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
     try{ localStorage.setItem('bk_shift_tools_view_v1', next); }catch(e){}
+    refreshShiftView(next);
   }
   function initShiftTabs(){
     if(initShiftTabs.done) return;
@@ -263,6 +270,8 @@
   }
 
   document.addEventListener('bk-access-ready', renderShiftTools);
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initShiftTabs);
+  else initShiftTabs();
   document.getElementById('shiftReportDate').onchange = ()=>{ restrictDateInput(); renderReport(); };
   document.getElementById('historyToday').onclick = ()=>{ setShiftView('closeout'); setReportDate(0); };
   document.getElementById('historyYesterday').onclick = ()=>{ setShiftView('closeout'); setReportDate(-1); };
