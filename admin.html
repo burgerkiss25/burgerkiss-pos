@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BurgerKiss – Admin Editors</title>
-  <link rel="stylesheet" href="./style.css?v=65" />
+  <link rel="stylesheet" href="./style.css?v=67" />
   <script src="./firebase-config.js?v=2"></script>
 </head>
 <body class="admin-page">
@@ -25,7 +25,7 @@
   </div>
 
   <div class="wrap">
-    <section class="admin-dashboard" aria-labelledby="adminDashboardTitle">
+    <section class="admin-dashboard admin-dashboard-shell" aria-labelledby="adminDashboardTitle">
       <div class="admin-dashboard-heading">
         <div>
           <div class="eyebrow">Management workspace</div>
@@ -34,35 +34,35 @@
         </div>
       </div>
 
-      <div class="admin-editor-groups admin-workspace-groups">
-        <article class="admin-editor-group">
-          <div class="admin-group-heading">
-            <span class="admin-group-icon" aria-hidden="true">01</span>
-            <div><h3>Business workspaces</h3><p>Open one workspace for each day-to-day management task.</p></div>
-          </div>
-          <div class="admin-editor-grid">
-            <button class="admin-editor-card" id="btnCatalog" type="button"><span class="admin-card-icon" aria-hidden="true">P</span><span><b>Products</b><small>Products, prices, images, recipes, and add-ons</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
-            <button class="admin-editor-card" id="btnMenus" type="button"><span class="admin-card-icon" aria-hidden="true">M</span><span><b>Menus</b><small>Menu contents, prices, and default choices</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
-            <button class="admin-editor-card" id="btnInventory" type="button"><span class="admin-card-icon" aria-hidden="true">IN</span><span><b>Inventory</b><small>Stock overview, ingredients, and transfers</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
-            <button class="admin-editor-card" id="btnOperations" type="button"><span class="admin-card-icon" aria-hidden="true">O</span><span><b>Operations</b><small>Packaging and service rules</small></span><span class="admin-card-arrow" aria-hidden="true">→</span></button>
-          </div>
-        </article>
-      </div>
+      <div class="admin-workspace-shell">
+        <nav class="admin-editor-tabs" role="tablist" aria-label="Admin workspaces">
+          <button class="admin-editor-tab" id="btnCatalog" type="button" role="tab" data-admin-tab="products"><span class="admin-card-icon" aria-hidden="true">P</span><span><b>Products</b><small>Products, prices, images, recipes, and add-ons</small></span></button>
+          <button class="admin-editor-tab" id="btnMenus" type="button" role="tab" data-admin-tab="menus"><span class="admin-card-icon" aria-hidden="true">M</span><span><b>Menus</b><small>Menu contents, prices, and default choices</small></span></button>
+          <button class="admin-editor-tab" id="btnInventory" type="button" role="tab" data-admin-tab="inventory"><span class="admin-card-icon" aria-hidden="true">IN</span><span><b>Inventory</b><small>Stock overview, ingredients, and transfers</small></span></button>
+          <button class="admin-editor-tab" id="btnOperations" type="button" role="tab" data-admin-tab="operations"><span class="admin-card-icon" aria-hidden="true">O</span><span><b>Operations</b><small>Packaging and service rules</small></span></button>
+          <button class="admin-editor-tab active" id="btnSystemHealth" type="button" role="tab" data-admin-tab="health" aria-selected="true"><span class="admin-card-icon" aria-hidden="true">DB</span><span><b>System Health</b><small>Online database status and activity</small></span></button>
+        </nav>
 
-      <div class="panel" id="adminDbStatusPanel">
-        <div class="admin-status-heading">
-          <div>
-            <div class="eyebrow">System health</div>
-            <h2>Online database</h2>
-            <p id="adminDbStatusSummary">Checking Firebase status...</p>
-          </div>
-          <button class="x" id="btnRefreshDbStatus" type="button">Refresh status</button>
-        </div>
-        <div class="admin-status-table-wrap">
-          <table class="admin-status-table">
-            <thead><tr><th scope="col">Area</th><th scope="col">Status</th><th scope="col">Last activity</th><th scope="col"><span class="sr-only">Details</span></th></tr></thead>
-            <tbody id="adminDbStatusBody"><tr><td colspan="4" class="empty-state">Checking Firebase status...</td></tr></tbody>
-          </table>
+        <div class="admin-tab-viewport">
+          <section class="admin-tab-panel admin-workspace-empty" data-admin-panel="workspaces" aria-live="polite" hidden>
+            <div class="admin-editor-intro"><div><h4>Workspace opened</h4><p>The selected editor opens in a focused workspace. Close it to return here or choose another tab.</p></div></div>
+          </section>
+          <section class="panel admin-tab-panel" id="adminDbStatusPanel" data-admin-panel="health">
+            <div class="admin-status-heading">
+              <div>
+                <div class="eyebrow">System health</div>
+                <h2>Online database</h2>
+                <p id="adminDbStatusSummary">Checking Firebase status...</p>
+              </div>
+              <button class="x" id="btnRefreshDbStatus" type="button">Refresh status</button>
+            </div>
+            <div class="admin-status-table-wrap">
+              <table class="admin-status-table">
+                <thead><tr><th scope="col">Area</th><th scope="col">Status</th><th scope="col">Last activity</th><th scope="col"><span class="sr-only">Details</span></th></tr></thead>
+                <tbody id="adminDbStatusBody"><tr><td colspan="4" class="empty-state">Checking Firebase status...</td></tr></tbody>
+              </table>
+            </div>
+          </section>
         </div>
       </div>
     </section>
@@ -89,7 +89,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
-  <script src="./access.js?v=2"></script>
+  <script src="./access.js?v=5"></script>
   <script src="./addons.js?v=1"></script>
   <script src="./sides.js?v=1"></script>
   <script src="./drinks.js?v=1"></script>
@@ -115,7 +115,7 @@
       }
       if(document.querySelector('script[data-admin-boot]')) return;
       const script = document.createElement('script');
-      script.src = 'admin.js?v=8';
+      script.src = 'admin.js?v=9';
       script.dataset.adminBoot = 'true';
       document.body.appendChild(script);
     });

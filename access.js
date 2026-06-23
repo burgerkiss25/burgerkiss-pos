@@ -307,6 +307,36 @@
       el.classList.toggle('access-hidden', !hasRole(el.dataset.minRole));
     });
   }
+
+  function positionStaffMenu(details){
+    const dropdown = details && details.querySelector('.staff-session-dropdown');
+    const summary = details && details.querySelector('summary');
+    if(!(dropdown && summary && details.open)) return;
+    const rect = summary.getBoundingClientRect();
+    const width = Math.min(Math.max(dropdown.offsetWidth || 210, 210), Math.max(210, window.innerWidth - 16));
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+    dropdown.style.left = `${left}px`;
+    dropdown.style.top = `${Math.min(rect.bottom + 8, window.innerHeight - 8)}px`;
+    dropdown.style.maxWidth = `${window.innerWidth - 16}px`;
+  }
+  function wireDismissibleMenus(){
+    if(wireDismissibleMenus.done) return;
+    wireDismissibleMenus.done = true;
+    document.addEventListener('toggle', event=>{
+      const details = event.target;
+      if(!(details instanceof HTMLDetailsElement) || !details.matches('details.staff-session-menu,details.more-menu,details.tool-menu')) return;
+      if(details.open){
+        document.querySelectorAll('details.staff-session-menu[open],details.more-menu[open],details.tool-menu[open]').forEach(item=>{ if(item !== details) item.removeAttribute('open'); });
+        positionStaffMenu(details);
+      }
+    }, true);
+    document.addEventListener('click', event=>{
+      const active = event.target.closest && event.target.closest('details.staff-session-menu,details.more-menu,details.tool-menu');
+      document.querySelectorAll('details.staff-session-menu[open],details.more-menu[open],details.tool-menu[open]').forEach(details=>{ if(details !== active) details.removeAttribute('open'); });
+    });
+    window.addEventListener('resize', ()=>document.querySelectorAll('details.staff-session-menu[open]').forEach(positionStaffMenu));
+    window.addEventListener('scroll', ()=>document.querySelectorAll('details.staff-session-menu[open]').forEach(positionStaffMenu), true);
+  }
   function updateHeader(){
     const host = document.getElementById('staffSession');
     if(!host || !session) return;
@@ -318,6 +348,9 @@
     if(signOutButton) signOutButton.onclick = signOut;
     const topupButton = document.getElementById('btnElectricityTopup');
     if(topupButton) topupButton.onclick = promptElectricityTopup;
+    wireDismissibleMenus();
+    const staffMenu = host.querySelector('details.staff-session-menu');
+    if(staffMenu) staffMenu.addEventListener('toggle', ()=>positionStaffMenu(staffMenu));
     if(root.BK_UI && typeof BK_UI.renderStock === 'function') BK_UI.renderStock();
   }
   function promptElectricityTopup(){

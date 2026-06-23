@@ -5,10 +5,13 @@ const html = fs.readFileSync('admin.html', 'utf8');
 const admin = fs.readFileSync('admin.js', 'utf8');
 const css = fs.readFileSync('style.css', 'utf8');
 
-assert.strictEqual((html.match(/class="admin-editor-card"/g) || []).length, 4);
+assert.strictEqual((html.match(/data-admin-tab=/g) || []).length, 5);
+assert.match(html, /class="admin-editor-tabs" role="tablist"/);
 assert.match(html, /id="btnCatalog"/);
 assert.match(html, /id="btnInventory"/);
 assert.match(html, /id="btnOperations"/);
+assert.match(html, /id="btnSystemHealth"/);
+assert.match(html, /id="adminDbStatusPanel" data-admin-panel="health"/);
 assert.match(html, /id="modalCatalog"/);
 assert.match(html, /id="catalogBody"/);
 assert.match(html, /Save all changes/);
@@ -24,5 +27,6 @@ assert.match(admin, /function closeWorkspaceModals/);
 assert.match(admin, /function openCatalogWorkspace/);
 assert.match(admin, /BK_CATALOG\.save/);
 assert.match(css, /\.admin-workspace-nav/);
+assert.match(css, /\.admin-tab-panel\{height:100%;min-height:0;overflow-y:auto;overflow-x:hidden\}/);
 
 console.log('Admin workspace consolidation checks passed.');

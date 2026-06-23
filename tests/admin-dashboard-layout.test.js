@@ -8,16 +8,27 @@ const html = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'admin.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
 
-test('admin header stays compact and navigation uses four domain workspaces', () => {
+test('admin header stays compact and workspaces are presented as tabs', () => {
   const header = html.slice(html.indexOf('<header class="admin-header">'), html.indexOf('</header>'));
   assert.match(header, /← Back to POS/);
   assert.doesNotMatch(header, /id="btnCatalog"|id="btnInventory"|id="btnOperations"/);
-  assert.strictEqual((html.match(/class="admin-editor-group"/g) || []).length, 1);
-  assert.match(html, /id="btnCatalog"/);
-  assert.match(html, /id="btnMenus"/);
-  assert.match(html, /id="btnInventory"/);
-  assert.match(html, /id="btnOperations"/);
+  assert.strictEqual((html.match(/class="admin-editor-tab(?:\s|")/g) || []).length, 5);
+  assert.match(html, /class="admin-editor-tabs" role="tablist"/);
+  assert.match(html, /id="btnCatalog"[^>]+role="tab"/);
+  assert.match(html, /id="btnMenus"[^>]+role="tab"/);
+  assert.match(html, /id="btnInventory"[^>]+role="tab"/);
+  assert.match(html, /id="btnOperations"[^>]+role="tab"/);
+  assert.match(html, /id="btnSystemHealth"[^>]+role="tab"/);
   assert.match(html, /Products, prices, images, recipes, and add-ons/);
+});
+
+test('admin dashboard scrolls only inside the active workspace panel', () => {
+  assert.match(html, /class="admin-dashboard admin-dashboard-shell"/);
+  assert.match(html, /class="admin-tab-viewport"/);
+  assert.match(html, /class="panel admin-tab-panel" id="adminDbStatusPanel"/);
+  assert.match(css, /\.admin-page\{height:100dvh;overflow:hidden\}/);
+  assert.match(css, /\.admin-tab-panel\{height:100%;min-height:0;overflow-y:auto;overflow-x:hidden\}/);
+  assert.match(css, /\.admin-status-table-wrap\{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden\}/);
 });
 
 test('database health uses a compact table with badges and hidden technical paths', () => {
