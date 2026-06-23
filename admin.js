@@ -332,6 +332,29 @@
     stock: { title:'Stock overview', description:'Review inventory levels, locations, transfers, and ingredient details', label:'Stock', reset:'Reset stock to defaults' }
   };
 
+  const WORKSPACE_ROUTES = new Set(['products','menus','inventory','operations','health']);
+  const routedWorkspace = new URLSearchParams(window.location.search).get('workspace');
+  const activeWorkspaceRoute = WORKSPACE_ROUTES.has(routedWorkspace) && routedWorkspace !== 'health' ? routedWorkspace : '';
+  function adminWorkspaceUrl(tab){ return `admin.html?workspace=${encodeURIComponent(tab)}`; }
+  function navigateWorkspace(tab){ window.location.assign(adminWorkspaceUrl(tab)); }
+  function returnToAdminHome(){
+    if(activeWorkspaceRoute) window.location.replace('admin.html');
+  }
+  function closeModalById(modalId){
+    if(modalId === 'modalCatalog') document.getElementById('modalCatalog').classList.remove('open');
+    else if(modalId === 'modalMenus') BK_MENUS.closeEditor();
+    else if(modalId === 'modalStock') BK_STOCK.closeEditor();
+    else if(modalId === 'modalPackagingRules') closePackagingRules();
+  }
+  function closeActiveWorkspace(){
+    const modal = document.querySelector('.admin-editor-modal.open');
+    if(!modal) return;
+    closeEditorSafely(modal.id, ()=>{
+      closeModalById(modal.id);
+      returnToAdminHome();
+    });
+  }
+
   function setAdminWorkspaceTab(tab){
     const selected = tab || 'health';
     document.querySelectorAll('[data-admin-tab]').forEach(button=>{
@@ -378,33 +401,44 @@
   function openOperationsWorkspace(){ return guardWorkspaceChange(()=>{ closeWorkspaceModals(); openPackagingRules(); }); }
   function closeEditorSafely(modalId, close){ return guardWorkspaceChange(()=>{ markEditorSaved(modalId); close(); }); }
 
-  document.getElementById('btnCatalog').onclick = ()=>openWorkspaceTab('products', openCatalogWorkspace);
-  document.getElementById('btnInventory').onclick = ()=>guardWorkspaceChange(()=>{ setAdminWorkspaceTab('inventory'); showStockEditor('stock'); });
-  document.getElementById('btnOperations').onclick = ()=>guardWorkspaceChange(()=>{ setAdminWorkspaceTab('operations'); closeWorkspaceModals(); openPackagingRules(); });
+  document.getElementById('btnCatalog').onclick = ()=>guardWorkspaceChange(()=>navigateWorkspace('products'));
+  document.getElementById('btnInventory').onclick = ()=>guardWorkspaceChange(()=>navigateWorkspace('inventory'));
+  document.getElementById('btnOperations').onclick = ()=>guardWorkspaceChange(()=>navigateWorkspace('operations'));
   document.getElementById('catalogAdd').onclick = ()=>BK_CATALOG.addProduct();
-  document.getElementById('catalogClose').onclick = ()=>closeEditorSafely('modalCatalog', ()=>document.getElementById('modalCatalog').classList.remove('open'));
+  document.getElementById('catalogClose').onclick = ()=>closeEditorSafely('modalCatalog', ()=>{ document.getElementById('modalCatalog').classList.remove('open'); returnToAdminHome(); });
   document.getElementById('catalogSave').onclick = async ()=>{
     if(await saveWithFeedback(()=>BK_CATALOG.save(), 'Product catalog')) markEditorSaved('modalCatalog');
   };
   document.getElementById('catalogReset').onclick = ()=>resetWithConfirmation(()=>BK_CATALOG.reset(), 'Product catalog');
 
-  document.getElementById('btnMenus').onclick = ()=> openWorkspaceTab('menus', ()=>{ closeWorkspaceModals(); openEditorModal('modalMenus', ()=>BK_MENUS.openEditor()); });
-  document.getElementById('menuClose').onclick  = ()=> closeEditorSafely('modalMenus', ()=>BK_MENUS.closeEditor());
+  document.getElementById('btnMenus').onclick = ()=> guardWorkspaceChange(()=>navigateWorkspace('menus'));
+  document.getElementById('menuClose').onclick  = ()=> closeEditorSafely('modalMenus', ()=>{ BK_MENUS.closeEditor(); returnToAdminHome(); });
   document.getElementById('menuAdd').onclick    = ()=> BK_MENUS.addRow();
   document.getElementById('menuSave').onclick   = async ()=>{ if(await saveWithFeedback(()=>BK_MENUS.save(), 'Menus')) markEditorSaved('modalMenus'); };
   document.getElementById('menuReset').onclick  = ()=> resetWithConfirmation(()=>BK_MENUS.reset(), 'Menus');
 
 
   document.getElementById('btnStock').onclick = ()=> openStockEditor('stock');
-  document.getElementById('packClose').onclick = ()=> closeEditorSafely('modalPackagingRules', closePackagingRules);
+  document.getElementById('packClose').onclick = ()=> closeEditorSafely('modalPackagingRules', ()=>{ closePackagingRules(); returnToAdminHome(); });
   document.getElementById('packSave').onclick = async ()=>{ if(await saveWithFeedback(savePackagingRulesFromModal, 'Packaging rules')) markEditorSaved('modalPackagingRules'); };
   document.getElementById('packReset').onclick = ()=> resetWithConfirmation(()=>{ savePackagingRules(PACK_RULES_DEFAULT); openPackagingRules(); }, 'Packaging rules');
-  document.getElementById('sClose').onclick   = ()=> closeEditorSafely('modalStock', ()=>BK_STOCK.closeEditor());
+  document.getElementById('sClose').onclick   = ()=> closeEditorSafely('modalStock', ()=>{ BK_STOCK.closeEditor(); returnToAdminHome(); });
   document.getElementById('sSave').onclick    = async ()=>{ if(await saveWithFeedback(()=>BK_STOCK.save(), stockEditorCopy[activeStockMode].label)) markEditorSaved('modalStock'); };
   document.getElementById('sReset').onclick   = ()=> resetWithConfirmation(()=>{ BK_STOCK.resetEditor(activeStockMode); showStockEditor(activeStockMode); }, stockEditorCopy[activeStockMode].label);
-  document.getElementById('btnSystemHealth').onclick = ()=> guardWorkspaceChange(()=>{ closeWorkspaceModals(); setAdminWorkspaceTab('health'); });
-  setAdminWorkspaceTab('health');
+  document.getElementById('btnSystemHealth').onclick = ()=> guardWorkspaceChange(()=>{ closeWorkspaceModals(); window.location.assign(adminWorkspaceUrl('health')); });
+  if(activeWorkspaceRoute){
+    document.body.classList.add('admin-workspace-route');
+    if(activeWorkspaceRoute === 'products') openWorkspaceTab('products', openCatalogWorkspace);
+    else if(activeWorkspaceRoute === 'menus') openWorkspaceTab('menus', ()=>{ closeWorkspaceModals(); openEditorModal('modalMenus', ()=>BK_MENUS.openEditor()); });
+    else if(activeWorkspaceRoute === 'inventory') guardWorkspaceChange(()=>{ setAdminWorkspaceTab('inventory'); showStockEditor('stock'); });
+    else if(activeWorkspaceRoute === 'operations') guardWorkspaceChange(()=>{ setAdminWorkspaceTab('operations'); closeWorkspaceModals(); openPackagingRules(); });
+  }else{
+    setAdminWorkspaceTab('health');
+  }
   document.getElementById('btnRefreshDbStatus').onclick = refreshDbStatus;
+  document.addEventListener('click', event=>{
+    if(event.target.classList && event.target.classList.contains('admin-editor-modal')) closeActiveWorkspace();
+  });
   document.getElementById('adminConfirmCancel').onclick = ()=> finishConfirmation(false);
   document.getElementById('adminConfirmAccept').onclick = ()=> finishConfirmation(true);
   window.addEventListener('beforeunload', event=>{
