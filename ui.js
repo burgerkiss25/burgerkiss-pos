@@ -1406,9 +1406,11 @@
 
   function workflowNextState(stage, slot){
     const hasItems = !!(slot && Array.isArray(slot.items) && slot.items.length);
-    if(stage === 'order') return hasItems
-      ? {state:'ready', title:'Order ready for kitchen', detail:'Products and packaging can now be sent to preparation.', label:'Continue to Kitchen', target:'make', disabled:false}
-      : {state:'blocked', title:'Order not ready', detail:'Add at least one product to continue.', label:'Continue to Kitchen', target:'make', disabled:true};
+    if(stage === 'order'){
+      if(!hasItems) return {state:'blocked', title:'Add products first', detail:'Choose at least one product from the product grid before sending this order to Kitchen.', label:'Continue to Kitchen', target:'make', disabled:true};
+      if(slot && isOnlineOrder(slot)) return {state:'ready', title:`${platformLabel(slot.orderSource)} order ready`, detail:'Reference is saved. Check products, then send the order to Kitchen.', label:'Continue to Kitchen', target:'make', disabled:false};
+      return {state:'ready', title:'Order ready for kitchen', detail:'Check the cart, then send the order to preparation.', label:'Continue to Kitchen', target:'make', disabled:false};
+    }
     if(stage === 'make'){
       const done = hasItems && slot.items.every(item=>!!item.done);
       return done
@@ -1935,16 +1937,30 @@
     const host = ensureDialogHost();
     document.getElementById('appDialogTitle').textContent = 'New online order';
     document.getElementById('appDialogBody').innerHTML = `
-      <p>Choose the order channel. Bolt, Chowdeck and Hubtel are already paid online. WhatsApp orders remain unpaid until pickup or delivery.</p>
-      <label class="dialog-label">Channel<select id="onlinePlatform" class="dialog-field"><option value="whatsapp">WhatsApp</option><option value="bolt">Bolt</option><option value="chowdeck">Chowdeck</option><option value="hubtel">Hubtel</option></select></label>
-      <label class="dialog-label">Order reference / customer name<input id="onlineReference" class="dialog-field" maxlength="80" placeholder="e.g. Ama or BOLT-847263" autocomplete="off"></label>
-      <label class="dialog-label hidden" id="onlinePhoneRow">Customer phone<input id="onlinePhone" class="dialog-field" maxlength="30" inputmode="tel" placeholder="Optional for pickup; needed for delivery"></label>
+      <div class="online-order-guide">
+        <strong>Start with the platform details.</strong>
+        <span>After creating the slot, add products exactly like a walk-in order.</span>
+      </div>
+      <label class="dialog-label">Platform<select id="onlinePlatform" class="dialog-field"><option value="whatsapp">WhatsApp</option><option value="bolt">Bolt</option><option value="chowdeck">Chowdeck</option><option value="hubtel">Hubtel</option></select></label>
+      <div class="online-platform-hint" id="onlinePaymentHint" role="status" aria-live="polite"></div>
+      <label class="dialog-label">Order reference<input id="onlineReference" class="dialog-field" maxlength="80" placeholder="Customer name or platform order number" autocomplete="off"></label>
+      <label class="dialog-label" id="onlineNameRow">Customer name optional<input id="onlineCustomerName" class="dialog-field" maxlength="80" placeholder="Shown on receipts and handover notes" autocomplete="off"></label>
+      <label class="dialog-label hidden" id="onlinePhoneRow">Customer phone optional<input id="onlinePhone" class="dialog-field" maxlength="30" inputmode="tel" placeholder="Useful for WhatsApp delivery or rider calls"></label>
       <div id="onlineOrderError" class="field-error"></div>
       <div class="dialog-actions"><button class="x" id="dlgCancel">Cancel</button><button class="x modifier-primary" id="dlgConfirm">Create Online Order</button></div>`;
     host.classList.add('open');
     const reference = document.getElementById('onlineReference');
     const platformInput = document.getElementById('onlinePlatform');
-    const syncOnlineFields = ()=> document.getElementById('onlinePhoneRow').classList.toggle('hidden', platformInput.value !== 'whatsapp');
+    const syncOnlineFields = ()=>{
+      const platform = platformInput.value;
+      const whatsapp = platform === 'whatsapp';
+      document.getElementById('onlinePhoneRow').classList.toggle('hidden', !whatsapp);
+      document.getElementById('onlineNameRow').classList.toggle('hidden', whatsapp);
+      document.getElementById('onlinePaymentHint').textContent = whatsapp
+        ? 'WhatsApp stays unpaid until pickup/delivery is confirmed before Kitchen.'
+        : `${platformLabel(platform)} is treated as paid online; only enter the platform order number and products.`;
+      reference.placeholder = whatsapp ? 'e.g. Ama pickup or Ama delivery' : `e.g. ${platformLabel(platform).toUpperCase()}-847263`;
+    };
     platformInput.onchange = syncOnlineFields; syncOnlineFields();
     reference.focus();
     document.getElementById('dlgCancel').onclick = ()=>{
@@ -1954,9 +1970,10 @@
     document.getElementById('dlgConfirm').onclick = ()=>{
       const platform = document.getElementById('onlinePlatform').value;
       const externalOrderNo = reference.value.trim();
+      const customerName = document.getElementById('onlineCustomerName').value.trim();
       const customerPhone = document.getElementById('onlinePhone').value.trim();
       const error = document.getElementById('onlineOrderError');
-      if(!externalOrderNo){ error.textContent = 'The platform order number is required.'; return; }
+      if(!externalOrderNo){ error.textContent = platform === 'whatsapp' ? 'Enter the customer name or WhatsApp reference.' : 'Enter the platform order number.'; return; }
       if(onlineOrderExists(platform, externalOrderNo)){ error.textContent = `This ${platformLabel(platform)} order already exists.`; return; }
       const state = BK_STATE.getState();
       const current = state.slots[state.active];
@@ -1965,13 +1982,13 @@
         closeDialog();
         renderAll();
         goTab('order');
-        infoDialog(platform === 'whatsapp' ? `WhatsApp order for ${externalOrderNo} created. Enter the products; fulfilment and payment rules are confirmed before Kitchen.` : `${platformLabel(platform)} order ${externalOrderNo} created. Payment is already recorded; enter the products and continue to Kitchen.`);
+        infoDialog(platform === 'whatsapp' ? `WhatsApp order for ${externalOrderNo} created. Add products next; fulfilment and payment are confirmed before Kitchen.` : `${platformLabel(platform)} order ${externalOrderNo} created as paid online. Add products next, then send to Kitchen.`);
       };
       if(current && !current.items.length && current.pay === 'unpaid'){
-        BK_STATE.updateSlot(state.active, {orderSource:platform, externalOrderNo, customerName:platform === 'whatsapp' ? externalOrderNo : '', customerPhone, pay:platform === 'whatsapp' ? 'unpaid' : platform});
+        BK_STATE.updateSlot(state.active, {orderSource:platform, externalOrderNo, customerName:platform === 'whatsapp' ? externalOrderNo : customerName, customerPhone, pay:platform === 'whatsapp' ? 'unpaid' : platform});
         finish(state.active);
       }else{
-        BK_STATE.addSlot(undefined, {orderSource:platform, externalOrderNo, customerName:platform === 'whatsapp' ? externalOrderNo : '', customerPhone, pay:platform === 'whatsapp' ? 'unpaid' : platform}).then(finish).catch(showOrderNumberError);
+        BK_STATE.addSlot(undefined, {orderSource:platform, externalOrderNo, customerName:platform === 'whatsapp' ? externalOrderNo : customerName, customerPhone, pay:platform === 'whatsapp' ? 'unpaid' : platform}).then(finish).catch(showOrderNumberError);
       }
     };
   }
