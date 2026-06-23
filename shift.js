@@ -30,6 +30,7 @@
     const dateInput = document.getElementById('shiftReportDate');
     if(dateInput && !dateInput.value) dateInput.value = BK_REPORTS.dateInputValue(new Date());
     initPlanner();
+    initAbsences();
     restrictDateInput();
     renderReport();
     Promise.all([
@@ -58,6 +59,7 @@
   function canManagePlanner(){ return window.BK_SHIFT_PLANNER && BK_SHIFT_PLANNER.canManageSchedule(currentActor()); }
   function plannerMonth(){ return document.getElementById('plannerMonth').value || BK_SHIFT_PLANNER.monthValue(new Date()); }
   function setPlannerMessage(message){ document.getElementById('plannerMessage').textContent = message || ''; }
+  function setAbsenceMessage(message){ document.getElementById('absenceMessage').textContent = message || ''; }
   function fillPlannerOptions(){
     document.getElementById('plannerStaff').innerHTML = BK_ACCESS.STAFF.filter(person=>person.role !== 'owner').map(person=>`<option value="${escapeHtml(person.id)}">${escapeHtml(person.name)} · ${escapeHtml(person.roleLabel)}</option>`).join('');
     const shifts = Object.values(BK_ACCESS.SHIFTS).map(shift=>`<option value="${escapeHtml(shift.id)}">${escapeHtml(shift.label)} · ${escapeHtml(shift.hours)}</option>`).join('');
@@ -87,7 +89,9 @@
       const body = entries.length ? entries.map(entry=>{
         const person = BK_ACCESS.STAFF.find(item=>item.id === entry.staffId);
         const shift = entry.shiftId === 'off' ? { label:'Off day' } : BK_ACCESS.SHIFTS[entry.shiftId];
-        return `<div class="planner-entry"><span><b>${escapeHtml(person && person.name || entry.staffId)}</b> · ${escapeHtml(shift && shift.label || entry.shiftId)} <small>${Number(entry.workDayCredit || 0).toFixed(1)} day</small>${entry.note ? `<small> · ${escapeHtml(entry.note)}</small>` : ''}</span>${canManage ? `<button class="x" type="button" data-planner-remove="${escapeHtml(entry.id)}">Remove</button>` : ''}</div>`;
+        const absence = window.BK_ABSENCES && BK_ABSENCES.staffAbsentOn ? BK_ABSENCES.staffAbsentOn(entry.staffId, entry.date) : null;
+        const absenceNote = absence ? ` <span class="absence-badge ${absence.paid ? 'paid' : 'unpaid'}">${escapeHtml(absence.typeLabel)} · ${absence.paid ? 'paid' : 'unpaid'}</span>` : '';
+        return `<div class="planner-entry"><span><b>${escapeHtml(person && person.name || entry.staffId)}</b> · ${escapeHtml(shift && shift.label || entry.shiftId)} <small>${Number(entry.workDayCredit || 0).toFixed(1)} day</small>${absenceNote}${entry.note ? `<small> · ${escapeHtml(entry.note)}</small>` : ''}</span>${canManage ? `<button class="x" type="button" data-planner-remove="${escapeHtml(entry.id)}">Remove</button>` : ''}</div>`;
       }).join('') : '<div class="planner-empty">No shifts planned.</div>';
       return `<details class="planner-day"><summary>${escapeHtml(weekday)}</summary>${body}</details>`;
     }).join('');
@@ -105,14 +109,15 @@
     fillPlannerOptions();
     const monthInput = document.getElementById('plannerMonth');
     monthInput.value = BK_SHIFT_PLANNER.monthValue(new Date());
-    monthInput.onchange = ()=>{ setPlannerMessage(''); renderPlanner(); };
+    monthInput.onchange = ()=>{ setPlannerMessage(''); renderPlanner(); renderAbsences(); };
     document.getElementById('plannerShift').onchange = event=>{
       document.getElementById('plannerCredit').value = event.target.value === 'off' ? '0' : '1';
     };
     document.getElementById('plannerForm').onsubmit = event=>{
       event.preventDefault();
       const result = BK_SHIFT_PLANNER.upsertEntry(plannerMonth(), Object.fromEntries(new FormData(event.currentTarget).entries()), currentActor());
-      setPlannerMessage(result.ok ? 'Shift saved.' : result.message);
+      const absence = result.ok && window.BK_ABSENCES && BK_ABSENCES.staffAbsentOn ? BK_ABSENCES.staffAbsentOn(result.entry.staffId, result.entry.date) : null;
+      setPlannerMessage(result.ok ? `Shift saved.${absence ? ` Warning: ${absence.typeLabel} absence exists for this staff member.` : ''}` : result.message);
       if(result.ok){ event.currentTarget.reset(); fillPlannerOptions(); }
       renderPlanner();
     };
@@ -127,6 +132,47 @@
       renderPlanner();
     };
     renderPlanner();
+  }
+  function fillAbsenceOptions(){
+    document.getElementById('absenceStaff').innerHTML = BK_ACCESS.STAFF.filter(person=>person.role !== 'owner').map(person=>`<option value="${escapeHtml(person.id)}">${escapeHtml(person.name)} · ${escapeHtml(person.roleLabel)}</option>`).join('');
+    document.getElementById('absenceType').innerHTML = Object.entries(BK_ABSENCES.TYPES).map(([id,label])=>`<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`).join('');
+  }
+  function renderAbsences(){
+    if(!(window.BK_ABSENCES && window.BK_ACCESS)) return;
+    const month = plannerMonth();
+    const actor = currentActor();
+    const canManage = BK_ABSENCES.canManageAbsences(actor);
+    document.getElementById('absenceForm').classList.toggle('hidden', !canManage);
+    const absences = BK_ABSENCES.absencesForMonth(month);
+    document.getElementById('absenceList').innerHTML = absences.length ? absences.map(absence=>{
+      const person = BK_ACCESS.STAFF.find(item=>item.id === absence.staffId);
+      return `<div class="absence-entry"><span><b>${escapeHtml(person && person.name || absence.staffId)}</b> · ${escapeHtml(absence.typeLabel)} <small>${escapeHtml(absence.fromDate)}–${escapeHtml(absence.toDate)}</small> <span class="absence-badge ${absence.paid ? 'paid' : 'unpaid'}">${absence.paid ? 'Paid' : 'Unpaid'}</span>${absence.note ? `<small> · ${escapeHtml(absence.note)}</small>` : ''}</span>${canManage ? `<button class="x" type="button" data-absence-cancel="${escapeHtml(absence.id)}">Cancel</button>` : ''}</div>`;
+    }).join('') : '<div class="absence-empty">No absences in this month.</div>';
+    document.querySelectorAll('[data-absence-cancel]').forEach(button=>{
+      button.onclick = ()=>{
+        const result = BK_ABSENCES.cancelAbsence(button.dataset.absenceCancel, currentActor());
+        setAbsenceMessage(result.ok ? 'Absence cancelled.' : result.message);
+        renderAbsences();
+        renderPlanner();
+      };
+    });
+  }
+  function initAbsences(){
+    if(initAbsences.done || !(window.BK_ABSENCES && window.BK_ACCESS)) return;
+    initAbsences.done = true;
+    fillAbsenceOptions();
+    document.getElementById('absenceFrom').value = document.getElementById('plannerDate').value || BK_REPORTS.dateInputValue(new Date());
+    document.getElementById('absenceTo').value = document.getElementById('absenceFrom').value;
+    document.getElementById('absenceFrom').onchange = event=>{ if(!document.getElementById('absenceTo').value || document.getElementById('absenceTo').value < event.target.value) document.getElementById('absenceTo').value = event.target.value; };
+    document.getElementById('absenceForm').onsubmit = event=>{
+      event.preventDefault();
+      const result = BK_ABSENCES.upsertAbsence(Object.fromEntries(new FormData(event.currentTarget).entries()), currentActor());
+      setAbsenceMessage(result.ok ? 'Absence saved.' : result.message);
+      if(result.ok){ event.currentTarget.reset(); fillAbsenceOptions(); document.getElementById('absenceFrom').value = `${plannerMonth()}-01`; document.getElementById('absenceTo').value = `${plannerMonth()}-01`; }
+      renderAbsences();
+      renderPlanner();
+    };
+    renderAbsences();
   }
   function exportPurchaseHistory(){
     const date = document.getElementById('shiftReportDate').value || BK_REPORTS.dateInputValue(new Date());
