@@ -42,6 +42,22 @@ test('empty orders use employee-friendly status language', () => {
 
 test('continue to kitchen remains compact inside the current order', () => {
   assert.match(css, /#orderFlowNav\.workflow-next\{flex-wrap:nowrap/);
-  assert.match(css, /#orderFlowNav \.workflow-next-copy small\{display:none\}/);
+  assert.match(css, /#orderFlowNav \.workflow-next-copy small\{display:block/);
   assert.match(css, /#orderFlowNav \.workflow-next-button\{min-height:38px/);
+});
+
+test('order step explains blockers and next action', () => {
+  assert.match(ui, /title:'Add products first'/);
+  assert.match(ui, /Choose at least one product from the product grid before sending this order to Kitchen/);
+  assert.match(ui, /title:`\$\{platformLabel\(slot\.orderSource\)\} order ready`/);
+  assert.match(css, /#orderFlowNav \.workflow-next-copy small\{display:block/);
+});
+
+test('online order dialog guides platform entry before products', () => {
+  assert.match(ui, /class="online-order-guide"/);
+  assert.match(ui, /id="onlinePaymentHint"/);
+  assert.match(ui, /id="onlineCustomerName"/);
+  assert.match(ui, /WhatsApp stays unpaid until pickup\/delivery is confirmed before Kitchen/);
+  assert.match(ui, /is treated as paid online/);
+  assert.match(css, /\.online-order-guide,\.online-platform-hint/);
 });
