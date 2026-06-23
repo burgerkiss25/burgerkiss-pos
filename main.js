@@ -31,12 +31,6 @@
       if(BK_ACCESS.guardNewSale()) BK_UI.openOnlineOrderDialog();
       return;
     }
-    if(entryMode === 'shift'){
-      history.replaceState(null, '', 'order.html');
-      BK_UI.renderAll();
-      BK_UI.openHistory();
-      return;
-    }
     window.location.replace('index.html');
   }
 
