@@ -28,7 +28,8 @@
       <form class="purchase-form" id="purchaseEntryForm">
         <label>Item<input id="purchaseItem" name="name" list="purchaseItems" placeholder="Search or type item" required></label><datalist id="purchaseItems"></datalist>
         <label>Quantity received<input name="qty" type="number" min="0" step="0.01" required></label>
-        <label>Unit<input name="unit" placeholder="pcs, heads, bottles" required></label>
+        <label>Unit<input name="unit" id="purchaseUnit" placeholder="packs, bottles, 500g pack" required></label>
+        <label>Convert to stock unit<input name="packageSize" id="purchasePackageSize" type="number" min="0" step="0.01" placeholder="Optional: e.g. 500 for 500g pasta pack"></label>
         <label>Amount paid<input name="amount" type="number" min="0" step="0.01" required></label>
         <label>Payment source<select name="paymentSource"><option value="cash_wallet">Cash wallet</option><option value="staff_paid">Staff paid</option><option value="owner_paid">Owner paid</option><option value="momo">MoMo</option><option value="other">Other</option></select></label>
         <label class="purchase-receipt"><input name="receiptInPurse" type="checkbox" required> Receipt is in purse</label>
