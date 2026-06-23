@@ -12,6 +12,21 @@
     const ingredients = BK_STOCK.getIngredients();
     document.getElementById('purchaseItems').innerHTML = Object.entries(ingredients).map(([id, item])=>`<option value="${BK_REPORTS.escapeHtml(item.name || id)}" data-id="${BK_REPORTS.escapeHtml(id)}"></option>`).join('');
   }
+  function selectedIngredientByName(name){
+    const ingredients = BK_STOCK.getIngredients();
+    return Object.entries(ingredients).find(([, item])=>String(item.name || '').toLowerCase() === String(name || '').toLowerCase()) || null;
+  }
+  function syncPurchaseUnit(){
+    const match = selectedIngredientByName(document.getElementById('purchaseItem').value);
+    if(!match) return;
+    const item = match[1];
+    const unitInput = document.getElementById('purchaseUnit');
+    const packageInput = document.getElementById('purchasePackageSize');
+    unitInput.value = item.purchase_unit || item.unit || unitInput.value;
+    const firstOption = Array.isArray(item.purchase_options) ? item.purchase_options[0] : null;
+    packageInput.value = firstOption && Number(firstOption.factor) !== 1 ? firstOption.factor : '';
+    packageInput.placeholder = firstOption ? `${firstOption.label} = ${firstOption.factor} ${item.unit || ''}` : 'Optional conversion factor';
+  }
   function purchaseDate(offset){ const date = new Date(); date.setDate(date.getDate() + offset); return BK_REPORTS.dateInputValue(date); }
   function visiblePurchases(){
     const selected = purchaseRange === 'yesterday' ? purchaseDate(-1) : purchaseDate(0);
@@ -49,8 +64,7 @@
     const data = Object.fromEntries(new FormData(form).entries());
     data.receiptInPurse = form.elements.receiptInPurse.checked;
     data.purchasedBy = purchaser;
-    const ingredients = BK_STOCK.getIngredients();
-    const match = Object.entries(ingredients).find(([, item])=>String(item.name || '').toLowerCase() === String(data.name || '').toLowerCase());
+    const match = selectedIngredientByName(data.name);
     if(match) data.ingredientId = match[0];
     const result = BK_STOCK.recordPurchase(data);
     const message = document.getElementById('purchaseMessage');
@@ -62,6 +76,7 @@
     fillStaffOptions();
     document.getElementById('purchaseAuthForm').onsubmit = confirmPurchaser;
     document.getElementById('purchaseEntryForm').onsubmit = savePurchase;
+    document.getElementById('purchaseItem').oninput = syncPurchaseUnit;
     document.getElementById('purchaseToday').onclick = ()=>{ purchaseRange = 'today'; renderPurchaseHistory(); };
     document.getElementById('purchaseYesterday').onclick = ()=>{ purchaseRange = 'yesterday'; renderPurchaseHistory(); };
     document.getElementById('purchaseExport').onclick = exportPurchasesCsv;
