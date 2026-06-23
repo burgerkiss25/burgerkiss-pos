@@ -31,6 +31,7 @@
     if(dateInput && !dateInput.value) dateInput.value = BK_REPORTS.dateInputValue(new Date());
     initPlanner();
     initAbsences();
+    initPayroll();
     restrictDateInput();
     renderReport();
     Promise.all([
@@ -60,6 +61,7 @@
   function plannerMonth(){ return document.getElementById('plannerMonth').value || BK_SHIFT_PLANNER.monthValue(new Date()); }
   function setPlannerMessage(message){ document.getElementById('plannerMessage').textContent = message || ''; }
   function setAbsenceMessage(message){ document.getElementById('absenceMessage').textContent = message || ''; }
+  function setPayrollMessage(message){ document.getElementById('payrollMessage').textContent = message || ''; }
   function fillPlannerOptions(){
     document.getElementById('plannerStaff').innerHTML = BK_ACCESS.STAFF.filter(person=>person.role !== 'owner').map(person=>`<option value="${escapeHtml(person.id)}">${escapeHtml(person.name)} · ${escapeHtml(person.roleLabel)}</option>`).join('');
     const shifts = Object.values(BK_ACCESS.SHIFTS).map(shift=>`<option value="${escapeHtml(shift.id)}">${escapeHtml(shift.label)} · ${escapeHtml(shift.hours)}</option>`).join('');
@@ -100,6 +102,7 @@
         const result = BK_SHIFT_PLANNER.removeEntry(month, button.dataset.plannerRemove, currentActor());
         setPlannerMessage(result.ok ? 'Shift removed.' : result.message);
         renderPlanner();
+        renderPayroll();
       };
     });
   }
@@ -109,7 +112,7 @@
     fillPlannerOptions();
     const monthInput = document.getElementById('plannerMonth');
     monthInput.value = BK_SHIFT_PLANNER.monthValue(new Date());
-    monthInput.onchange = ()=>{ setPlannerMessage(''); renderPlanner(); renderAbsences(); };
+    monthInput.onchange = ()=>{ setPlannerMessage(''); renderPlanner(); renderAbsences(); renderPayroll(); };
     document.getElementById('plannerShift').onchange = event=>{
       document.getElementById('plannerCredit').value = event.target.value === 'off' ? '0' : '1';
     };
@@ -120,6 +123,7 @@
       setPlannerMessage(result.ok ? `Shift saved.${absence ? ` Warning: ${absence.typeLabel} absence exists for this staff member.` : ''}` : result.message);
       if(result.ok){ event.currentTarget.reset(); fillPlannerOptions(); }
       renderPlanner();
+      renderPayroll();
     };
     document.getElementById('plannerSubmit').onclick = ()=>{
       const result = BK_SHIFT_PLANNER.submitForApproval(plannerMonth(), currentActor());
@@ -154,6 +158,7 @@
         setAbsenceMessage(result.ok ? 'Absence cancelled.' : result.message);
         renderAbsences();
         renderPlanner();
+        renderPayroll();
       };
     });
   }
@@ -171,8 +176,42 @@
       if(result.ok){ event.currentTarget.reset(); fillAbsenceOptions(); document.getElementById('absenceFrom').value = `${plannerMonth()}-01`; document.getElementById('absenceTo').value = `${plannerMonth()}-01`; }
       renderAbsences();
       renderPlanner();
+      renderPayroll();
     };
     renderAbsences();
+  }
+  function fillAdvanceOptions(){
+    document.getElementById('advanceStaff').innerHTML = BK_ACCESS.STAFF.filter(person=>BK_PAYROLL.profileFor(person.id)).map(person=>`<option value="${escapeHtml(person.id)}">${escapeHtml(person.name)} · ${escapeHtml(person.roleLabel)}</option>`).join('');
+  }
+  function formatGhs(value){ return `GHS ${Number(value || 0).toFixed(2)}`; }
+  function renderPayroll(){
+    if(!(window.BK_PAYROLL && window.BK_ACCESS)) return;
+    const month = plannerMonth();
+    const actor = currentActor();
+    const canManage = BK_PAYROLL.canManagePayroll(actor);
+    document.getElementById('advanceForm').classList.toggle('hidden', !canManage);
+    const rows = BK_PAYROLL.payrollRows(month, actor);
+    document.getElementById('payrollList').innerHTML = rows.length ? rows.map(row=>{
+      const person = BK_ACCESS.STAFF.find(item=>item.id === row.staffId);
+      const advanceList = row.advances.length ? row.advances.map(advance=>`<small>${escapeHtml(advance.date)} · ${formatGhs(advance.amount)} · ${escapeHtml(advance.method || 'Advance')}${advance.staffConfirmed ? ' · confirmed' : ''}</small>`).join('<br>') : '<small>No salary advances.</small>';
+      return `<div class="payroll-entry"><span><b>${escapeHtml(person && person.name || row.staffId)}</b><br><small>Fixed salary ${formatGhs(row.monthlySalary)} · planned days ${row.plannedWorkDays} · day value ${formatGhs(row.dayValue)}</small><br><small>Unpaid absences ${row.unpaidAbsenceDays} (${formatGhs(row.absenceDeduction)}) · double-shift extras ${row.extraWorkDayCredits} (${formatGhs(row.extraPay)})</small><br>${advanceList}</span><span><small>Gross ${formatGhs(row.grossPay)}</small><br><small>Advances -${formatGhs(row.advancesTotal)}</small><br><strong>To pay ${formatGhs(row.netPay)}</strong></span></div>`;
+    }).join('') : '<div class="absence-empty">No payroll rows visible for this account.</div>';
+  }
+  function initPayroll(){
+    if(initPayroll.done || !(window.BK_PAYROLL && window.BK_ACCESS)) return;
+    initPayroll.done = true;
+    fillAdvanceOptions();
+    document.getElementById('advanceDate').value = `${plannerMonth()}-01`;
+    document.getElementById('advanceForm').onsubmit = event=>{
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+      data.period = String(data.date || '').slice(0, 7) || plannerMonth();
+      const result = BK_PAYROLL.recordAdvance(data, currentActor());
+      setPayrollMessage(result.ok ? 'Salary advance saved.' : result.message);
+      if(result.ok){ event.currentTarget.reset(); fillAdvanceOptions(); document.getElementById('advanceDate').value = `${plannerMonth()}-01`; }
+      renderPayroll();
+    };
+    renderPayroll();
   }
   function exportPurchaseHistory(){
     const date = document.getElementById('shiftReportDate').value || BK_REPORTS.dateInputValue(new Date());
