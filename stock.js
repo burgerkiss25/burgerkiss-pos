@@ -13,7 +13,8 @@
     sanitizeIngredients,
     sanitizeRecipes,
     parseRecipeText,
-    recipeToText
+    recipeToText,
+    convertPurchaseQuantity
   } = window.BK_STOCK_UTILS;
   let INGREDIENTS = {};
   let RECIPES = {};
@@ -375,30 +376,37 @@
   }
   function getIngredients(){ return clone(INGREDIENTS); }
   function getPurchases(){ return clone(PURCHASES); }
+  function getOperatingSupplies(){
+    return Object.entries(INGREDIENTS).filter(([, def])=>def && (def.operating_supply || def.category === 'operating_supply')).map(([id, def])=>{
+      const purchases = PURCHASES.filter(entry=>entry.ingredient_id === id).sort((a,b)=>(b.ts || 0) - (a.ts || 0));
+      const lastPurchase = purchases[0] || null;
+      return Object.assign({ id, lastPurchase }, clone(def));
+    });
+  }
   function recordPurchase(input){
     const rawName = String((input && input.name) || '').trim();
     const id = normalizeId((input && input.ingredientId) || rawName);
-    const qty = Number(input && input.qty);
     const amount = Number(input && input.amount);
     if(!id || !rawName) return {ok:false, message:'Choose or enter an item.'};
-    if(!Number.isFinite(qty) || qty <= 0) return {ok:false, message:'Enter the quantity received.'};
     if(!Number.isFinite(amount) || amount < 0) return {ok:false, message:'Enter the purchase amount.'};
     if(!(input && input.receiptInPurse)) return {ok:false, message:'Confirm that the receipt is in the purse.'};
     const unit = String((input && input.unit) || (INGREDIENTS[id] && INGREDIENTS[id].unit) || 'pcs').trim() || 'pcs';
     const before = num(INGREDIENTS[id] && INGREDIENTS[id].current_stock_foodtruck, 0);
     const def = INGREDIENTS[id] || sanitizeIngredient({name:rawName, category:'general', unit, track_stock:true, stock_location:'foodtruck', current_stock_storage:0, current_stock_foodtruck:0, moq_storage:0, moq_foodtruck:0}, id);
+    const converted = convertPurchaseQuantity(def, input);
+    if(!converted) return {ok:false, message:'Enter the quantity received.'};
     def.name = rawName;
-    def.unit = unit;
-    def.current_stock_foodtruck = before + qty;
+    def.unit = def.unit || unit;
+    def.current_stock_foodtruck = before + converted.qty;
     INGREDIENTS[id] = syncIngredientStock(def);
     const actor = (input && input.purchasedBy && typeof input.purchasedBy === 'object') ? input.purchasedBy : (window.BK_ACCESS && BK_ACCESS.actor ? BK_ACCESS.actor() : null);
     const purchase = {
       id:`pur_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, ts:Date.now(), businessDate:actor && actor.businessDate || '',
-      ingredient_id:id, ingredient_name:rawName, qty, unit, amount, paymentSource:String((input && input.paymentSource) || 'cash_wallet'), receiptInPurse:true, note:String((input && input.note) || ''),
+      ingredient_id:id, ingredient_name:rawName, qty:converted.qty, unit:def.unit, purchase_qty:converted.originalQty, purchase_unit:converted.originalUnit, conversion_factor:converted.factor, amount, paymentSource:String((input && input.paymentSource) || 'cash_wallet'), receiptInPurse:true, note:String((input && input.note) || ''),
       stockLocation:'block_factory', before, after:def.current_stock_foodtruck, staff:actor
     };
     PURCHASES.push(purchase); PURCHASES = PURCHASES.slice(-200);
-    MOVEMENTS.push({id:purchase.id, ts:purchase.ts, type:'purchase', ingredient_id:id, ingredient_name:rawName, qty, unit, before, after:def.current_stock_foodtruck});
+    MOVEMENTS.push({id:purchase.id, ts:purchase.ts, type:'purchase', ingredient_id:id, ingredient_name:rawName, qty:converted.qty, unit:def.unit, before, after:def.current_stock_foodtruck});
     MOVEMENTS = MOVEMENTS.slice(-200);
     persist(); persistMovements(); persistPurchases(); persistRemoteSoon(); renderPosIfAvailable();
     return {ok:true, purchase};
@@ -774,5 +782,5 @@
     INGREDIENTS = syncAllIngredientStock(ingNext); RECIPES = recipeNext; persist(); persistRemoteSoon(); closeEditor(); return true;
   }
 
-  window.BK_STOCK = { KEY, TRANSFERS_KEY, MOVEMENTS_KEY, PURCHASES_KEY, load, loadRemoteOnce, reset, resetEditor, getSnapshot, getIngredients, getPurchases, recordPurchase, getRecipe, getRecipes, setRecipes, getUsageForSlot, consumeSlot, openEditor, closeEditor, save:saveEditor, saveEditor, remoteEnabled, stockPaths };
+  window.BK_STOCK = { KEY, TRANSFERS_KEY, MOVEMENTS_KEY, PURCHASES_KEY, load, loadRemoteOnce, reset, resetEditor, getSnapshot, getIngredients, getPurchases, getOperatingSupplies, recordPurchase, getRecipe, getRecipes, setRecipes, getUsageForSlot, consumeSlot, openEditor, closeEditor, save:saveEditor, saveEditor, remoteEnabled, stockPaths };
 })();

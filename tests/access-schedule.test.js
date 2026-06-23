@@ -44,3 +44,41 @@ test('all staff can open the daily closeout report', () => {
   delete global.sessionStorage;
   delete require.cache[require.resolve('../access.js')];
 });
+
+test('operational worklogs record shift electricity start and close readings', () => {
+  const store = {};
+  global.localStorage = {
+    getItem(key){ return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null; },
+    setItem(key, value){ store[key] = String(value); },
+    removeItem(key){ delete store[key]; }
+  };
+  delete require.cache[require.resolve('../access.js')];
+  const freshAccess = require('../access.js');
+  const originalNow = Date.now;
+  Date.now = () => 1000000;
+  const worklog = freshAccess.startWorklog({
+    staffId:'erica', name:'Erica', role:'employee', mode:'operational',
+    shiftId:'early', shiftLabel:'Early shift', businessDate:'2026-06-23', signedInAt:940000
+  }, '128,50', 'Opening reading');
+  assert.equal(worklog.electricityStartCreditGhs, 128.5);
+  assert.equal(freshAccess.getWorklogs().length, 1);
+
+  Date.now = () => 4600000;
+  const closed = freshAccess.closeWorklog(worklog.id, '94.20', 'Closing reading');
+  assert.equal(closed.status, 'closed');
+  assert.equal(closed.durationMinutes, 61);
+  assert.equal(closed.electricityEndCreditGhs, 94.2);
+  assert.equal(closed.electricityUsageGhs, 34.3);
+  assert.equal(freshAccess.electricityStatus().creditGhs, 94.2);
+
+  Date.now = originalNow;
+  delete global.localStorage;
+  delete require.cache[require.resolve('../access.js')];
+});
+
+test('electricity credit validation accepts positive decimal readings only', () => {
+  assert.equal(access.normalizeElectricityCredit('12,34'), 12.34);
+  assert.equal(access.normalizeElectricityCredit('0'), 0);
+  assert.equal(access.normalizeElectricityCredit('-1'), null);
+  assert.equal(access.normalizeElectricityCredit('not a number'), null);
+});

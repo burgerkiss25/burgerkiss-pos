@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="./style.css?v=53" />
   <script src="./firebase-config.js?v=2"></script>
   <style>
-    body.shift-app{min-height:100dvh;background:radial-gradient(circle at top left,#161b22 0,#090a0f 42%,#07080c 100%);color:#f7f8fb}.shift-wrap{width:min(1280px,100%);margin:0 auto;padding:18px}.shift-header{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:14px;margin:-18px -18px 18px;padding:12px 18px;border-bottom:1px solid #27303b;background:rgba(9,11,16,.96);backdrop-filter:blur(14px)}.shift-brand{display:flex;align-items:center;gap:12px}.shift-brand h1{margin:0;font-size:22px}.shift-brand small{display:block;color:#9eabba}.shift-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.shift-page{display:grid;gap:14px}.shift-card{padding:18px;border:1px solid #303948;border-radius:16px;background:#10151d}.shift-card h2{margin:0;color:#fff2c7}.shift-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}.shift-toolbar input{min-height:40px;padding:8px;border:1px solid #384356;border-radius:9px;background:#101620;color:#edf3fa}.daily-report .report-orders{max-height:280px;overflow:auto;padding-right:4px}.daily-report button.report-order{width:100%;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}@media(max-width:900px){.shift-header{position:static;align-items:flex-start;flex-direction:column}.shift-actions{width:100%}.shift-actions .x{flex:1}.daily-report .report-orders{max-height:none}}
+    body.shift-app{min-height:100dvh;background:radial-gradient(circle at top left,#161b22 0,#090a0f 42%,#07080c 100%);color:#f7f8fb}.shift-wrap{width:min(1280px,100%);margin:0 auto;padding:18px}.shift-header{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:14px;margin:-18px -18px 18px;padding:12px 18px;border-bottom:1px solid #27303b;background:rgba(9,11,16,.96);backdrop-filter:blur(14px)}.shift-brand{display:flex;align-items:center;gap:12px}.shift-brand h1{margin:0;font-size:22px}.shift-brand small{display:block;color:#9eabba}.shift-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.shift-page{display:grid;gap:14px}.shift-card{padding:18px;border:1px solid #303948;border-radius:16px;background:#10151d}.shift-card h2{margin:0;color:#fff2c7}.shift-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}.shift-toolbar input,.shift-toolbar select,.planner-form input,.planner-form select,.absence-form input,.absence-form select,.advance-form input,.advance-form select{min-height:40px;padding:8px;border:1px solid #384356;border-radius:9px;background:#101620;color:#edf3fa}.daily-report .report-orders{max-height:280px;overflow:auto;padding-right:4px}.daily-report button.report-order{width:100%;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}.planner-form,.absence-form,.advance-form{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:8px;margin:12px 0}.planner-form label,.absence-form label,.advance-form label{display:grid;gap:5px;color:#9eabba;font-size:12px}.planner-form button,.absence-form button,.advance-form button{align-self:end}.planner-grid,.absence-list,.payroll-list{display:grid;gap:8px}.planner-day{border:1px solid #283342;border-radius:12px;background:#0c1118;overflow:hidden}.planner-day>summary{padding:10px 12px;cursor:pointer;color:#fff2c7;font-weight:900}.planner-entry,.absence-entry,.payroll-entry{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border:1px solid #283342;border-radius:12px;background:#0c1118}.planner-entry small,.absence-entry small,.payroll-entry small{color:#9eabba}.payroll-entry strong{color:#fff2c7}.planner-empty,.absence-empty{padding:10px 12px;color:#7f8b99}.schedule-status,.absence-badge{display:inline-flex;align-items:center;border:1px solid #445268;border-radius:999px;padding:6px 10px;color:#dce7f5;background:#111925;font-weight:900;text-transform:capitalize}.absence-badge.unpaid{border-color:#70424b;background:#251017;color:#ffb5c0}.absence-badge.paid{border-color:#3b6847;background:#102317;color:#c7ffd0}@media(max-width:900px){.shift-header{position:static;align-items:flex-start;flex-direction:column}.shift-actions{width:100%}.shift-actions .x{flex:1}.daily-report .report-orders{max-height:none}.planner-form,.absence-form,.advance-form{grid-template-columns:1fr 1fr}}
   </style>
 </head>
 <body class="shift-app app-loading">
@@ -17,6 +17,54 @@
       <div class="shift-actions"><button class="x" id="historyToday" type="button">Today</button><button class="x" id="historyYesterday" type="button">Yesterday</button><button class="x" id="purchaseHistoryExport" type="button">Export purchases CSV</button><a class="x admin-primary" href="purchases.html">Add purchase</a><a class="x" href="order.html?start=walkin">Order</a><a class="x" href="index.html">Start</a><div class="staff-session" id="staffSession" aria-live="polite"></div></div>
     </header>
     <section class="shift-page">
+      <article class="shift-card shift-planner-card">
+        <div class="shift-toolbar">
+          <div><h2>Monthly schedule</h2><small>Vera can draft shifts; owner approval makes the plan official.</small></div>
+          <div class="shift-actions"><input id="plannerMonth" type="month" /><span class="schedule-status" id="plannerStatus">Draft</span><button class="x" id="plannerSubmit" type="button">Submit for approval</button><button class="x admin-primary" id="plannerApprove" type="button">Approve</button></div>
+        </div>
+        <form id="plannerForm" class="planner-form">
+          <label><span>Date</span><input id="plannerDate" name="date" type="date" required /></label>
+          <label><span>Staff</span><select id="plannerStaff" name="staffId" required></select></label>
+          <label><span>Shift</span><select id="plannerShift" name="shiftId" required></select></label>
+          <label><span>Work-day credit</span><input id="plannerCredit" name="workDayCredit" type="number" min="0" step="0.5" value="1" /></label>
+          <label><span>Note</span><input id="plannerNote" name="note" type="text" maxlength="160" placeholder="Optional" /></label>
+          <button class="x admin-primary" id="plannerSave" type="submit">Save shift</button>
+        </form>
+        <div class="access-error" id="plannerMessage"></div>
+        <div id="plannerGrid" class="planner-grid"></div>
+      </article>
+      <article class="shift-card absence-card">
+        <div class="shift-toolbar">
+          <div><h2>Absences</h2><small>Track sick days, vacation, emergencies and unpaid no-shows for payroll.</small></div>
+        </div>
+        <form id="absenceForm" class="absence-form">
+          <label><span>Staff</span><select id="absenceStaff" name="staffId" required></select></label>
+          <label><span>Type</span><select id="absenceType" name="type" required></select></label>
+          <label><span>From</span><input id="absenceFrom" name="fromDate" type="date" required /></label>
+          <label><span>To</span><input id="absenceTo" name="toDate" type="date" required /></label>
+          <label><span>Paid?</span><select id="absencePaid" name="paid"><option value="false">Unpaid</option><option value="true">Paid</option></select></label>
+          <label><span>Note</span><input id="absenceNote" name="note" type="text" maxlength="180" placeholder="Optional" /></label>
+          <button class="x admin-primary" id="absenceSave" type="submit">Save absence</button>
+        </form>
+        <div class="access-error" id="absenceMessage"></div>
+        <div id="absenceList" class="absence-list"></div>
+      </article>
+      <article class="shift-card payroll-card">
+        <div class="shift-toolbar">
+          <div><h2>Payroll</h2><small>Fixed monthly salary, day value, unpaid absences, double-shift extras and salary advances.</small></div>
+        </div>
+        <form id="advanceForm" class="advance-form">
+          <label><span>Staff</span><select id="advanceStaff" name="staffId" required></select></label>
+          <label><span>Date</span><input id="advanceDate" name="date" type="date" required /></label>
+          <label><span>Amount GHS</span><input id="advanceAmount" name="amount" type="number" min="0.01" step="0.01" required /></label>
+          <label><span>Method</span><select id="advanceMethod" name="method"><option>Cash</option><option>Mobile Money</option><option>Bank</option><option>Other</option></select></label>
+          <label><span>Staff confirmed?</span><select id="advanceConfirmed" name="staffConfirmed"><option value="true">Confirmed</option><option value="false">Not confirmed</option></select></label>
+          <label><span>Note</span><input id="advanceNote" name="note" type="text" maxlength="180" placeholder="Optional" /></label>
+          <button class="x admin-primary" id="advanceSave" type="submit">Save advance</button>
+        </form>
+        <div class="access-error" id="payrollMessage"></div>
+        <div id="payrollList" class="payroll-list"></div>
+      </article>
       <article class="shift-card daily-sales-card">
         <div class="shift-toolbar"><div><h2>Daily closeout</h2><small>The BurgerKiss purse must start each shift with 200 GHS change.</small></div><input id="shiftReportDate" type="date" /></div>
         <div id="shiftReportBody"></div>
@@ -44,6 +92,9 @@
   <script src="./stock_utils.js?v=15"></script>
   <script src="./stock.js?v=22"></script>
   <script src="./shift_reports.js?v=5"></script>
+  <script src="./shift_planner.js?v=1"></script>
+  <script src="./absences.js?v=1"></script>
+  <script src="./payroll.js?v=1"></script>
   <script src="./shift.js?v=4"></script>
   <script>BK_STOCK.load(); BK_ACCESS.init();</script>
 </body>

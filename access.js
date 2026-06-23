@@ -4,6 +4,10 @@
 
   const CONFIG_KEY = 'bk_staff_access_v1';
   const SESSION_KEY = 'bk_staff_session_v1';
+  const WORKLOG_KEY = 'bk_staff_worklogs_v1';
+  const ELECTRICITY_TOPUPS_KEY = 'bk_electricity_topups_v1';
+  const ELECTRICITY_LOW_CREDIT_GHS = 50;
+  const ELECTRICITY_CRITICAL_CREDIT_GHS = 20;
   const ROLE_LEVEL = { employee: 1, supervisor: 2, owner: 3 };
   const STAFF = [
     { id:'asamoah', name:'Mr Asamoah', role:'owner', roleLabel:'Owner' },
@@ -60,6 +64,16 @@
     if(!ref) return Promise.resolve(false);
     return ensureRemoteAuth().then(()=>ref.set(config)).then(()=>true).catch(error=>{ console.warn('staff access sync failed:', error && error.message); return false; });
   }
+  function remoteOpsPath(path){
+    return `${(root.BK_OPERATIONS_PATH || '/pos/operations').replace(/\/+$/,'')}/${path}`;
+  }
+  function saveRemoteOps(path, value){
+    try{
+      if(!(root.FIREBASE_CONFIG && root.firebase && root.firebase.database)) return Promise.resolve(false);
+      const app = root.firebase.apps && root.firebase.apps.length ? root.firebase.app() : root.firebase.initializeApp(root.FIREBASE_CONFIG);
+      return ensureRemoteAuth().then(()=>root.firebase.database(app).ref(remoteOpsPath(path)).set(value)).then(()=>true).catch(error=>{ console.warn('operations sync failed:', error && error.message); return false; });
+    }catch(e){ return Promise.resolve(false); }
+  }
   function minutes(date){ return date.getHours() * 60 + date.getMinutes(); }
   function suggestedShift(date){ return minutes(date || new Date()) >= 15 * 60 ? 'late' : 'early'; }
   function salesStatus(date){
@@ -85,7 +99,8 @@
     return {
       staffId:person.id, name:person.name, role:person.role, roleLabel:person.roleLabel, mode,
       shiftId:shift ? shift.id : '', shiftLabel:shift ? shift.label : 'Remote support', shiftHours:shift ? shift.hours : 'No shift',
-      businessDate:String(raw.businessDate || businessDate()), signedInAt:Number(raw.signedInAt) || Date.now()
+      businessDate:String(raw.businessDate || businessDate()), signedInAt:Number(raw.signedInAt) || Date.now(),
+      worklogId:String(raw.worklogId || '')
     };
   }
   function actor(){
@@ -143,20 +158,133 @@
     if(!person || !(await verifyPin(person.id, pin))) return null;
     return {id:person.id, name:person.name, role:person.role, mode:'purchase'};
   }
-  function setSession(staffId, shiftId){
+  function normalizeElectricityCredit(value){
+    const n = Number(String(value == null ? '' : value).replace(',', '.'));
+    return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
+  }
+  function safeArray(store, key){
+    const value = readJson(store, key);
+    return Array.isArray(value) ? value : [];
+  }
+  function writeWorklogs(items){
+    const clean = (items || []).filter(Boolean).slice(-500);
+    writeJson(localStorageSafe(), WORKLOG_KEY, clean);
+    saveRemoteOps('worklogs', { items: clean, ts: Date.now() });
+    return clean;
+  }
+  function getWorklogs(){
+    return safeArray(localStorageSafe(), WORKLOG_KEY);
+  }
+  function currentWorklog(){
+    if(!session || !session.worklogId) return null;
+    return getWorklogs().find(entry=>entry.id === session.worklogId) || null;
+  }
+  function electricityStatus(){
+    const logs = getWorklogs();
+    const topups = safeArray(localStorageSafe(), ELECTRICITY_TOPUPS_KEY);
+    const readings = [];
+    logs.forEach(log=>{
+      if(Number.isFinite(Number(log.electricityStartCreditGhs))) readings.push({ ts:log.electricityStartEnteredAt || log.loginAt, creditGhs:Number(log.electricityStartCreditGhs), by:log.name, source:'shift_start' });
+      if(Number.isFinite(Number(log.electricityEndCreditGhs))) readings.push({ ts:log.electricityEndEnteredAt || log.logoutAt, creditGhs:Number(log.electricityEndCreditGhs), by:log.name, source:'shift_end' });
+    });
+    topups.forEach(topup=>{
+      if(Number.isFinite(Number(topup.creditAfterGhs))) readings.push({ ts:topup.ts, creditGhs:Number(topup.creditAfterGhs), by:topup.staff && topup.staff.name || '', source:'topup' });
+    });
+    readings.sort((a,b)=>(b.ts || 0) - (a.ts || 0));
+    const latest = readings[0] || null;
+    const credit = latest ? Number(latest.creditGhs) : null;
+    const state = credit == null ? 'unknown' : credit <= ELECTRICITY_CRITICAL_CREDIT_GHS ? 'critical' : credit <= ELECTRICITY_LOW_CREDIT_GHS ? 'warning' : 'ok';
+    return { latest, creditGhs:credit, state, lowThresholdGhs:ELECTRICITY_LOW_CREDIT_GHS, criticalThresholdGhs:ELECTRICITY_CRITICAL_CREDIT_GHS };
+  }
+  function startWorklog(activeSession, electricityStartCreditGhs, note){
+    if(!activeSession || activeSession.mode !== 'operational') return null;
+    const now = Date.now();
+    const id = `worklog_${activeSession.businessDate}_${activeSession.staffId}_${now}`;
+    const entry = {
+      id, staffId:activeSession.staffId, name:activeSession.name, role:activeSession.role,
+      shiftId:activeSession.shiftId, shiftLabel:activeSession.shiftLabel, businessDate:activeSession.businessDate,
+      loginAt:activeSession.signedInAt || now, logoutAt:null, status:'open',
+      electricityStartCreditGhs:normalizeElectricityCredit(electricityStartCreditGhs),
+      electricityStartNote:String(note || '').trim(),
+      electricityStartEnteredAt:now,
+      electricityEndCreditGhs:null, electricityEndNote:'', electricityEndEnteredAt:null,
+      electricityTopupsGhs:0, electricityUsageGhs:null
+    };
+    writeWorklogs(getWorklogs().concat(entry));
+    return entry;
+  }
+  function closeWorklog(worklogId, electricityEndCreditGhs, note){
+    const credit = normalizeElectricityCredit(electricityEndCreditGhs);
+    if(credit === null) throw new Error('Enter the prepaid electricity credit at shift end.');
+    const now = Date.now();
+    let closed = null;
+    const logs = getWorklogs().map(entry=>{
+      if(entry.id !== worklogId) return entry;
+      const topups = Number(entry.electricityTopupsGhs) || 0;
+      const start = normalizeElectricityCredit(entry.electricityStartCreditGhs);
+      const usage = start === null ? null : Math.round((start + topups - credit) * 100) / 100;
+      closed = Object.assign({}, entry, {
+        logoutAt:now, status:'closed', durationMinutes:Math.max(0, Math.round((now - Number(entry.loginAt || now)) / 60000)),
+        electricityEndCreditGhs:credit, electricityEndNote:String(note || '').trim(), electricityEndEnteredAt:now,
+        electricityUsageGhs:usage
+      });
+      return closed;
+    });
+    if(!closed) throw new Error('No open worklog was found for this session.');
+    writeWorklogs(logs);
+    return closed;
+  }
+  function writeTopups(items){
+    const clean = (items || []).filter(Boolean).slice(-300);
+    writeJson(localStorageSafe(), ELECTRICITY_TOPUPS_KEY, clean);
+    saveRemoteOps('electricityTopups', { items: clean, ts: Date.now() });
+    return clean;
+  }
+  function recordElectricityTopup(input){
+    const amount = normalizeElectricityCredit(input && input.amountGhs);
+    if(amount === null || amount <= 0) return { ok:false, message:'Enter a valid electricity top-up amount.' };
+    const creditAfter = normalizeElectricityCredit(input && input.creditAfterGhs);
+    const actorInfo = actor();
+    const entry = {
+      id:`electricity_topup_${Date.now()}`, ts:Date.now(), amountGhs:amount,
+      creditAfterGhs:creditAfter, method:String(input && input.method || '').trim(),
+      token:String(input && input.token || '').trim(), note:String(input && input.note || '').trim(),
+      staff:actorInfo
+    };
+    writeTopups(safeArray(localStorageSafe(), ELECTRICITY_TOPUPS_KEY).concat(entry));
+    const active = currentWorklog();
+    if(active){
+      writeWorklogs(getWorklogs().map(log=>log.id === active.id ? Object.assign({}, log, { electricityTopupsGhs:Math.round(((Number(log.electricityTopupsGhs) || 0) + amount) * 100) / 100 }) : log));
+    }
+    return { ok:true, entry };
+  }
+  function setSession(staffId, shiftId, options){
     const person = staffById(staffId);
     const mode = shiftId === 'remote' && person && person.role !== 'employee' ? 'remote' : 'operational';
     const shift = SHIFTS[shiftId];
     if(!person || (mode === 'operational' && !shift)) return null;
+    const electricityStartCreditGhs = options && options.electricityStartCreditGhs;
+    if(mode === 'operational' && normalizeElectricityCredit(electricityStartCreditGhs) === null) throw new Error('Enter the prepaid electricity credit at shift start.');
     session = {
       staffId:person.id, name:person.name, role:person.role, roleLabel:person.roleLabel, mode,
       shiftId:shift ? shift.id : '', shiftLabel:shift ? shift.label : 'Remote support', shiftHours:shift ? shift.hours : 'No shift',
       businessDate:businessDate(), signedInAt:Date.now()
     };
+    const worklog = startWorklog(session, electricityStartCreditGhs, options && options.electricityStartNote);
+    if(worklog) session.worklogId = worklog.id;
     writeJson(sessionStorageSafe(), SESSION_KEY, session);
     return session;
   }
   function signOut(){
+    if(session && session.mode === 'operational' && session.worklogId){
+      const active = currentWorklog();
+      if(active && active.status === 'open'){
+        const value = root.prompt ? root.prompt('Enter prepaid electricity credit at shift end (GHS) before signing out:') : '';
+        if(value === null) return;
+        try{ closeWorklog(session.worklogId, value, 'Shift sign-out reading'); }
+        catch(error){ if(root.alert) root.alert(error.message); return; }
+      }
+    }
     session = null;
     try{ sessionStorageSafe()?.removeItem(SESSION_KEY); }catch(e){}
     root.location.reload();
@@ -183,10 +311,22 @@
     const host = document.getElementById('staffSession');
     if(!host || !session) return;
     const status = salesStatus();
-    host.innerHTML = `<details class="staff-session-menu"><summary class="staff-session-button"><b>${escapeHtml(session.name)}</b><span>${escapeHtml(session.roleLabel)} · ${escapeHtml(session.shiftLabel)}</span></summary><div class="staff-session-dropdown"><button type="button" id="btnStockOverview">Stock <span class="stock-alert-badge hidden" id="stockAlertBadge">0</span></button><button type="button" id="btnHistory">History / Daily Report</button><button type="button" id="btnReceipt">Receipt</button><button type="button" id="btnClearStorage" data-permission="maintenance">Clear Storage</button><a href="shift.html">Shift Tools</a><a href="admin.html" data-permission="admin">Admin</a><button type="button" id="btnStaffSwitch">Switch staff / Sign out</button></div></details><span class="sales-status ${status.state}"><b>${escapeHtml(status.label)}</b><small>${escapeHtml(status.detail)}</small></span>`;
+    const electricity = electricityStatus();
+    const electricityLabel = electricity.creditGhs == null ? 'Electricity unknown' : `Electricity GHS ${electricity.creditGhs.toFixed(2)}`;
+    host.innerHTML = `<details class="staff-session-menu"><summary class="staff-session-button"><b>${escapeHtml(session.name)}</b><span>${escapeHtml(session.roleLabel)} · ${escapeHtml(session.shiftLabel)}</span></summary><div class="staff-session-dropdown"><button type="button" id="btnStockOverview">Stock <span class="stock-alert-badge hidden" id="stockAlertBadge">0</span></button><button type="button" id="btnHistory">History / Daily Report</button><button type="button" id="btnReceipt">Receipt</button><button type="button" id="btnElectricityTopup">Electricity top-up</button><button type="button" id="btnClearStorage" data-permission="maintenance">Clear Storage</button><a href="shift.html">Shift Tools</a><a href="admin.html" data-permission="admin">Admin</a><button type="button" id="btnStaffSwitch">Switch staff / Sign out</button></div></details><span class="sales-status ${status.state}"><b>${escapeHtml(status.label)}</b><small>${escapeHtml(status.detail)}</small></span><span class="sales-status ${electricity.state}"><b>${escapeHtml(electricityLabel)}</b><small>Prepaid meter</small></span>`;
     const signOutButton = document.getElementById('btnStaffSwitch');
     if(signOutButton) signOutButton.onclick = signOut;
+    const topupButton = document.getElementById('btnElectricityTopup');
+    if(topupButton) topupButton.onclick = promptElectricityTopup;
     if(root.BK_UI && typeof BK_UI.renderStock === 'function') BK_UI.renderStock();
+  }
+  function promptElectricityTopup(){
+    const amount = root.prompt ? root.prompt('Electricity top-up amount (GHS):') : '';
+    if(amount === null) return;
+    const creditAfterGhs = root.prompt ? root.prompt('Prepaid electricity credit after top-up (GHS, optional):') : '';
+    const result = recordElectricityTopup({ amountGhs:amount, creditAfterGhs });
+    if(!result.ok){ if(root.alert) root.alert(result.message); return; }
+    updateHeader();
   }
   function escapeHtml(value){
     return String(value || '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
@@ -217,7 +357,14 @@
   function showLogin(message){
     const host = shell();
     const selectedShift = suggestedShift(new Date());
-    host.innerHTML = `<div class="access-card"><div class="brand-mark">BK</div><p class="access-kicker">BurgerKiss POS</p><h1>Who is signing in?</h1><p class="access-copy">Staff working in the truck choose a shift. Mr Asamoah and Vera may choose Remote Support without joining a shift.</p><form id="accessLoginForm" class="access-form"><div class="staff-picker">${STAFF.map((person,index)=>`<label class="staff-choice"><input type="radio" name="staffId" value="${person.id}" data-role="${person.role}" ${index===0?'checked':''}><span><b>${escapeHtml(person.name)}</b><small>${escapeHtml(person.roleLabel)}</small></span></label>`).join('')}</div><label><span>Access mode</span><select name="shiftId" id="accessMode"><option value="remote">Remote Support · no shift</option>${Object.values(SHIFTS).map(shift=>`<option value="${shift.id}" >${escapeHtml(shift.label)} · ${escapeHtml(shift.hours)}</option>`).join('')}</select></label><label><span>Personal PIN</span><input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="current-password" required autofocus></label><div class="access-error" id="accessError">${escapeHtml(message || '')}</div><button class="access-primary" type="submit">Sign in</button></form></div>`;
+    host.innerHTML = `<div class="access-card"><div class="brand-mark">BK</div><p class="access-kicker">BurgerKiss POS</p><h1>Who is signing in?</h1><p class="access-copy">Staff working in the truck choose a shift. Mr Asamoah and Vera may choose Remote Support without joining a shift.</p><form id="accessLoginForm" class="access-form"><div class="staff-picker">${STAFF.map((person,index)=>`<label class="staff-choice"><input type="radio" name="staffId" value="${person.id}" data-role="${person.role}" ${index===0?'checked':''}><span><b>${escapeHtml(person.name)}</b><small>${escapeHtml(person.roleLabel)}</small></span></label>`).join('')}</div><label><span>Access mode</span><select name="shiftId" id="accessMode"><option value="remote">Remote Support · no shift</option>${Object.values(SHIFTS).map(shift=>`<option value="${shift.id}" >${escapeHtml(shift.label)} · ${escapeHtml(shift.hours)}</option>`).join('')}</select></label><label id="electricityStartField"><span>Prepaid electricity credit at shift start (GHS)</span><input name="electricityStartCreditGhs" type="number" inputmode="decimal" min="0" step="0.01" placeholder="e.g. 128.50"></label><label id="electricityStartNoteField"><span>Electricity note optional</span><input name="electricityStartNote" type="text" maxlength="120" placeholder="Meter/token note"></label><label><span>Personal PIN</span><input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="current-password" required autofocus></label><div class="access-error" id="accessError">${escapeHtml(message || '')}</div><button class="access-primary" type="submit">Sign in</button></form></div>`;
+    const updateElectricityFields = ()=>{
+      const operational = document.getElementById('accessMode').value !== 'remote';
+      const electricityInput = document.querySelector('input[name="electricityStartCreditGhs"]');
+      document.getElementById('electricityStartField').classList.toggle('hidden', !operational);
+      document.getElementById('electricityStartNoteField').classList.toggle('hidden', !operational);
+      if(electricityInput) electricityInput.required = operational;
+    };
     const syncModes = ()=>{
       const selected = document.querySelector('input[name="staffId"]:checked');
       const remote = document.querySelector('#accessMode option[value="remote"]');
@@ -225,8 +372,10 @@
       remote.disabled = employee;
       if(employee) document.getElementById('accessMode').value = selectedShift;
       else document.getElementById('accessMode').value = 'remote';
+      updateElectricityFields();
     };
     document.querySelectorAll('input[name="staffId"]').forEach(input=>input.addEventListener('change', syncModes));
+    document.getElementById('accessMode').addEventListener('change', updateElectricityFields);
     syncModes();
     document.getElementById('accessLoginForm').onsubmit = async event=>{
       event.preventDefault();
@@ -235,7 +384,7 @@
       button.disabled = true;
       try{
         if(!(await verifyPin(data.staffId, data.pin))) throw new Error('Incorrect PIN. Please try again.');
-        setSession(data.staffId, data.shiftId);
+        setSession(data.staffId, data.shiftId, data);
         host.remove();
         document.body.classList.remove('access-locked');
         updateHeader();
@@ -269,7 +418,7 @@
     return false;
   }
 
-  const api = { STAFF, SHIFTS, ROLE_LEVEL, suggestedShift, salesStatus, businessDate, init, current:()=>session, actor, operationalActor, authorizeOwnerPin, authorizeStaffPin, canOperate, hasRole, can, applyPermissions, guardNewSale, signOut };
+  const api = { STAFF, SHIFTS, ROLE_LEVEL, suggestedShift, salesStatus, businessDate, init, current:()=>session, actor, operationalActor, authorizeOwnerPin, authorizeStaffPin, canOperate, hasRole, can, applyPermissions, guardNewSale, signOut, normalizeElectricityCredit, startWorklog, closeWorklog, getWorklogs, currentWorklog, electricityStatus, recordElectricityTopup };
   root.BK_ACCESS = api;
   if(typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
