@@ -275,19 +275,92 @@
     writeJson(sessionStorageSafe(), SESSION_KEY, session);
     return session;
   }
+  function removeAccessDialog(){
+    const existing = root.document && root.document.getElementById('accessOperationalDialog');
+    if(existing) existing.remove();
+  }
+  function accessOperationalDialog(title, copy, fields, submitLabel, onSubmit){
+    if(!(root.document && root.document.body)) return Promise.resolve(null);
+    removeAccessDialog();
+    return new Promise(resolve=>{
+      const host = root.document.createElement('div');
+      host.id = 'accessOperationalDialog';
+      host.className = 'access-operational-dialog';
+      host.setAttribute('role', 'dialog');
+      host.setAttribute('aria-modal', 'true');
+      host.setAttribute('aria-labelledby', 'accessOperationalTitle');
+      host.innerHTML = `<div class="access-operational-card">
+        <div class="access-operational-heading">
+          <p class="access-kicker">BurgerKiss POS</p>
+          <h2 id="accessOperationalTitle">${escapeHtml(title)}</h2>
+          <p>${escapeHtml(copy)}</p>
+        </div>
+        <form id="accessOperationalForm" class="access-form">
+          ${(fields || []).map(field=>`<label><span>${escapeHtml(field.label)}</span><input name="${escapeHtml(field.name)}" type="${escapeHtml(field.type || 'text')}" inputmode="${escapeHtml(field.inputmode || 'text')}" min="${escapeHtml(field.min || '')}" step="${escapeHtml(field.step || '')}" maxlength="${escapeHtml(field.maxlength || '')}" placeholder="${escapeHtml(field.placeholder || '')}" ${field.required ? 'required' : ''}></label>`).join('')}
+          <div class="access-error" id="accessOperationalError" aria-live="polite"></div>
+          <div class="access-operational-actions">
+            <button class="x" id="accessOperationalCancel" type="button">Cancel</button>
+            <button class="access-primary" type="submit">${escapeHtml(submitLabel || 'Confirm')}</button>
+          </div>
+        </form>
+      </div>`;
+      root.document.body.appendChild(host);
+      const form = root.document.getElementById('accessOperationalForm');
+      const cancel = root.document.getElementById('accessOperationalCancel');
+      const error = root.document.getElementById('accessOperationalError');
+      const firstInput = form && form.querySelector('input');
+      const close = value=>{ host.remove(); resolve(value); };
+      cancel.onclick = ()=>close(null);
+      host.addEventListener('click', event=>{ if(event.target === host) close(null); });
+      form.onsubmit = event=>{
+        event.preventDefault();
+        const button = event.submitter;
+        if(button) button.disabled = true;
+        try{
+          const data = Object.fromEntries(new FormData(form).entries());
+          const result = onSubmit ? onSubmit(data) : { ok:true, value:data };
+          if(!result || result.ok === false){
+            error.textContent = result && result.message ? result.message : 'Please check the entered values.';
+            if(button) button.disabled = false;
+            return;
+          }
+          close(result.value || data);
+        }catch(dialogError){
+          error.textContent = dialogError && dialogError.message ? dialogError.message : 'Please check the entered values.';
+          if(button) button.disabled = false;
+        }
+      };
+      if(firstInput) firstInput.focus();
+    });
+  }
+  function completeSignOut(){
+    session = null;
+    try{ sessionStorageSafe()?.removeItem(SESSION_KEY); }catch(e){}
+    root.location.reload();
+  }
   function signOut(){
     if(session && session.mode === 'operational' && session.worklogId){
       const active = currentWorklog();
       if(active && active.status === 'open'){
-        const value = root.prompt ? root.prompt('Enter prepaid electricity credit at shift end (GHS) before signing out:') : '';
-        if(value === null) return;
-        try{ closeWorklog(session.worklogId, value, 'Shift sign-out reading'); }
-        catch(error){ if(root.alert) root.alert(error.message); return; }
+        accessOperationalDialog(
+          'Close shift before signing out',
+          'Enter the prepaid electricity credit shown on the meter. The worklog will be closed before this staff session ends.',
+          [
+            { name:'electricityEndCreditGhs', label:'Prepaid electricity credit at shift end (GHS)', type:'number', inputmode:'decimal', min:'0', step:'0.01', placeholder:'e.g. 94.20', required:true },
+            { name:'electricityEndNote', label:'Closing note optional', type:'text', maxlength:'120', placeholder:'Meter/token note' }
+          ],
+          'Close shift & sign out',
+          data=>{
+            try{
+              closeWorklog(session.worklogId, data.electricityEndCreditGhs, data.electricityEndNote || 'Shift sign-out reading');
+              return { ok:true };
+            }catch(error){ return { ok:false, message:error.message }; }
+          }
+        ).then(result=>{ if(result) completeSignOut(); });
+        return;
       }
     }
-    session = null;
-    try{ sessionStorageSafe()?.removeItem(SESSION_KEY); }catch(e){}
-    root.location.reload();
+    completeSignOut();
   }
   function hasRole(required){
     return !!(session && ROLE_LEVEL[session.role] >= ROLE_LEVEL[required]);
@@ -354,12 +427,20 @@
     if(root.BK_UI && typeof BK_UI.renderStock === 'function') BK_UI.renderStock();
   }
   function promptElectricityTopup(){
-    const amount = root.prompt ? root.prompt('Electricity top-up amount (GHS):') : '';
-    if(amount === null) return;
-    const creditAfterGhs = root.prompt ? root.prompt('Prepaid electricity credit after top-up (GHS, optional):') : '';
-    const result = recordElectricityTopup({ amountGhs:amount, creditAfterGhs });
-    if(!result.ok){ if(root.alert) root.alert(result.message); return; }
-    updateHeader();
+    accessOperationalDialog(
+      'Record electricity top-up',
+      'Save the prepaid top-up amount and, if available, the meter credit after loading the token.',
+      [
+        { name:'amountGhs', label:'Electricity top-up amount (GHS)', type:'number', inputmode:'decimal', min:'0.01', step:'0.01', placeholder:'e.g. 50.00', required:true },
+        { name:'creditAfterGhs', label:'Prepaid electricity credit after top-up (GHS, optional)', type:'number', inputmode:'decimal', min:'0', step:'0.01', placeholder:'e.g. 140.00' },
+        { name:'note', label:'Top-up note optional', type:'text', maxlength:'120', placeholder:'Token, receipt or meter note' }
+      ],
+      'Save top-up',
+      data=>{
+        const result = recordElectricityTopup(data);
+        return result.ok ? { ok:true, value:result.entry } : result;
+      }
+    ).then(result=>{ if(result) updateHeader(); });
   }
   function escapeHtml(value){
     return String(value || '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
@@ -451,7 +532,7 @@
     return false;
   }
 
-  const api = { STAFF, SHIFTS, ROLE_LEVEL, suggestedShift, salesStatus, businessDate, init, current:()=>session, actor, operationalActor, authorizeOwnerPin, authorizeStaffPin, canOperate, hasRole, can, applyPermissions, guardNewSale, signOut, normalizeElectricityCredit, startWorklog, closeWorklog, getWorklogs, currentWorklog, electricityStatus, recordElectricityTopup };
+  const api = { STAFF, SHIFTS, ROLE_LEVEL, suggestedShift, salesStatus, businessDate, init, current:()=>session, actor, operationalActor, authorizeOwnerPin, authorizeStaffPin, canOperate, hasRole, can, applyPermissions, guardNewSale, signOut, normalizeElectricityCredit, startWorklog, closeWorklog, getWorklogs, currentWorklog, electricityStatus, recordElectricityTopup, accessOperationalDialog };
   root.BK_ACCESS = api;
   if(typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

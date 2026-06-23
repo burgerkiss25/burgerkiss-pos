@@ -98,52 +98,16 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   }
 
-  function ensureDialogHost(){
-    let host = document.getElementById('appDialog');
-    if(host) return host;
-    host = document.createElement('div');
-    host.id = 'appDialog';
-    host.className = 'modal';
-    host.innerHTML = '<div class="sheet"><header><b id="appDialogTitle"></b></header><div class="body" id="appDialogBody"></div></div>';
-    document.body.appendChild(host);
-    return host;
-  }
-
+  const DIALOGS = window.BK_DIALOGS || {};
+  function ensureDialogHost(){ return DIALOGS.ensureHost ? DIALOGS.ensureHost() : null; }
   function closeDialog(){
+    if(DIALOGS.close){ DIALOGS.close(); return; }
     const host = document.getElementById('appDialog');
     if(host) host.classList.remove('open', 'modifier-dialog');
   }
-
-  function infoDialog(message){
-    const host = ensureDialogHost();
-    document.getElementById('appDialogTitle').textContent = 'Info';
-    document.getElementById('appDialogBody').innerHTML = `
-      <div style="margin-bottom:10px">${message}</div>
-      <div style="display:flex;justify-content:flex-end"><button class="x" id="dlgOk">OK</button></div>
-    `;
-    host.classList.add('open');
-    document.getElementById('dlgOk').onclick = closeDialog;
-  }
-
-  function confirmDialog(title, message, opts){
-    return new Promise(resolve=>{
-      const options = opts || {};
-      const cancelLabel = options.cancelLabel || 'Cancel';
-      const confirmLabel = options.confirmLabel || 'Confirm';
-      const host = ensureDialogHost();
-      document.getElementById('appDialogTitle').textContent = title;
-      document.getElementById('appDialogBody').innerHTML = `
-        <div style="margin-bottom:10px">${message}</div>
-        <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="x" id="dlgCancel">${cancelLabel}</button>
-          <button class="x" id="dlgConfirm">${confirmLabel}</button>
-        </div>
-      `;
-      host.classList.add('open');
-      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(false); };
-      document.getElementById('dlgConfirm').onclick = ()=>{ closeDialog(); resolve(true); };
-    });
-  }
+  function infoDialog(message){ if(DIALOGS.info) DIALOGS.info(message); }
+  function confirmDialog(title, message, opts){ return DIALOGS.confirm ? DIALOGS.confirm(title, message, opts) : Promise.resolve(false); }
+  function handoverChecklistDialog(title, message){ return DIALOGS.handoverChecklist ? DIALOGS.handoverChecklist(title, message) : Promise.resolve(false); }
 
   function requestDiscountApproval(rate){
     const st = BK_STATE.getState();
@@ -186,42 +150,6 @@
       renderPay();
       refreshTotals();
     };
-  }
-
-  function handoverChecklistDialog(title, message){
-    return new Promise(resolve=>{
-      const host = ensureDialogHost();
-      document.getElementById('appDialogTitle').textContent = title;
-      document.getElementById('appDialogBody').innerHTML = `
-        <div class="handover-checklist-dialog">
-          ${message}
-          <div class="handover-check-progress" id="handoverCheckProgress" role="status" aria-live="polite"></div>
-          <div class="handover-check-actions">
-            <button class="x" id="dlgCancel" type="button">Cancel</button>
-            <button class="x modifier-primary" id="dlgConfirm" type="button" disabled>Confirm handover</button>
-          </div>
-        </div>
-      `;
-      host.classList.add('open');
-      const checks = Array.from(host.querySelectorAll('[data-handover-check]'));
-      const confirm = document.getElementById('dlgConfirm');
-      const progress = document.getElementById('handoverCheckProgress');
-      const update = ()=>{
-        const complete = checks.filter(input=>input.checked).length;
-        const total = checks.length;
-        progress.textContent = `${complete} of ${total} required checks confirmed`;
-        progress.classList.toggle('complete', total > 0 && complete === total);
-        confirm.disabled = total === 0 || complete !== total;
-      };
-      checks.forEach(input=>input.addEventListener('change', update));
-      update();
-      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(false); };
-      confirm.onclick = ()=>{
-        if(confirm.disabled) return;
-        closeDialog();
-        resolve(true);
-      };
-    });
   }
 
   function promptDialog(title, initial){
