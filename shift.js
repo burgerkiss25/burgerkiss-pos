@@ -29,6 +29,7 @@
     document.body.classList.remove('app-loading');
     const dateInput = document.getElementById('shiftReportDate');
     if(dateInput && !dateInput.value) dateInput.value = BK_REPORTS.dateInputValue(new Date());
+    initPlanner();
     restrictDateInput();
     renderReport();
     Promise.all([
@@ -52,6 +53,81 @@
     document.getElementById('shiftOrderDetailModal').classList.add('open');
   }
   function closeOrderDetail(){ document.getElementById('shiftOrderDetailModal').classList.remove('open'); }
+  function escapeHtml(value){ return BK_REPORTS && BK_REPORTS.escapeHtml ? BK_REPORTS.escapeHtml(value) : String(value || '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
+  function currentActor(){ return window.BK_ACCESS && BK_ACCESS.actor ? BK_ACCESS.actor() : null; }
+  function canManagePlanner(){ return window.BK_SHIFT_PLANNER && BK_SHIFT_PLANNER.canManageSchedule(currentActor()); }
+  function plannerMonth(){ return document.getElementById('plannerMonth').value || BK_SHIFT_PLANNER.monthValue(new Date()); }
+  function setPlannerMessage(message){ document.getElementById('plannerMessage').textContent = message || ''; }
+  function fillPlannerOptions(){
+    document.getElementById('plannerStaff').innerHTML = BK_ACCESS.STAFF.filter(person=>person.role !== 'owner').map(person=>`<option value="${escapeHtml(person.id)}">${escapeHtml(person.name)} · ${escapeHtml(person.roleLabel)}</option>`).join('');
+    const shifts = Object.values(BK_ACCESS.SHIFTS).map(shift=>`<option value="${escapeHtml(shift.id)}">${escapeHtml(shift.label)} · ${escapeHtml(shift.hours)}</option>`).join('');
+    document.getElementById('plannerShift').innerHTML = `<option value="off">Off day</option>${shifts}`;
+  }
+  function renderPlanner(){
+    if(!(window.BK_SHIFT_PLANNER && window.BK_ACCESS)) return;
+    const month = plannerMonth();
+    const schedule = BK_SHIFT_PLANNER.scheduleForMonth(month);
+    const actor = currentActor();
+    const canManage = BK_SHIFT_PLANNER.canManageSchedule(actor);
+    const canApprove = BK_SHIFT_PLANNER.canApproveSchedule(actor);
+    const form = document.getElementById('plannerForm');
+    form.classList.toggle('hidden', !canManage);
+    document.getElementById('plannerSubmit').classList.toggle('hidden', !canManage);
+    document.getElementById('plannerApprove').classList.toggle('hidden', !canApprove);
+    document.getElementById('plannerStatus').textContent = schedule.status.replace(/_/g, ' ');
+    document.getElementById('plannerDate').min = `${month}-01`;
+    const days = BK_SHIFT_PLANNER.daysInMonth(month);
+    document.getElementById('plannerDate').max = days[days.length - 1] || '';
+    if(!document.getElementById('plannerDate').value || !document.getElementById('plannerDate').value.startsWith(month)) document.getElementById('plannerDate').value = days[0] || '';
+    const entriesByDate = {};
+    schedule.entries.forEach(entry=>{ (entriesByDate[entry.date] = entriesByDate[entry.date] || []).push(entry); });
+    document.getElementById('plannerGrid').innerHTML = days.map(date=>{
+      const entries = entriesByDate[date] || [];
+      const weekday = new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
+      const body = entries.length ? entries.map(entry=>{
+        const person = BK_ACCESS.STAFF.find(item=>item.id === entry.staffId);
+        const shift = entry.shiftId === 'off' ? { label:'Off day' } : BK_ACCESS.SHIFTS[entry.shiftId];
+        return `<div class="planner-entry"><span><b>${escapeHtml(person && person.name || entry.staffId)}</b> · ${escapeHtml(shift && shift.label || entry.shiftId)} <small>${Number(entry.workDayCredit || 0).toFixed(1)} day</small>${entry.note ? `<small> · ${escapeHtml(entry.note)}</small>` : ''}</span>${canManage ? `<button class="x" type="button" data-planner-remove="${escapeHtml(entry.id)}">Remove</button>` : ''}</div>`;
+      }).join('') : '<div class="planner-empty">No shifts planned.</div>';
+      return `<details class="planner-day"><summary>${escapeHtml(weekday)}</summary>${body}</details>`;
+    }).join('');
+    document.querySelectorAll('[data-planner-remove]').forEach(button=>{
+      button.onclick = ()=>{
+        const result = BK_SHIFT_PLANNER.removeEntry(month, button.dataset.plannerRemove, currentActor());
+        setPlannerMessage(result.ok ? 'Shift removed.' : result.message);
+        renderPlanner();
+      };
+    });
+  }
+  function initPlanner(){
+    if(initPlanner.done || !(window.BK_SHIFT_PLANNER && window.BK_ACCESS)) return;
+    initPlanner.done = true;
+    fillPlannerOptions();
+    const monthInput = document.getElementById('plannerMonth');
+    monthInput.value = BK_SHIFT_PLANNER.monthValue(new Date());
+    monthInput.onchange = ()=>{ setPlannerMessage(''); renderPlanner(); };
+    document.getElementById('plannerShift').onchange = event=>{
+      document.getElementById('plannerCredit').value = event.target.value === 'off' ? '0' : '1';
+    };
+    document.getElementById('plannerForm').onsubmit = event=>{
+      event.preventDefault();
+      const result = BK_SHIFT_PLANNER.upsertEntry(plannerMonth(), Object.fromEntries(new FormData(event.currentTarget).entries()), currentActor());
+      setPlannerMessage(result.ok ? 'Shift saved.' : result.message);
+      if(result.ok){ event.currentTarget.reset(); fillPlannerOptions(); }
+      renderPlanner();
+    };
+    document.getElementById('plannerSubmit').onclick = ()=>{
+      const result = BK_SHIFT_PLANNER.submitForApproval(plannerMonth(), currentActor());
+      setPlannerMessage(result.ok ? 'Schedule submitted for owner approval.' : result.message);
+      renderPlanner();
+    };
+    document.getElementById('plannerApprove').onclick = ()=>{
+      const result = BK_SHIFT_PLANNER.approveSchedule(plannerMonth(), currentActor());
+      setPlannerMessage(result.ok ? 'Schedule approved.' : result.message);
+      renderPlanner();
+    };
+    renderPlanner();
+  }
   function exportPurchaseHistory(){
     const date = document.getElementById('shiftReportDate').value || BK_REPORTS.dateInputValue(new Date());
     const report = BK_REPORTS.dailyReportData(date);
