@@ -331,6 +331,26 @@
   const stockEditorCopy = {
     stock: { title:'Stock overview', description:'Review inventory levels, locations, transfers, and ingredient details', label:'Stock', reset:'Reset stock to defaults' }
   };
+
+  function setAdminWorkspaceTab(tab){
+    const selected = tab || 'health';
+    document.querySelectorAll('[data-admin-tab]').forEach(button=>{
+      const active = button.dataset.adminTab === selected;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-admin-panel]').forEach(panel=>{
+      const healthPanel = panel.dataset.adminPanel === 'health';
+      panel.hidden = selected === 'health' ? !healthPanel : healthPanel;
+    });
+    if(selected === 'health') refreshDbStatus();
+  }
+  function openWorkspaceTab(tab, open){
+    return guardWorkspaceChange(()=>{
+      setAdminWorkspaceTab(tab);
+      open();
+    });
+  }
   function closeWorkspaceModals(){
     ['modalCatalog','modalMenus','modalStock','modalPackagingRules'].forEach(id=>{
       const modal = document.getElementById(id);
@@ -358,9 +378,9 @@
   function openOperationsWorkspace(){ return guardWorkspaceChange(()=>{ closeWorkspaceModals(); openPackagingRules(); }); }
   function closeEditorSafely(modalId, close){ return guardWorkspaceChange(()=>{ markEditorSaved(modalId); close(); }); }
 
-  document.getElementById('btnCatalog').onclick = ()=>guardWorkspaceChange(openCatalogWorkspace);
-  document.getElementById('btnInventory').onclick = ()=> openStockEditor('stock');
-  document.getElementById('btnOperations').onclick = openOperationsWorkspace;
+  document.getElementById('btnCatalog').onclick = ()=>openWorkspaceTab('products', openCatalogWorkspace);
+  document.getElementById('btnInventory').onclick = ()=>guardWorkspaceChange(()=>{ setAdminWorkspaceTab('inventory'); showStockEditor('stock'); });
+  document.getElementById('btnOperations').onclick = ()=>guardWorkspaceChange(()=>{ setAdminWorkspaceTab('operations'); closeWorkspaceModals(); openPackagingRules(); });
   document.getElementById('catalogAdd').onclick = ()=>BK_CATALOG.addProduct();
   document.getElementById('catalogClose').onclick = ()=>closeEditorSafely('modalCatalog', ()=>document.getElementById('modalCatalog').classList.remove('open'));
   document.getElementById('catalogSave').onclick = async ()=>{
@@ -368,7 +388,7 @@
   };
   document.getElementById('catalogReset').onclick = ()=>resetWithConfirmation(()=>BK_CATALOG.reset(), 'Product catalog');
 
-  document.getElementById('btnMenus').onclick = ()=> guardWorkspaceChange(()=>{ closeWorkspaceModals(); openEditorModal('modalMenus', ()=>BK_MENUS.openEditor()); });
+  document.getElementById('btnMenus').onclick = ()=> openWorkspaceTab('menus', ()=>{ closeWorkspaceModals(); openEditorModal('modalMenus', ()=>BK_MENUS.openEditor()); });
   document.getElementById('menuClose').onclick  = ()=> closeEditorSafely('modalMenus', ()=>BK_MENUS.closeEditor());
   document.getElementById('menuAdd').onclick    = ()=> BK_MENUS.addRow();
   document.getElementById('menuSave').onclick   = async ()=>{ if(await saveWithFeedback(()=>BK_MENUS.save(), 'Menus')) markEditorSaved('modalMenus'); };
@@ -382,6 +402,8 @@
   document.getElementById('sClose').onclick   = ()=> closeEditorSafely('modalStock', ()=>BK_STOCK.closeEditor());
   document.getElementById('sSave').onclick    = async ()=>{ if(await saveWithFeedback(()=>BK_STOCK.save(), stockEditorCopy[activeStockMode].label)) markEditorSaved('modalStock'); };
   document.getElementById('sReset').onclick   = ()=> resetWithConfirmation(()=>{ BK_STOCK.resetEditor(activeStockMode); showStockEditor(activeStockMode); }, stockEditorCopy[activeStockMode].label);
+  document.getElementById('btnSystemHealth').onclick = ()=> guardWorkspaceChange(()=>{ closeWorkspaceModals(); setAdminWorkspaceTab('health'); });
+  setAdminWorkspaceTab('health');
   document.getElementById('btnRefreshDbStatus').onclick = refreshDbStatus;
   document.getElementById('adminConfirmCancel').onclick = ()=> finishConfirmation(false);
   document.getElementById('adminConfirmAccept').onclick = ()=> finishConfirmation(true);
