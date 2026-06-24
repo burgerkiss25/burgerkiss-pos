@@ -88,3 +88,12 @@ test('workflow next action renders dynamic copy without innerHTML templates', ()
   assert.match(ui, /detail\.textContent = opts\.detail \|\| ''/);
   assert.match(ui, /button\.textContent = opts\.label \|\| 'Continue'/);
 });
+
+
+test('kitchen order cards render dynamic progress copy with textContent', () => {
+  assert.doesNotMatch(ui, /card\.innerHTML\s*=\s*`\s*<div class="slot-head kitchen-order-head"/);
+  assert.match(ui, /orderTitle\.textContent = `Order #\$\{shortOrderNumber\(s\.orderNo\)\}`/);
+  assert.match(ui, /packaging\.textContent = `Packaging: \$\{packagingLabel\(s\)\}`/);
+  assert.match(ui, /progressTitle\.textContent = progress\.label/);
+  assert.match(ui, /nextButton\.textContent = makeNext\.label/);
+});

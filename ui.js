@@ -1540,20 +1540,50 @@
       const progress = kitchenProgress(s);
       const makeNext = workflowNextState('make', s);
       const card = document.createElement('div'); card.className='slot-card kitchen-order-card';
-      card.innerHTML = `
-        <div class="slot-head kitchen-order-head">
-          <div class="kitchen-order-identity">
-            <strong>Order #${escapeHtml(shortOrderNumber(s.orderNo))}</strong>
-            <span>${escapeHtml(orderChannelText(s))} · waiting ${formatAge(s.createdAt)}</span>
-          </div>
-          <span class="kitchen-packaging">Packaging: ${escapeHtml(packagingLabel(s))}</span>
-        </div>
-        <div class="kitchen-progress ${progress.state}">
-          <div class="kitchen-progress-copy"><strong>${progress.label}</strong><span>${progress.complete} / ${progress.total} prepared</span></div>
-          <div class="kitchen-progress-track" role="progressbar" aria-label="Kitchen progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="width:${progress.percent}%"></span></div>
-          ${progress.state === 'complete' && !s.issued ? `<button class="workflow-next-button kitchen-next-action" type="button">${makeNext.label}</button>` : ''}
-        </div>
-        <div class="todo grouped-todo" id="todo-${i}"></div>`;
+      const head = document.createElement('div');
+      head.className = 'slot-head kitchen-order-head';
+      const identity = document.createElement('div');
+      identity.className = 'kitchen-order-identity';
+      const orderTitle = document.createElement('strong');
+      orderTitle.textContent = `Order #${shortOrderNumber(s.orderNo)}`;
+      const orderMeta = document.createElement('span');
+      orderMeta.textContent = `${orderChannelText(s)} · waiting ${formatAge(s.createdAt)}`;
+      identity.append(orderTitle, orderMeta);
+      const packaging = document.createElement('span');
+      packaging.className = 'kitchen-packaging';
+      packaging.textContent = `Packaging: ${packagingLabel(s)}`;
+      head.append(identity, packaging);
+      const progressBox = document.createElement('div');
+      progressBox.className = `kitchen-progress ${progress.state}`;
+      const progressCopy = document.createElement('div');
+      progressCopy.className = 'kitchen-progress-copy';
+      const progressTitle = document.createElement('strong');
+      progressTitle.textContent = progress.label;
+      const progressDetail = document.createElement('span');
+      progressDetail.textContent = `${progress.complete} / ${progress.total} prepared`;
+      progressCopy.append(progressTitle, progressDetail);
+      const progressTrack = document.createElement('div');
+      progressTrack.className = 'kitchen-progress-track';
+      progressTrack.setAttribute('role', 'progressbar');
+      progressTrack.setAttribute('aria-label', 'Kitchen progress');
+      progressTrack.setAttribute('aria-valuemin', '0');
+      progressTrack.setAttribute('aria-valuemax', '100');
+      progressTrack.setAttribute('aria-valuenow', String(progress.percent));
+      const progressFill = document.createElement('span');
+      progressFill.style.width = `${progress.percent}%`;
+      progressTrack.appendChild(progressFill);
+      progressBox.append(progressCopy, progressTrack);
+      if(progress.state === 'complete' && !s.issued){
+        const nextButton = document.createElement('button');
+        nextButton.className = 'workflow-next-button kitchen-next-action';
+        nextButton.type = 'button';
+        nextButton.textContent = makeNext.label;
+        progressBox.appendChild(nextButton);
+      }
+      const todo = document.createElement('div');
+      todo.className = 'todo grouped-todo';
+      todo.id = `todo-${i}`;
+      card.append(head, progressBox, todo);
       const nextAction = card.querySelector('.kitchen-next-action');
       if(nextAction) nextAction.onclick = ()=> focusSlot(i, makeNext.target);
       makeSlotCardSelectable(card, i, 'make', i === active);
