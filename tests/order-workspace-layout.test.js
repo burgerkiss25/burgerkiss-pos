@@ -17,9 +17,9 @@ test('order header no longer duplicates cart totals or technical order context',
 
 test('employee tools live inside the staff session menu', () => {
   assert.doesNotMatch(html, /class="more-menu"/);
-  assert.match(access, /id="btnStockOverview"/);
-  assert.match(access, /id="btnHistory"/);
-  assert.match(access, /id="btnReceipt"/);
+  assert.match(access, /id = 'btnStockOverview'|id:'btnStockOverview'/);
+  assert.match(access, /id:'btnHistory'/);
+  assert.match(access, /id:'btnReceipt'/);
   assert.doesNotMatch(access, /id="btnDailyReport"/);
   assert.match(access, /History \/ Daily Report/);
   assert.match(html, /id="hDailyReport"/);
