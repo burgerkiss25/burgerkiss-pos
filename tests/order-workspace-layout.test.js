@@ -80,3 +80,11 @@ test('order slot chips render dynamic status text with textContent', () => {
   assert.match(ui, /statusLabel\.textContent = status\.label/);
   assert.match(ui, /statusProgress\.textContent = status\.shortDetail/);
 });
+
+
+test('workflow next action renders dynamic copy without innerHTML templates', () => {
+  assert.doesNotMatch(ui, /host\.innerHTML\s*=\s*`<div class="workflow-next-copy"/);
+  assert.match(ui, /title\.textContent = opts\.title \|\| ''/);
+  assert.match(ui, /detail\.textContent = opts\.detail \|\| ''/);
+  assert.match(ui, /button\.textContent = opts\.label \|\| 'Continue'/);
+});

@@ -1464,8 +1464,20 @@
     if(!host) return;
     const opts = options || {};
     host.className = `workflow-next ${opts.state || 'blocked'}`;
-    host.innerHTML = `<div class="workflow-next-copy"><strong>${escapeHtml(opts.title || '')}</strong><small>${escapeHtml(opts.detail || '')}</small></div><button type="button" class="workflow-next-button" ${opts.disabled ? 'disabled' : ''}>${escapeHtml(opts.label || 'Continue')}</button>`;
-    const button = host.querySelector('.workflow-next-button');
+    host.textContent = '';
+    const copy = document.createElement('div');
+    copy.className = 'workflow-next-copy';
+    const title = document.createElement('strong');
+    title.textContent = opts.title || '';
+    const detail = document.createElement('small');
+    detail.textContent = opts.detail || '';
+    copy.append(title, detail);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'workflow-next-button';
+    button.disabled = !!opts.disabled;
+    button.textContent = opts.label || 'Continue';
+    host.append(copy, button);
     button.onclick = ()=>{ if(!button.disabled && typeof opts.onClick === 'function') opts.onClick(); };
   }
 
