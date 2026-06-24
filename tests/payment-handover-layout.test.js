@@ -139,6 +139,18 @@ test('stock overview has search and sorted results', () => {
   assert.match(ui, /localeCompare/);
 });
 
+test('stock overview, void reason and group order dialogs avoid inline HTML templates', () => {
+  const stockOverview = ui.slice(ui.indexOf('function renderStock'), ui.indexOf('function openReceipt'));
+  const voidReason = ui.slice(ui.indexOf('function requestVoidReason'), ui.indexOf('function voidHistoryOrder'));
+  const groupDialog = ui.slice(ui.indexOf('function openGroup'), ui.indexOf('function closeGroup'));
+  assert.doesNotMatch(stockOverview, /host\.innerHTML\s*=|row\.innerHTML\s*=/);
+  assert.doesNotMatch(voidReason, /appDialogBody'\)\.innerHTML/);
+  assert.doesNotMatch(groupDialog, /body\.innerHTML|row\.innerHTML/);
+  assert.match(stockOverview, /host\.replaceChildren\(summary, filters, list\)/);
+  assert.match(voidReason, /presetSelect\.appendChild\(optionNode/);
+  assert.match(groupDialog, /input\.onchange = event=> toggleGroup/);
+});
+
 
 test('payment card renders dynamic payment copy without innerHTML or inline handlers', () => {
   const renderPay = ui.slice(ui.indexOf('function renderPay()'), ui.indexOf('function continueFromPayment'));
@@ -170,4 +182,32 @@ test('history purge list renders rows with DOM text nodes', () => {
   assert.match(renderPurge, /row\.className = 'history-purge-row'/);
   assert.match(renderPurge, /order\.textContent = entry\.orderNo \|\| ''/);
   assert.match(renderPurge, /meta\.textContent = `\$\{entry\.externalOrderNo \|\| entry\.slotName \|\| ''\} · \$\{paymentLabel\(entry\.pay\)\} ·/);
+});
+
+test('order history list renders rows with DOM text nodes', () => {
+  const renderStart = ui.indexOf('function renderHistoryBody');
+  const renderHistory = ui.slice(renderStart, ui.indexOf('function openHistory', renderStart));
+  assert.doesNotMatch(renderHistory, /body\.innerHTML\s*=/);
+  assert.match(renderHistory, /body\.replaceChildren\(summary, list\)/);
+  assert.match(renderHistory, /button\.dataset\.historyId = h\.id \|\| ''/);
+  assert.match(renderHistory, /button\.onclick = \(\)=> openHistoryOrder/);
+});
+
+test('order history detail modal renders with DOM text nodes', () => {
+  const detail = ui.slice(ui.indexOf('function openHistoryOrder'), ui.indexOf('function closeHistoryOrder'));
+  assert.doesNotMatch(detail, /historyDetailBody'\)\.innerHTML/);
+  assert.match(ui, /function historyItemsNode\(entry\)/);
+  assert.match(ui, /function historyDetailMeta\(label, value\)/);
+  assert.match(detail, /historyDetailBody'\)\.replaceChildren\(\.\.\.content\)/);
+  assert.match(detail, /notice\.append\(/);
+  assert.match(detail, /totals\.className = 'history-totals'/);
+});
+
+test('active order summary modal renders grouped rows with DOM nodes', () => {
+  const summary = ui.slice(ui.indexOf('function openSummary'), ui.indexOf('function closeSummary'));
+  assert.doesNotMatch(summary, /body\.innerHTML\s*=/);
+  assert.match(ui, /function groupedRowsNode\(items\)/);
+  assert.match(summary, /body\.replaceChildren\(groupedRowsNode\(s\.items\), subtotal, meta\)/);
+  assert.match(summary, /meta\.className = 'summary-meta'/);
+  assert.match(css, /\.summary-meta\{/);
 });
