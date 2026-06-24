@@ -2153,18 +2153,82 @@
   function openOnlineOrderDialog(){
     const host = ensureDialogHost();
     document.getElementById('appDialogTitle').textContent = 'New online order';
-    document.getElementById('appDialogBody').innerHTML = `
-      <div class="online-order-guide">
-        <strong>Start with the platform details.</strong>
-        <span>After creating the slot, add products exactly like a walk-in order.</span>
-      </div>
-      <label class="dialog-label">Platform<select id="onlinePlatform" class="dialog-field"><option value="whatsapp">WhatsApp</option><option value="bolt">Bolt</option><option value="chowdeck">Chowdeck</option><option value="hubtel">Hubtel</option></select></label>
-      <div class="online-platform-hint" id="onlinePaymentHint" role="status" aria-live="polite"></div>
-      <label class="dialog-label">Order reference<input id="onlineReference" class="dialog-field" maxlength="80" placeholder="Customer name or platform order number" autocomplete="off"></label>
-      <label class="dialog-label" id="onlineNameRow">Customer name optional<input id="onlineCustomerName" class="dialog-field" maxlength="80" placeholder="Shown on receipts and handover notes" autocomplete="off"></label>
-      <label class="dialog-label hidden" id="onlinePhoneRow">Customer phone optional<input id="onlinePhone" class="dialog-field" maxlength="30" inputmode="tel" placeholder="Useful for WhatsApp delivery or rider calls"></label>
-      <div id="onlineOrderError" class="field-error"></div>
-      <div class="dialog-actions"><button class="x" id="dlgCancel">Cancel</button><button class="x modifier-primary" id="dlgConfirm">Create Online Order</button></div>`;
+    const body = document.getElementById('appDialogBody');
+    body.textContent = '';
+    const guide = document.createElement('div');
+    guide.className = 'online-order-guide';
+    const guideTitle = document.createElement('strong');
+    guideTitle.textContent = 'Start with the platform details.';
+    const guideCopy = document.createElement('span');
+    guideCopy.textContent = 'After creating the slot, add products exactly like a walk-in order.';
+    guide.append(guideTitle, guideCopy);
+    const platformLabelNode = document.createElement('label');
+    platformLabelNode.className = 'dialog-label';
+    platformLabelNode.append('Platform');
+    const platformSelect = document.createElement('select');
+    platformSelect.id = 'onlinePlatform';
+    platformSelect.className = 'dialog-field';
+    [['whatsapp','WhatsApp'], ['bolt','Bolt'], ['chowdeck','Chowdeck'], ['hubtel','Hubtel']].forEach(([value,label])=>{
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      platformSelect.appendChild(option);
+    });
+    platformLabelNode.appendChild(platformSelect);
+    const hint = document.createElement('div');
+    hint.className = 'online-platform-hint';
+    hint.id = 'onlinePaymentHint';
+    hint.setAttribute('role', 'status');
+    hint.setAttribute('aria-live', 'polite');
+    const referenceLabel = document.createElement('label');
+    referenceLabel.className = 'dialog-label';
+    referenceLabel.append('Order reference');
+    const referenceInput = document.createElement('input');
+    referenceInput.id = 'onlineReference';
+    referenceInput.className = 'dialog-field';
+    referenceInput.maxLength = 80;
+    referenceInput.placeholder = 'Customer name or platform order number';
+    referenceInput.autocomplete = 'off';
+    referenceLabel.appendChild(referenceInput);
+    const nameLabel = document.createElement('label');
+    nameLabel.className = 'dialog-label';
+    nameLabel.id = 'onlineNameRow';
+    nameLabel.append('Customer name optional');
+    const nameInput = document.createElement('input');
+    nameInput.id = 'onlineCustomerName';
+    nameInput.className = 'dialog-field';
+    nameInput.maxLength = 80;
+    nameInput.placeholder = 'Shown on receipts and handover notes';
+    nameInput.autocomplete = 'off';
+    nameLabel.appendChild(nameInput);
+    const phoneLabel = document.createElement('label');
+    phoneLabel.className = 'dialog-label hidden';
+    phoneLabel.id = 'onlinePhoneRow';
+    phoneLabel.append('Customer phone optional');
+    const phoneInput = document.createElement('input');
+    phoneInput.id = 'onlinePhone';
+    phoneInput.className = 'dialog-field';
+    phoneInput.maxLength = 30;
+    phoneInput.inputMode = 'tel';
+    phoneInput.placeholder = 'Useful for WhatsApp delivery or rider calls';
+    phoneLabel.appendChild(phoneInput);
+    const error = document.createElement('div');
+    error.id = 'onlineOrderError';
+    error.className = 'field-error';
+    const actions = document.createElement('div');
+    actions.className = 'dialog-actions';
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'x';
+    cancelButton.id = 'dlgCancel';
+    cancelButton.type = 'button';
+    cancelButton.textContent = 'Cancel';
+    const confirmButton = document.createElement('button');
+    confirmButton.className = 'x modifier-primary';
+    confirmButton.id = 'dlgConfirm';
+    confirmButton.type = 'button';
+    confirmButton.textContent = 'Create Online Order';
+    actions.append(cancelButton, confirmButton);
+    body.append(guide, platformLabelNode, hint, referenceLabel, nameLabel, phoneLabel, error, actions);
     host.classList.add('open');
     const reference = document.getElementById('onlineReference');
     const platformInput = document.getElementById('onlinePlatform');
@@ -2215,12 +2279,57 @@
     const host = ensureDialogHost();
     const platform = platformLabel(slot.orderSource);
     document.getElementById('appDialogTitle').textContent = `${platform} rider did not pick up`;
-    document.getElementById('appDialogBody').innerHTML = `
-      <p>The platform refund is expected and may remain pending for several hours. Convert this same prepared order without waiting for platform confirmation.</p>
-      <div class="online-conversion-summary"><b>${escapeHtml(slot.externalOrderNo || slot.orderNo)}</b><span>${BK_LOGIC.computeSlot(slot).subtotal} GHS</span></div>
-      <label class="dialog-label">Delivery<select id="conversionFulfilment" class="dialog-field"><option value="burgerkiss-delivery">BurgerKiss will deliver</option><option value="customer-rider">Customer will send a rider</option></select></label>
-      <label class="dialog-label">Direct payment<select id="conversionPayment" class="dialog-field"><option value="cash">Collect Cash</option><option value="momo">Collect MoMo</option></select></label>
-      <div class="dialog-actions"><button class="x" id="dlgCancel">Keep Waiting</button><button class="x modifier-primary" id="dlgConfirm">Convert to Direct Order</button></div>`;
+    const body = document.getElementById('appDialogBody');
+    body.textContent = '';
+    const copy = document.createElement('p');
+    copy.textContent = 'The platform refund is expected and may remain pending for several hours. Convert this same prepared order without waiting for platform confirmation.';
+    const summary = document.createElement('div');
+    summary.className = 'online-conversion-summary';
+    const reference = document.createElement('b');
+    reference.textContent = slot.externalOrderNo || slot.orderNo;
+    const amount = document.createElement('span');
+    amount.textContent = `${BK_LOGIC.computeSlot(slot).subtotal} GHS`;
+    summary.append(reference, amount);
+    const deliveryLabel = document.createElement('label');
+    deliveryLabel.className = 'dialog-label';
+    deliveryLabel.append('Delivery');
+    const deliverySelect = document.createElement('select');
+    deliverySelect.id = 'conversionFulfilment';
+    deliverySelect.className = 'dialog-field';
+    [['burgerkiss-delivery','BurgerKiss will deliver'], ['customer-rider','Customer will send a rider']].forEach(([value,label])=>{
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      deliverySelect.appendChild(option);
+    });
+    deliveryLabel.appendChild(deliverySelect);
+    const paymentLabelNode = document.createElement('label');
+    paymentLabelNode.className = 'dialog-label';
+    paymentLabelNode.append('Direct payment');
+    const paymentSelect = document.createElement('select');
+    paymentSelect.id = 'conversionPayment';
+    paymentSelect.className = 'dialog-field';
+    [['cash','Collect Cash'], ['momo','Collect MoMo']].forEach(([value,label])=>{
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      paymentSelect.appendChild(option);
+    });
+    paymentLabelNode.appendChild(paymentSelect);
+    const actions = document.createElement('div');
+    actions.className = 'dialog-actions';
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'x';
+    cancelButton.id = 'dlgCancel';
+    cancelButton.type = 'button';
+    cancelButton.textContent = 'Keep Waiting';
+    const confirmButton = document.createElement('button');
+    confirmButton.className = 'x modifier-primary';
+    confirmButton.id = 'dlgConfirm';
+    confirmButton.type = 'button';
+    confirmButton.textContent = 'Convert to Direct Order';
+    actions.append(cancelButton, confirmButton);
+    body.append(copy, summary, deliveryLabel, paymentLabelNode, actions);
     host.classList.add('open');
     document.getElementById('dlgCancel').onclick = closeDialog;
     document.getElementById('dlgConfirm').onclick = ()=>{

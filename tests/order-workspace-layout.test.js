@@ -54,9 +54,9 @@ test('order step explains blockers and next action', () => {
 });
 
 test('online order dialog guides platform entry before products', () => {
-  assert.match(ui, /class="online-order-guide"/);
-  assert.match(ui, /id="onlinePaymentHint"/);
-  assert.match(ui, /id="onlineCustomerName"/);
+  assert.match(ui, /guide\.className = 'online-order-guide'/);
+  assert.match(ui, /hint\.id = 'onlinePaymentHint'/);
+  assert.match(ui, /nameInput\.id = 'onlineCustomerName'/);
   assert.match(ui, /WhatsApp stays unpaid until pickup\/delivery is confirmed before Kitchen/);
   assert.match(ui, /is treated as paid online/);
   assert.match(css, /\.online-order-guide,\.online-platform-hint/);
@@ -96,4 +96,16 @@ test('kitchen order cards render dynamic progress copy with textContent', () => 
   assert.match(ui, /packaging\.textContent = `Packaging: \$\{packagingLabel\(s\)\}`/);
   assert.match(ui, /progressTitle\.textContent = progress\.label/);
   assert.match(ui, /nextButton\.textContent = makeNext\.label/);
+});
+
+
+test('online order and conversion dialogs render bodies without innerHTML', () => {
+  const onlineDialog = ui.slice(ui.indexOf('function openOnlineOrderDialog'), ui.indexOf('function convertOnlineOrder'));
+  const conversionDialog = ui.slice(ui.indexOf('function convertOnlineOrder'), ui.indexOf('function historyRemoteEnabled'));
+  assert.doesNotMatch(onlineDialog, /appDialogBody'\)\.innerHTML/);
+  assert.doesNotMatch(conversionDialog, /appDialogBody'\)\.innerHTML/);
+  assert.match(onlineDialog, /guide\.className = 'online-order-guide'/);
+  assert.match(onlineDialog, /confirmButton\.textContent = 'Create Online Order'/);
+  assert.match(conversionDialog, /summary\.className = 'online-conversion-summary'/);
+  assert.match(conversionDialog, /confirmButton\.textContent = 'Convert to Direct Order'/);
 });
