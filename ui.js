@@ -219,7 +219,11 @@
     if(!items.length){
       const empty = document.createElement('div');
       empty.className = 'empty-state product-empty';
-      empty.innerHTML = `<strong>No products found</strong><span>Try another category or clear the search.</span>`;
+      const emptyTitle = document.createElement('strong');
+      emptyTitle.textContent = 'No products found';
+      const emptyHint = document.createElement('span');
+      emptyHint.textContent = 'Try another category or clear the search.';
+      empty.append(emptyTitle, emptyHint);
       empty.style.gridColumn = '1 / -1';
       grid.appendChild(empty);
       return;
@@ -237,13 +241,29 @@
         b.style.backgroundImage = '';
       }
       const catLabel = CATEGORY_LABELS[it.cat] || it.cat || 'Item';
-      b.innerHTML = `<span class="cat-badge">${catLabel}</span>
-                     <div class="name">${it.name}</div>
-                     ${it.subtitle ? `<small class="item-subtitle">${it.subtitle}</small>` : ''}
-                     <div class="item-meta">
-                       <div class="price">${itemDisplayPrice(it)} GHS</div>
-                       <span class="badge">+1</span>
-                     </div>`;
+      const catBadge = document.createElement('span');
+      catBadge.className = 'cat-badge';
+      catBadge.textContent = catLabel;
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = it.name;
+      const meta = document.createElement('div');
+      meta.className = 'item-meta';
+      const price = document.createElement('div');
+      price.className = 'price';
+      price.textContent = `${itemDisplayPrice(it)} GHS`;
+      const addBadge = document.createElement('span');
+      addBadge.className = 'badge';
+      addBadge.textContent = '+1';
+      meta.append(price, addBadge);
+      b.append(catBadge, name);
+      if(it.subtitle){
+        const subtitle = document.createElement('small');
+        subtitle.className = 'item-subtitle';
+        subtitle.textContent = it.subtitle;
+        b.appendChild(subtitle);
+      }
+      b.appendChild(meta);
       b.onclick = ()=> addProductWithFlow(it);
       grid.appendChild(b);
     });

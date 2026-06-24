@@ -61,3 +61,13 @@ test('online order dialog guides platform entry before products', () => {
   assert.match(ui, /is treated as paid online/);
   assert.match(css, /\.online-order-guide,\.online-platform-hint/);
 });
+
+
+test('product grid renders dynamic labels with textContent instead of card innerHTML', () => {
+  assert.doesNotMatch(ui, /b\.innerHTML\s*=/);
+  assert.doesNotMatch(ui, /empty\.innerHTML\s*=/);
+  assert.match(ui, /catBadge\.textContent = catLabel/);
+  assert.match(ui, /name\.textContent = it\.name/);
+  assert.match(ui, /subtitle\.textContent = it\.subtitle/);
+  assert.match(ui, /price\.textContent = `\$\{itemDisplayPrice\(it\)\} GHS`/);
+});
