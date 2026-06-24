@@ -34,8 +34,9 @@ test('admin dashboard scrolls only inside the active workspace panel', () => {
 test('database health uses a compact table with badges and hidden technical paths', () => {
   assert.match(html, /class="admin-status-table"/);
   assert.match(html, /<th scope="col">Status<\/th>/);
-  assert.match(js, /admin-status-badge \$\{tone\}/);
-  assert.match(js, /<details class="admin-path-details">/);
+  assert.match(js, /textEl\('span', label, `admin-status-badge \$\{tone\}`\)/);
+  assert.match(js, /details\.className = 'admin-path-details'/);
+  assert.match(js, /body\.replaceChildren\(\.\.\.rows\.map/);
   assert.match(css, /\.admin-status-badge\.ok/);
 });
 
@@ -44,6 +45,13 @@ test('database activity is displayed as relative time with an exact-time tooltip
   assert.match(js, /hour/);
   assert.match(js, /day/);
   assert.match(js, /month/);
-  assert.match(js, /title="\$\{escapeHtml\(exactTime\)\}"/);
+  assert.match(js, /time\.title = exactTime/);
   assert.doesNotMatch(js, /return new Date\(n\)\.toLocaleString\(\)/);
+});
+
+test('packaging rules modal renders fields without innerHTML templates', () => {
+  assert.match(js, /function packagingRuleRow\(label, id, value, help, numeric\)/);
+  assert.match(js, /body\.replaceChildren\(intro, grid, preview\)/);
+  assert.match(js, /input\.setAttribute\('aria-describedby'/);
+  assert.doesNotMatch(js, /packagingRulesBody[\s\S]{0,240}\.innerHTML/);
 });
