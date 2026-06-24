@@ -2658,11 +2658,31 @@
     if(!list) return;
     const entries = historyPurgeCandidates();
     if(message) message.textContent = '';
+    list.textContent = '';
     if(!entries.length){
-      list.innerHTML = '<div class="empty-state">No orders found for this date range.</div>';
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No orders found for this date range.';
+      list.appendChild(empty);
       return;
     }
-    list.innerHTML = entries.map(entry=>`<label class="history-purge-row"><input type="checkbox" value="${escapeHtml(entry.id)}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(entry.externalOrderNo || entry.slotName)} · ${escapeHtml(paymentLabel(entry.pay))} · ${new Date(entry.closedAt).toLocaleString()}</small></span><strong>${Number(entry.total || entry.subtotal || 0)} GHS</strong></label>`).join('');
+    entries.forEach(entry=>{
+      const row = document.createElement('label');
+      row.className = 'history-purge-row';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = entry.id || '';
+      const details = document.createElement('span');
+      const order = document.createElement('b');
+      order.textContent = entry.orderNo || '';
+      const meta = document.createElement('small');
+      meta.textContent = `${entry.externalOrderNo || entry.slotName || ''} · ${paymentLabel(entry.pay)} · ${new Date(entry.closedAt).toLocaleString()}`;
+      details.append(order, meta);
+      const total = document.createElement('strong');
+      total.textContent = `${Number(entry.total || entry.subtotal || 0)} GHS`;
+      row.append(checkbox, details, total);
+      list.appendChild(row);
+    });
   }
   function openHistoryPurge(){
     if(!isOwnerSession()) return infoDialog('Only the owner can delete order history.');

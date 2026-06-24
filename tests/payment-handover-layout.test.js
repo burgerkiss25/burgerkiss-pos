@@ -160,3 +160,14 @@ test('handover card renders dynamic readiness copy without innerHTML templates',
   assert.match(renderIssue, /readinessTitle\.textContent = readiness\.label/);
   assert.match(renderIssue, /riderMissedButton\.onclick = \(\)=> convertOnlineOrder\(active\)/);
 });
+
+
+
+test('history purge list renders rows with DOM text nodes', () => {
+  const renderPurge = ui.slice(ui.indexOf('function renderHistoryPurgeList()'), ui.indexOf('function openHistoryPurge'));
+  assert.doesNotMatch(renderPurge, /list\.innerHTML\s*=/);
+  assert.match(renderPurge, /list\.textContent = ''/);
+  assert.match(renderPurge, /row\.className = 'history-purge-row'/);
+  assert.match(renderPurge, /order\.textContent = entry\.orderNo \|\| ''/);
+  assert.match(renderPurge, /meta\.textContent = `\$\{entry\.externalOrderNo \|\| entry\.slotName \|\| ''\} · \$\{paymentLabel\(entry\.pay\)\} ·/);
+});
