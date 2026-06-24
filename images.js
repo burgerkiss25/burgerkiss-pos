@@ -96,7 +96,18 @@
   }
   function notify(message){
     if(window.BK_UI && BK_UI.infoDialog) BK_UI.infoDialog(message);
-    else alert(message);
+    else {
+      const region = document.getElementById('adminToastRegion');
+      if(region){
+        const toast = document.createElement('div');
+        toast.className = 'admin-toast';
+        toast.textContent = message;
+        region.appendChild(toast);
+        setTimeout(()=>toast.remove(), 2600);
+      }else{
+        console.warn(message);
+      }
+    }
   }
 
   function imageEditorOpen(){
