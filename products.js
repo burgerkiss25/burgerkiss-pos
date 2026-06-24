@@ -145,13 +145,36 @@
     return rows;
   }
 
-  function esc(value){
-    return String(value == null ? '' : value).replace(/[&<>"']/g, char=>({
-      '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
-    }[char]));
+  function textEl(tag, text, className){
+    const el = document.createElement(tag);
+    if(className) el.className = className;
+    el.textContent = text == null ? '' : String(text);
+    return el;
   }
-  function categoryOptions(selected){
-    return CATEGORIES.map(([value,label])=>`<option value="${value}" ${value === selected ? 'selected' : ''}>${label}</option>`).join('');
+  function field(label, control){
+    const wrapper = document.createElement('label');
+    wrapper.append(textEl('span', label), control);
+    return wrapper;
+  }
+  function inputField(name, value, placeholder, type){
+    const input = document.createElement('input');
+    input.dataset.field = name;
+    input.placeholder = placeholder || '';
+    input.value = value == null ? '' : String(value);
+    if(type) input.type = type;
+    return input;
+  }
+  function categorySelect(selected){
+    const select = document.createElement('select');
+    select.dataset.field = 'cat';
+    select.replaceChildren(...CATEGORIES.map(([value,label])=>{
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      option.selected = value === selected;
+      return option;
+    }));
+    return select;
   }
   function notifyValidation(message){
     const body = document.getElementById('productsBody');
@@ -167,20 +190,50 @@
     notice.scrollIntoView({block:'nearest'});
     return false;
   }
-  function rowHtml(p){
-    return `
-      <div class="admin-data-row product-editor-row" data-prod-row draggable="true">
-        <div class="product-order-controls">
-          <button class="drag-handle" type="button" aria-label="Drag ${esc(p.name || 'new product')} to reorder" title="Drag to reorder">⠿</button>
-          <button type="button" data-move="-1" aria-label="Move ${esc(p.name || 'new product')} up" title="Move up">↑</button>
-          <button type="button" data-move="1" aria-label="Move ${esc(p.name || 'new product')} down" title="Move down">↓</button>
-        </div>
-        <label><span>Product name</span><input data-field="name" placeholder="Product name" value="${esc(p.name)}"></label>
-        <label><span>Price</span><span class="currency-field"><input data-field="price" type="number" step="1" min="0" placeholder="0" value="${Number.isFinite(p.price)?p.price:''}"><b>GHS</b></span></label>
-        <label><span>Category</span><select data-field="cat">${categoryOptions(p.cat)}</select></label>
-        <details class="admin-advanced"><summary>Technical ID</summary><input data-field="id" placeholder="product_id" value="${esc(p.id)}"></details>
-        <button class="mini admin-row-danger" type="button" data-remove>Delete</button>
-      </div>`;
+  function rowNode(p){
+    const row = document.createElement('div');
+    row.className = 'admin-data-row product-editor-row';
+    row.dataset.prodRow = '';
+    row.draggable = true;
+    const controls = document.createElement('div');
+    controls.className = 'product-order-controls';
+    const name = p.name || 'new product';
+    const drag = textEl('button', '⠿', 'drag-handle');
+    drag.type = 'button';
+    drag.setAttribute('aria-label', `Drag ${name} to reorder`);
+    drag.title = 'Drag to reorder';
+    const up = textEl('button', '↑');
+    up.type = 'button';
+    up.dataset.move = '-1';
+    up.setAttribute('aria-label', `Move ${name} up`);
+    up.title = 'Move up';
+    const down = textEl('button', '↓');
+    down.type = 'button';
+    down.dataset.move = '1';
+    down.setAttribute('aria-label', `Move ${name} down`);
+    down.title = 'Move down';
+    controls.append(drag, up, down);
+    const price = inputField('price', Number.isFinite(p.price) ? p.price : '', '0', 'number');
+    price.step = '1';
+    price.min = '0';
+    const currency = document.createElement('span');
+    currency.className = 'currency-field';
+    currency.append(price, textEl('b', 'GHS'));
+    const advanced = document.createElement('details');
+    advanced.className = 'admin-advanced';
+    advanced.append(textEl('summary', 'Technical ID'), inputField('id', p.id, 'product_id'));
+    const remove = textEl('button', 'Delete', 'mini admin-row-danger');
+    remove.type = 'button';
+    remove.dataset.remove = '';
+    row.append(
+      controls,
+      field('Product name', inputField('name', p.name, 'Product name')),
+      field('Price', currency),
+      field('Category', categorySelect(p.cat)),
+      advanced,
+      remove
+    );
+    return row;
   }
 
   function bindRowEvents(body){
@@ -256,16 +309,31 @@
   function renderRows(){
     const body = document.getElementById('productsBody');
     if(!body) return;
-    const grouped = CATEGORIES.map(([cat,label])=>{
+    const intro = document.createElement('div');
+    intro.className = 'admin-editor-intro';
+    const introCopy = document.createElement('div');
+    introCopy.append(textEl('h4', 'Products and display order'), textEl('p', 'Change a category to move a product into the correct group. Drag products or use the arrow buttons to control their order in the POS.'));
+    intro.append(introCopy, textEl('span', `${DRAFT.length} products`, 'admin-count-badge'));
+    const groups = CATEGORIES.map(([cat,label])=>{
       const rows = DRAFT.filter(row=>row.cat === cat).sort((a,b)=>Number(a.categoryOrder||0)-Number(b.categoryOrder||0));
-      if(!rows.length) return '';
-      return `<section class="admin-category-group" data-category="${cat}">
-        <header><div><h4>${label}</h4><small>${rows.length} product${rows.length === 1 ? '' : 's'}</small></div><span>Drag or use the arrow buttons to set POS order</span></header>
-        <div class="admin-column-labels product-column-labels"><span></span><span>Product</span><span>Price</span><span>Category</span><span>Details</span><span>Action</span></div>
-        <div class="admin-category-rows">${rows.map(rowHtml).join('')}</div>
-      </section>`;
-    }).join('');
-    body.innerHTML = `<div class="admin-editor-intro"><div><h4>Products and display order</h4><p>Change a category to move a product into the correct group. Drag products or use the arrow buttons to control their order in the POS.</p></div><span class="admin-count-badge">${DRAFT.length} products</span></div>${grouped}`;
+      if(!rows.length) return null;
+      const section = document.createElement('section');
+      section.className = 'admin-category-group';
+      section.dataset.category = cat;
+      const header = document.createElement('header');
+      const headerCopy = document.createElement('div');
+      headerCopy.append(textEl('h4', label), textEl('small', `${rows.length} product${rows.length === 1 ? '' : 's'}`));
+      header.append(headerCopy, textEl('span', 'Drag or use the arrow buttons to set POS order'));
+      const labels = document.createElement('div');
+      labels.className = 'admin-column-labels product-column-labels';
+      ['', 'Product', 'Price', 'Category', 'Details', 'Action'].forEach(text=>labels.appendChild(textEl('span', text)));
+      const list = document.createElement('div');
+      list.className = 'admin-category-rows';
+      rows.forEach(row=>list.appendChild(rowNode(row)));
+      section.append(header, labels, list);
+      return section;
+    }).filter(Boolean);
+    body.replaceChildren(intro, ...groups);
     bindRowEvents(body);
   }
 
