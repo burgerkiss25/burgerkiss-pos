@@ -71,3 +71,12 @@ test('product grid renders dynamic labels with textContent instead of card inner
   assert.match(ui, /subtitle\.textContent = it\.subtitle/);
   assert.match(ui, /price\.textContent = `\$\{itemDisplayPrice\(it\)\} GHS`/);
 });
+
+
+test('order slot chips render dynamic status text with textContent', () => {
+  assert.doesNotMatch(ui, /el\.innerHTML\s*=\s*`<span class="status-dot"/);
+  assert.match(ui, /orderTitle\.textContent = orderLabel/);
+  assert.match(ui, /orderSmall\.textContent = orderDetail/);
+  assert.match(ui, /statusLabel\.textContent = status\.label/);
+  assert.match(ui, /statusProgress\.textContent = status\.shortDetail/);
+});
