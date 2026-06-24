@@ -611,27 +611,48 @@
     }));
   }
 
-  function transferPanelHtml(){
-    const options = Object.entries(INGREDIENTS).map(([id, def])=>
-      `<option value="${id}">${def.name || id} (${num(def.current_stock_storage,0)} ${def.unit || ''} in Store)</option>`
-    ).join('');
-    return `<section class="stock-transfer-panel">
-      <div class="stock-transfer-copy">
-        <h4>Transfer / Replenishment</h4>
-        <p>Moves stock from BurgerKiss Store to BurgerKiss Block Factory and syncs both location inventory records.</p>
-      </div>
-      <div class="stock-transfer-form">
-        <label>Article
-          <select id="stockTransferIngredient">${options}</select>
-        </label>
-        <label>Quantity
-          <input id="stockTransferQty" type="number" min="0" step="1" placeholder="0">
-        </label>
-        <button class="x" id="stockTransferBtn" type="button">Transfer stock</button>
-      </div>
-      <div class="stock-transfer-note" id="stockTransferNote">From: BurgerKiss Store · To: BurgerKiss Block Factory</div>
-      <div class="stock-transfer-history" id="stockTransferHistory"></div>
-    </section>`;
+  function transferPanelNode(){
+    const section = document.createElement('section');
+    section.className = 'stock-transfer-panel';
+    const copy = document.createElement('div');
+    copy.className = 'stock-transfer-copy';
+    copy.append(
+      textEl('h4', 'Transfer / Replenishment'),
+      textEl('p', 'Moves stock from BurgerKiss Store to BurgerKiss Block Factory and syncs both location inventory records.')
+    );
+    const form = document.createElement('div');
+    form.className = 'stock-transfer-form';
+    const article = document.createElement('label');
+    article.appendChild(document.createTextNode('Article'));
+    const select = document.createElement('select');
+    select.id = 'stockTransferIngredient';
+    Object.entries(INGREDIENTS).forEach(([id, def])=>{
+      const option = document.createElement('option');
+      option.value = id;
+      option.textContent = `${def.name || id} (${num(def.current_stock_storage,0)} ${def.unit || ''} in Store)`;
+      select.appendChild(option);
+    });
+    article.appendChild(select);
+    const quantity = document.createElement('label');
+    quantity.appendChild(document.createTextNode('Quantity'));
+    const qtyInput = document.createElement('input');
+    qtyInput.id = 'stockTransferQty';
+    qtyInput.type = 'number';
+    qtyInput.min = '0';
+    qtyInput.step = '1';
+    qtyInput.placeholder = '0';
+    quantity.appendChild(qtyInput);
+    const button = textEl('button', 'Transfer stock', 'x');
+    button.id = 'stockTransferBtn';
+    button.type = 'button';
+    form.append(article, quantity, button);
+    const note = textEl('div', 'From: BurgerKiss Store · To: BurgerKiss Block Factory', 'stock-transfer-note');
+    note.id = 'stockTransferNote';
+    const history = document.createElement('div');
+    history.className = 'stock-transfer-history';
+    history.id = 'stockTransferHistory';
+    section.append(copy, form, note, history);
+    return section;
   }
 
   function applyTransfer(ingredientId, qty){
@@ -691,6 +712,61 @@
     };
   }
 
+  function stockEditorIntro(){
+    const intro = document.createElement('div');
+    intro.className = 'stock-editor-intro';
+    const copy = document.createElement('div');
+    copy.append(
+      textEl('h4', 'Stock locations'),
+      textEl('p', 'Review stock at both locations, transfer inventory to the Block Factory, and maintain ingredient details in one place.')
+    );
+    const tabs = document.createElement('div');
+    tabs.className = 'stock-tabs';
+    tabs.setAttribute('aria-label', 'Stock location sections');
+    tabs.append(textEl('span', 'BurgerKiss Store'), textEl('span', 'BurgerKiss Block Factory'));
+    intro.append(copy, tabs);
+    return intro;
+  }
+
+  function stockIngredientHeader(){
+    const head = document.createElement('div');
+    head.className = 'stock-section-head';
+    const copy = document.createElement('div');
+    copy.append(
+      textEl('h4', 'Ingredients'),
+      textEl('p', 'Each ingredient has separate stock and minimum levels for the main warehouse and the Block Factory.')
+    );
+    const actions = document.createElement('div');
+    actions.className = 'stock-search-actions';
+    const searchLabel = document.createElement('label');
+    searchLabel.className = 'stock-search';
+    searchLabel.appendChild(textEl('span', 'Search ingredients', 'sr-only'));
+    const input = document.createElement('input');
+    input.id = 'stockIngredientSearch';
+    input.type = 'search';
+    input.placeholder = 'Search ingredients...';
+    input.autocomplete = 'off';
+    searchLabel.appendChild(input);
+    const add = textEl('button', '+ Ingredient', 'x');
+    add.id = 'sAddIngredient';
+    add.type = 'button';
+    actions.append(searchLabel, add);
+    head.append(copy, actions);
+    return head;
+  }
+
+  function recipeEditorIntro(activeMode){
+    const intro = document.createElement('div');
+    intro.className = 'admin-editor-intro';
+    const copy = document.createElement('div');
+    copy.append(
+      textEl('h4', activeMode === 'addons' ? 'Add-on recipes' : 'Product recipes'),
+      textEl('p', 'Choose ingredients and quantities. Technical recipe text remains available under Advanced.')
+    );
+    intro.appendChild(copy);
+    return intro;
+  }
+
   function openEditor(mode, options){
     const config = options || {};
     editorBodyId = config.bodyId || 'stockBody';
@@ -712,31 +788,21 @@
     const recipeProducts = activeMode === 'addons'
       ? productList.filter(p=> p && (p.cat === 'extra' || p.cat === 'sauce'))
       : productList.filter(p=> p && p.cat !== 'extra' && p.cat !== 'sauce');
-    body.innerHTML = `
-      ${showIngredients ? `<div class="stock-editor-intro">
-        <div>
-          <h4>Stock locations</h4>
-          <p>Review stock at both locations, transfer inventory to the Block Factory, and maintain ingredient details in one place.</p>
-        </div>
-        <div class="stock-tabs" aria-label="Stock location sections">
-          <span>BurgerKiss Store</span>
-          <span>BurgerKiss Block Factory</span>
-        </div>
-      </div>
-      <div class="stock-section-head">
-        <div>
-          <h4>Ingredients</h4>
-          <p>Each ingredient has separate stock and minimum levels for the main warehouse and the Block Factory.</p>
-        </div>
-        <div class="stock-search-actions">
-          <label class="stock-search"><span class="sr-only">Search ingredients</span><input id="stockIngredientSearch" type="search" placeholder="Search ingredients..." autocomplete="off"></label>
-          <button class="x" id="sAddIngredient">+ Ingredient</button>
-        </div>
-      </div>
-      ${showTransfers ? transferPanelHtml() : ''}
-      <div id="stockIngredients" class="stock-ingredients-list"></div>` : ''}
-      ${showRecipes ? `<div class="admin-editor-intro"><div><h4>${activeMode === 'addons' ? 'Add-on recipes' : 'Product recipes'}</h4><p>Choose ingredients and quantities. Technical recipe text remains available under Advanced.</p></div></div><div id="stockRecipes"></div>` : ''}
-    `;
+    const content = [];
+    if(showIngredients){
+      const ingWrap = document.createElement('div');
+      ingWrap.id = 'stockIngredients';
+      ingWrap.className = 'stock-ingredients-list';
+      content.push(stockEditorIntro(), stockIngredientHeader());
+      if(showTransfers) content.push(transferPanelNode());
+      content.push(ingWrap);
+    }
+    if(showRecipes){
+      const recipeWrap = document.createElement('div');
+      recipeWrap.id = 'stockRecipes';
+      content.push(recipeEditorIntro(activeMode), recipeWrap);
+    }
+    body.replaceChildren(...content);
     if(showIngredients){
       const ingWrap = document.getElementById('stockIngredients');
       const searchInput = document.getElementById('stockIngredientSearch');
