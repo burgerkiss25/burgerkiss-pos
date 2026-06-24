@@ -109,3 +109,18 @@ test('online order and conversion dialogs render bodies without innerHTML', () =
   assert.match(conversionDialog, /summary\.className = 'online-conversion-summary'/);
   assert.match(conversionDialog, /confirmButton\.textContent = 'Convert to Direct Order'/);
 });
+
+test('modifier, meal, fulfilment and packing dialogs render bodies with DOM nodes', () => {
+  const modifierDialog = ui.slice(ui.indexOf('function openModifierSheet'), ui.indexOf('function addQuantities'));
+  const mealDialog = ui.slice(ui.indexOf('function openMealModeDialog'), ui.indexOf('function friesModifierSections'));
+  const fulfilmentDialog = ui.slice(ui.indexOf('function whatsappOrderSetup'), ui.indexOf('function defaultPackingItems'));
+  const packingDialog = ui.slice(ui.indexOf('function packingAssignmentDialog'), ui.indexOf('function continueOrderToKitchen'));
+  [modifierDialog, mealDialog, fulfilmentDialog, packingDialog].forEach(source=>{
+    assert.doesNotMatch(source, /appDialogBody'\)\.innerHTML/);
+    assert.match(source, /appDialogBody\(\)\.replaceChildren/);
+  });
+  assert.match(modifierDialog, /quickBtn\.dataset\.note = noteText/);
+  assert.match(mealDialog, /choices\.className = 'meal-choice'/);
+  assert.match(fulfilmentDialog, /optionNode\('customer-rider'/);
+  assert.match(packingDialog, /select\.dataset\.itemIndex = String\(entry\.index\)/);
+});

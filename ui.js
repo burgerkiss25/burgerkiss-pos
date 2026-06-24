@@ -100,6 +100,33 @@
 
   const DIALOGS = window.BK_DIALOGS || {};
   function ensureDialogHost(){ return DIALOGS.ensureHost ? DIALOGS.ensureHost() : null; }
+  function appDialogBody(){ return document.getElementById('appDialogBody'); }
+  function textEl(tag, text, className){
+    const el = document.createElement(tag);
+    if(className) el.className = className;
+    el.textContent = text == null ? '' : String(text);
+    return el;
+  }
+  function dialogButton(id, label, className, type){
+    const btn = document.createElement('button');
+    if(id) btn.id = id;
+    btn.type = type || 'button';
+    btn.className = className || 'x';
+    btn.textContent = label;
+    return btn;
+  }
+  function dialogActions(){
+    const actions = document.createElement('div');
+    actions.className = 'dialog-actions';
+    actions.append(...Array.from(arguments));
+    return actions;
+  }
+  function optionNode(value, label){
+    const option = document.createElement('option');
+    option.value = value == null ? '' : String(value);
+    option.textContent = label == null ? option.value : String(label);
+    return option;
+  }
   function closeDialog(){
     if(DIALOGS.close){ DIALOGS.close(); return; }
     const host = document.getElementById('appDialog');
@@ -323,24 +350,39 @@
     const confirmLabel = settings.confirmLabel || 'Add selected';
     const initialValues = settings.initialValues || {};
     document.getElementById('appDialogTitle').textContent = title;
-    document.getElementById('appDialogBody').innerHTML = `
-      <form class="modifier-sheet" id="modifierForm">
-        ${showNote ? `
-          <label class="modifier-note">
-            <span>Note for this item</span>
-            <textarea id="modifierItemNote" rows="2" placeholder="e.g. no onion, no lettuce, no sesame"></textarea>
-          </label>
-          <div class="modifier-quick" aria-label="Quick note shortcuts">
-            ${QUICK_NOTES.map(note=>`<button class="chip modifier-quick-note" type="button" data-note="${note}">${note}</button>`).join('')}
-          </div>
-        ` : ''}
-        <div class="modifier-grid" id="modifierSections"></div>
-        <div class="modifier-actions">
-          <button class="x" id="dlgCancel" type="button">${cancelLabel}</button>
-          <button class="x modifier-primary" id="dlgConfirm" type="submit">${confirmLabel}</button>
-        </div>
-      </form>
-    `;
+    const form = document.createElement('form');
+    form.className = 'modifier-sheet';
+    form.id = 'modifierForm';
+    if(showNote){
+      const noteLabel = document.createElement('label');
+      noteLabel.className = 'modifier-note';
+      noteLabel.appendChild(textEl('span', 'Note for this item'));
+      const note = document.createElement('textarea');
+      note.id = 'modifierItemNote';
+      note.rows = 2;
+      note.placeholder = 'e.g. no onion, no lettuce, no sesame';
+      noteLabel.appendChild(note);
+      form.appendChild(noteLabel);
+      const quick = document.createElement('div');
+      quick.className = 'modifier-quick';
+      quick.setAttribute('aria-label', 'Quick note shortcuts');
+      QUICK_NOTES.forEach(noteText=>{
+        const quickBtn = dialogButton('', noteText, 'chip modifier-quick-note');
+        quickBtn.dataset.note = noteText;
+        quick.appendChild(quickBtn);
+      });
+      form.appendChild(quick);
+    }
+    const sectionsWrap = document.createElement('div');
+    sectionsWrap.className = 'modifier-grid';
+    sectionsWrap.id = 'modifierSections';
+    form.appendChild(sectionsWrap);
+    const actions = document.createElement('div');
+    actions.className = 'modifier-actions';
+    actions.appendChild(dialogButton('dlgCancel', cancelLabel, 'x'));
+    actions.appendChild(dialogButton('dlgConfirm', confirmLabel, 'x modifier-primary', 'submit'));
+    form.appendChild(actions);
+    appDialogBody().replaceChildren(form);
     const wrap = document.getElementById('modifierSections');
     (sections || []).forEach(section=>{
       const fieldset = document.createElement('fieldset');
@@ -628,21 +670,17 @@
       const singlePrice = BK_PRICES.getPrice(product.id);
       const menuPrice = mealBasePrice(product);
       document.getElementById('appDialogTitle').textContent = `${product.name}: single or menu?`;
-      document.getElementById('appDialogBody').innerHTML = `
-        <div class="meal-choice">
-          <button class="meal-choice-card" id="mealSingle" type="button">
-            <span class="meal-choice-kicker">Single item</span>
-            <strong>${product.name}</strong>
-            <span>${singlePrice} GHS</span>
-          </button>
-          <button class="meal-choice-card recommended" id="mealMenu" type="button">
-            <span class="meal-choice-kicker">Guided menu</span>
-            <strong>${product.name} Menu</strong>
-            <span>${menuPrice} GHS base · choose fries + drink</span>
-          </button>
-        </div>
-        <div class="modifier-actions"><button class="x" id="dlgCancel" type="button">Cancel</button></div>
-      `;
+      const choices = document.createElement('div');
+      choices.className = 'meal-choice';
+      const single = dialogButton('mealSingle', '', 'meal-choice-card');
+      single.append(textEl('span', 'Single item', 'meal-choice-kicker'), textEl('strong', product.name), textEl('span', `${singlePrice} GHS`));
+      const menu = dialogButton('mealMenu', '', 'meal-choice-card recommended');
+      menu.append(textEl('span', 'Guided menu', 'meal-choice-kicker'), textEl('strong', `${product.name} Menu`), textEl('span', `${menuPrice} GHS base · choose fries + drink`));
+      choices.append(single, menu);
+      const actions = document.createElement('div');
+      actions.className = 'modifier-actions';
+      actions.appendChild(dialogButton('dlgCancel', 'Cancel', 'x'));
+      appDialogBody().replaceChildren(choices, actions);
       host.classList.add('open');
       document.getElementById('mealSingle').onclick = ()=>{ closeDialog(); resolve('single'); };
       document.getElementById('mealMenu').onclick = ()=>{ closeDialog(); resolve('menu'); };
@@ -1371,13 +1409,40 @@
     return new Promise(resolve=>{
       const host = ensureDialogHost();
       document.getElementById('appDialogTitle').textContent = 'WhatsApp fulfilment';
-      document.getElementById('appDialogBody').innerHTML = `
-        <p>Confirm how the customer will receive and pay for this WhatsApp order.</p>
-        <label class="dialog-label">Receive order<select id="waFulfilment" class="dialog-field"><option value="pickup">Customer pickup</option><option value="delivery">Delivery</option></select></label>
-        <label class="dialog-label" id="waPickupPaymentRow">Pickup payment<select id="waPickupPayment" class="dialog-field"><option value="cash">Cash</option><option value="momo">MoMo</option></select></label>
-        <label class="dialog-label hidden" id="waRiderRow">Rider arrangement<select id="waRiderType" class="dialog-field"><option value="customer-rider">Customer sends a rider — pay before handover</option><option value="burgerkiss-rider">BurgerKiss rider — MoMo on delivery</option></select></label>
-        <div class="packing-summary-note" id="waPaymentRule">Payment is collected when the customer picks up the order.</div>
-        <div class="dialog-actions"><button class="x" id="dlgCancel">Back to Order</button><button class="x modifier-primary" id="dlgConfirm">Continue</button></div>`;
+      const intro = textEl('p', 'Confirm how the customer will receive and pay for this WhatsApp order.');
+      const fulfilmentLabel = textEl('label', 'Receive order', 'dialog-label');
+      const fulfilmentSelect = document.createElement('select');
+      fulfilmentSelect.id = 'waFulfilment';
+      fulfilmentSelect.className = 'dialog-field';
+      fulfilmentSelect.append(optionNode('pickup', 'Customer pickup'), optionNode('delivery', 'Delivery'));
+      fulfilmentLabel.appendChild(fulfilmentSelect);
+      const pickupLabel = textEl('label', 'Pickup payment', 'dialog-label');
+      pickupLabel.id = 'waPickupPaymentRow';
+      const pickupSelect = document.createElement('select');
+      pickupSelect.id = 'waPickupPayment';
+      pickupSelect.className = 'dialog-field';
+      pickupSelect.append(optionNode('cash', 'Cash'), optionNode('momo', 'MoMo'));
+      pickupLabel.appendChild(pickupSelect);
+      const riderLabel = textEl('label', 'Rider arrangement', 'dialog-label hidden');
+      riderLabel.id = 'waRiderRow';
+      const riderSelect = document.createElement('select');
+      riderSelect.id = 'waRiderType';
+      riderSelect.className = 'dialog-field';
+      riderSelect.append(
+        optionNode('customer-rider', 'Customer sends a rider — pay before handover'),
+        optionNode('burgerkiss-rider', 'BurgerKiss rider — MoMo on delivery')
+      );
+      riderLabel.appendChild(riderSelect);
+      const paymentRule = textEl('div', 'Payment is collected when the customer picks up the order.', 'packing-summary-note');
+      paymentRule.id = 'waPaymentRule';
+      appDialogBody().replaceChildren(
+        intro,
+        fulfilmentLabel,
+        pickupLabel,
+        riderLabel,
+        paymentRule,
+        dialogActions(dialogButton('dlgCancel', 'Back to Order'), dialogButton('dlgConfirm', 'Continue', 'x modifier-primary'))
+      );
       host.classList.add('open');
       const fulfilment = document.getElementById('waFulfilment');
       const sync = ()=>{
@@ -1435,22 +1500,67 @@
       const groups = BK_PACKING.menuGroups(slot);
       const assignable = BK_PACKING.assignableItems(slot, BK_DATA.BASE);
       const host = ensureDialogHost();
-      const groupOptions = groups.length
-        ? '<option value="shared-single">Together with other single items</option>' + groups.map((group,index)=>`<option value="${escapeHtml(group.id)}">Bag ${index+1} — ${escapeHtml(group.label)}</option>`).join('')
-        : '<option value="shared-single">Together in one single-items bag</option>';
-      const rows = assignable.map((entry,index)=>{
-        const current = entry.item.customerGroupId || entry.item.packGroupId || 'shared-single';
-        return `<label class="packing-assignment-row"><span><b>${escapeHtml(entry.product.name || entry.item.itemId)}</b><small>${BK_PACKING.isDrink(entry.item, BK_DATA.BASE) ? 'Drink' : 'Single item'}</small></span><select class="dialog-field packing-assignment" data-item-index="${entry.index}" data-current="${escapeHtml(current)}">${groupOptions}<option value="separate-${index}">Separate bag / customer</option></select></label>`;
-      }).join('');
       const drinkCount = (slot.items || []).filter(item=>BK_PACKING.isDrink(item, BK_DATA.BASE)).length;
-      const drinkChoice = drinkCount > 1 ? `<fieldset class="modifier-section"><legend>Drink packaging</legend><p>Ask whether the customers are leaving together.</p><label class="staff-choice"><input type="radio" name="drinkPackMode" value="shared" checked><span><b>Together — fewer bags</b><small>Combine drinks from different customers where capacity allows.</small></span></label><label class="staff-choice"><input type="radio" name="drinkPackMode" value="by-customer"><span><b>By customer</b><small>Keep drink bags separated by customer group.</small></span></label></fieldset>` : '';
       document.getElementById('appDialogTitle').textContent = 'Assign items to bags';
-      document.getElementById('appDialogBody').innerHTML = `
-        <p>Every menu stays in its own food bag. Single items are packed together by default; only change an item here when it needs its own separate bag.</p>
-        <div class="packing-assignment-list">${rows}</div>
-        ${drinkChoice}
-        <div id="packingError" class="field-error"></div>
-        <div class="dialog-actions"><button class="x" id="dlgCancel">Back to Order</button><button class="x modifier-primary" id="dlgConfirm">Confirm & Send to Kitchen</button></div>`;
+      const intro = textEl('p', 'Every menu stays in its own food bag. Single items are packed together by default; only change an item here when it needs its own separate bag.');
+      const list = document.createElement('div');
+      list.className = 'packing-assignment-list';
+      assignable.forEach((entry,index)=>{
+        const current = entry.item.customerGroupId || entry.item.packGroupId || 'shared-single';
+        const row = document.createElement('label');
+        row.className = 'packing-assignment-row';
+        const labelText = document.createElement('span');
+        labelText.append(
+          textEl('b', entry.product.name || entry.item.itemId),
+          textEl('small', BK_PACKING.isDrink(entry.item, BK_DATA.BASE) ? 'Drink' : 'Single item')
+        );
+        const select = document.createElement('select');
+        select.className = 'dialog-field packing-assignment';
+        select.dataset.itemIndex = String(entry.index);
+        select.dataset.current = current;
+        if(groups.length){
+          select.appendChild(optionNode('shared-single', 'Together with other single items'));
+          groups.forEach((group,groupIndex)=>{
+            select.appendChild(optionNode(group.id, `Bag ${groupIndex + 1} — ${group.label}`));
+          });
+        }else{
+          select.appendChild(optionNode('shared-single', 'Together in one single-items bag'));
+        }
+        select.appendChild(optionNode(`separate-${index}`, 'Separate bag / customer'));
+        row.append(labelText, select);
+        list.appendChild(row);
+      });
+      const content = [
+        intro,
+        list
+      ];
+      if(drinkCount > 1){
+        const drinkChoice = document.createElement('fieldset');
+        drinkChoice.className = 'modifier-section';
+        drinkChoice.append(textEl('legend', 'Drink packaging'), textEl('p', 'Ask whether the customers are leaving together.'));
+        [
+          ['shared', 'Together — fewer bags', 'Combine drinks from different customers where capacity allows.', true],
+          ['by-customer', 'By customer', 'Keep drink bags separated by customer group.', false]
+        ].forEach(([value,title,detail,checked])=>{
+          const choice = document.createElement('label');
+          choice.className = 'staff-choice';
+          const input = document.createElement('input');
+          input.type = 'radio';
+          input.name = 'drinkPackMode';
+          input.value = value;
+          input.checked = checked;
+          const copy = document.createElement('span');
+          copy.append(textEl('b', title), textEl('small', detail));
+          choice.append(input, copy);
+          drinkChoice.appendChild(choice);
+        });
+        content.push(drinkChoice);
+      }
+      const error = document.createElement('div');
+      error.id = 'packingError';
+      error.className = 'field-error';
+      content.push(error, dialogActions(dialogButton('dlgCancel', 'Back to Order'), dialogButton('dlgConfirm', 'Confirm & Send to Kitchen', 'x modifier-primary')));
+      appDialogBody().replaceChildren(...content);
       host.classList.add('open');
       document.querySelectorAll('.packing-assignment').forEach(select=>{ if(select.dataset.current) select.value = select.dataset.current; });
       document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(false); };
