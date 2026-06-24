@@ -183,3 +183,12 @@ test('history purge list renders rows with DOM text nodes', () => {
   assert.match(renderPurge, /order\.textContent = entry\.orderNo \|\| ''/);
   assert.match(renderPurge, /meta\.textContent = `\$\{entry\.externalOrderNo \|\| entry\.slotName \|\| ''\} · \$\{paymentLabel\(entry\.pay\)\} ·/);
 });
+
+test('order history list renders rows with DOM text nodes', () => {
+  const renderStart = ui.indexOf('function renderHistoryBody');
+  const renderHistory = ui.slice(renderStart, ui.indexOf('function openHistory', renderStart));
+  assert.doesNotMatch(renderHistory, /body\.innerHTML\s*=/);
+  assert.match(renderHistory, /body\.replaceChildren\(summary, list\)/);
+  assert.match(renderHistory, /button\.dataset\.historyId = h\.id \|\| ''/);
+  assert.match(renderHistory, /button\.onclick = \(\)=> openHistoryOrder/);
+});

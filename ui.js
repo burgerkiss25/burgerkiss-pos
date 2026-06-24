@@ -3000,7 +3000,7 @@
     const body = document.getElementById('historyBody');
     const hist = getFilteredHistory();
     if(hist.length===0){
-      body.innerHTML = '<div class="empty-state">No completed orders in history yet.</div>';
+      body.replaceChildren(textEl('div', 'No completed orders in history yet.', 'empty-state'));
       return;
     }
     const completed = hist.filter(h=>h.status !== 'voided');
@@ -3010,22 +3010,41 @@
     const onlineCount = completed.filter(h=>ONLINE_PLATFORMS.has(h.orderSource)).length;
     const convertedCount = completed.filter(h=>h.finalChannel === 'direct').length;
     const voidCount = hist.length - completed.length;
-    body.innerHTML = `
-      <div class="history-summary">
-        <span><b>Orders:</b> ${completed.length}</span><span><b>Cash:</b> ${cashCount}</span>
-        <span><b>MoMo:</b> ${momoCount}</span><span><b>Online:</b> ${onlineCount}</span><span><b>Converted:</b> ${convertedCount}</span><span><b>Voided:</b> ${voidCount}</span>
-        <span class="history-summary-total"><b>Net sales:</b> ${totalSales} GHS</span>
-      </div>
-      <div class="history-order-list">
-      ${hist.slice(0,200).map(h=>`
-        <button type="button" class="history-order-row ${h.status === 'voided' ? 'voided' : ''}" data-history-id="${escapeHtml(h.id)}">
-          <span><strong>${escapeHtml(h.orderNo)}</strong><small>${escapeHtml(h.externalOrderNo ? `${platformLabel(h.orderSource)} · ${h.externalOrderNo}` : h.slotName)} · ${escapeHtml(paymentLabel(h.pay))} · ${new Date(h.closedAt).toLocaleString()}</small></span>
-          <span><b>${Number(h.total||h.subtotal||0)} GHS</b><small class="history-status">${historyStatusLabel(h)}</small></span>
-        </button>`).join('')}
-      </div>`;
-    body.querySelectorAll('[data-history-id]').forEach(button=>{
-      button.onclick = ()=> openHistoryOrder(button.dataset.historyId);
+    const summary = document.createElement('div');
+    summary.className = 'history-summary';
+    [
+      ['Orders:', completed.length, ''],
+      ['Cash:', cashCount, ''],
+      ['MoMo:', momoCount, ''],
+      ['Online:', onlineCount, ''],
+      ['Converted:', convertedCount, ''],
+      ['Voided:', voidCount, ''],
+      ['Net sales:', `${totalSales} GHS`, 'history-summary-total']
+    ].forEach(([label,value,className])=>{
+      const item = document.createElement('span');
+      if(className) item.className = className;
+      item.append(textEl('b', label), document.createTextNode(` ${value}`));
+      summary.appendChild(item);
     });
+    const list = document.createElement('div');
+    list.className = 'history-order-list';
+    hist.slice(0,200).forEach(h=>{
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `history-order-row ${h.status === 'voided' ? 'voided' : ''}`.trim();
+      button.dataset.historyId = h.id || '';
+      const main = document.createElement('span');
+      main.append(
+        textEl('strong', h.orderNo),
+        textEl('small', `${h.externalOrderNo ? `${platformLabel(h.orderSource)} · ${h.externalOrderNo}` : h.slotName} · ${paymentLabel(h.pay)} · ${new Date(h.closedAt).toLocaleString()}`)
+      );
+      const totals = document.createElement('span');
+      totals.append(textEl('b', `${Number(h.total||h.subtotal||0)} GHS`), textEl('small', historyStatusLabel(h), 'history-status'));
+      button.append(main, totals);
+      button.onclick = ()=> openHistoryOrder(button.dataset.historyId);
+      list.appendChild(button);
+    });
+    body.replaceChildren(summary, list);
   }
   function openHistory(){
     recoverIssuedSlotsToHistory();

@@ -106,8 +106,32 @@ async function testDuplicateRepair() {
 
 function testIssuedOrderHistoryRecovery() {
   const storage = createStorage();
+  const makeElement = () => ({
+    children: [],
+    dataset: {},
+    className: '',
+    textContent: '',
+    innerHTML: '',
+    classList: {add() {}, remove() {}, toggle() {}},
+    append(...nodes) {
+      this.children.push(...nodes);
+      this.textContent += nodes.map(node => node && node.textContent ? node.textContent : '').join('');
+    },
+    appendChild(node) {
+      this.children.push(node);
+      this.textContent += node && node.textContent ? node.textContent : '';
+      return node;
+    },
+    replaceChildren(...nodes) {
+      this.children = [];
+      this.textContent = '';
+      this.innerHTML = '';
+      this.append(...nodes);
+    },
+    querySelectorAll: () => []
+  });
   const elements = {
-    historyBody: {innerHTML: '', querySelectorAll: () => []},
+    historyBody: makeElement(),
     modalHistory: {classList: {add() {}, remove() {}}},
     hSearch: {value: ''}
   };
@@ -120,7 +144,11 @@ function testIssuedOrderHistoryRecovery() {
   const context = {
     console, Promise, Map, Set, Date, Math, Number, String, Array, Object, JSON,
     localStorage: storage,
-    document: {getElementById: id => elements[id] || null},
+    document: {
+      getElementById: id => elements[id] || null,
+      createElement: () => makeElement(),
+      createTextNode: text => ({textContent: String(text || '')})
+    },
     setTimeout, clearTimeout,
     BK_SYNC_ENABLED: false,
     BK_STATE: {getState: () => activeState, setState(next) { activeState = next; }},
@@ -137,7 +165,7 @@ function testIssuedOrderHistoryRecovery() {
   const history = JSON.parse(storage.getItem('bk_order_history_v1') || '[]');
   assert.strictEqual(history.length, 1);
   assert.strictEqual(history[0].orderNo, slot.orderNo);
-  assert.ok(elements.historyBody.innerHTML.includes(slot.orderNo));
+  assert.ok(elements.historyBody.textContent.includes(slot.orderNo));
 
   const reportDate = new Date(history[0].closedAt).toISOString().slice(0, 10);
   const reportBeforeVoid = context.BK_UI.dailyReportData(reportDate);
