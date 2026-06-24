@@ -34,3 +34,18 @@ test('owner approval and prompt dialogs build bodies without innerHTML', () => {
   assert.match(promptDialog, /input\.value = initial \|\| ''/);
   assert.match(promptDialog, /body\.append\(input, actions\)/);
 });
+
+test('shared dialog module builds modal chrome and messages without innerHTML', () => {
+  assert.doesNotMatch(dialogs, /\.innerHTML\s*=/);
+  assert.match(dialogs, /host\.appendChild\(sheet\)/);
+  assert.match(dialogs, /body\.replaceChildren\(messageNode\(message\), actions\)/);
+  assert.match(dialogs, /node\.textContent = message == null \? '' : String\(message\)/);
+});
+
+test('handover checklist keeps generated checklist markup isolated from plain messages', () => {
+  const handoverDialog = dialogs.slice(dialogs.indexOf('function handoverChecklist'), dialogs.indexOf('root.BK_DIALOGS'));
+  assert.match(handoverDialog, /appendTrustedMarkup\(dialog, message\)/);
+  assert.match(handoverDialog, /root\.document\.createElement\('div'\)/);
+  assert.match(handoverDialog, /progress\.setAttribute\('aria-live', 'polite'\)/);
+  assert.doesNotMatch(handoverDialog, /appDialogBody'\)\.innerHTML/);
+});
