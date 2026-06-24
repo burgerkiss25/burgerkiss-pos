@@ -262,7 +262,7 @@
     if(next) next.disabled = productPage >= pageCount - 1;
     if(controls) controls.classList.toggle('single-page', pageCount <= 1);
     if(dots){
-      dots.innerHTML = '';
+      dots.replaceChildren();
       for(let index = 0; index < pageCount; index += 1){
         const dot = document.createElement('span');
         dot.className = index === productPage ? 'active' : '';
@@ -274,7 +274,7 @@
   function buildProducts(){
     const grid = document.getElementById('buttons');
     if(!grid) return;
-    grid.innerHTML = '';
+    grid.replaceChildren();
     const base = (Array.isArray(BK_DATA.BASE) && BK_DATA.BASE.length) ? BK_DATA.BASE : (BK_DATA.DEFAULT_BASE || []);
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
     const query = productQuery.trim().toLowerCase();
@@ -1254,7 +1254,7 @@
 
   function renderOrder(){
     const {slots, active, discountRate} = BK_STATE.getState();
-    const lines = document.getElementById('lines'); lines.innerHTML='';
+    const lines = document.getElementById('lines'); lines.replaceChildren();
     const orderMeta = document.getElementById('currentOrderMeta');
     if(!slots.length){
       setSlotTotals(0,0,0);
@@ -2145,7 +2145,7 @@
       row.style.marginTop = '10px';
       host.appendChild(row);
     }
-    row.innerHTML = '';
+    row.replaceChildren();
     (actions || []).forEach(action=>{
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -3139,15 +3139,34 @@
     return new Promise(resolve=>{
       const host = ensureDialogHost();
       document.getElementById('appDialogTitle').textContent = 'Void order';
-      document.getElementById('appDialogBody').innerHTML = `
-        <p class="dialog-warning">The order remains permanently visible in history. Enter a mandatory reason.</p>
-        <select id="voidReasonPreset" class="dialog-field">
-          <option value="">Select reason…</option><option>Customer cancelled</option><option>Wrong item entered</option>
-          <option>Duplicate order</option><option>Payment failed</option><option>Manager correction</option><option value="custom">Other reason</option>
-        </select>
-        <input id="voidReasonCustom" class="dialog-field hidden" placeholder="Enter reason" maxlength="160">
-        <div id="voidReasonError" class="field-error"></div>
-        <div class="dialog-actions"><button class="x" id="dlgCancel">Cancel</button><button class="x danger-link" id="dlgConfirm">Void Order</button></div>`;
+      const warning = textEl('p', 'The order remains permanently visible in history. Enter a mandatory reason.', 'dialog-warning');
+      const presetSelect = document.createElement('select');
+      presetSelect.id = 'voidReasonPreset';
+      presetSelect.className = 'dialog-field';
+      [
+        ['', 'Select reason…'],
+        ['Customer cancelled', 'Customer cancelled'],
+        ['Wrong item entered', 'Wrong item entered'],
+        ['Duplicate order', 'Duplicate order'],
+        ['Payment failed', 'Payment failed'],
+        ['Manager correction', 'Manager correction'],
+        ['custom', 'Other reason']
+      ].forEach(([value,label])=> presetSelect.appendChild(optionNode(value, label)));
+      const customInput = document.createElement('input');
+      customInput.id = 'voidReasonCustom';
+      customInput.className = 'dialog-field hidden';
+      customInput.placeholder = 'Enter reason';
+      customInput.maxLength = 160;
+      const error = document.createElement('div');
+      error.id = 'voidReasonError';
+      error.className = 'field-error';
+      appDialogBody().replaceChildren(
+        warning,
+        presetSelect,
+        customInput,
+        error,
+        dialogActions(dialogButton('dlgCancel', 'Cancel'), dialogButton('dlgConfirm', 'Void Order', 'x danger-link'))
+      );
       host.classList.add('open');
       const preset = document.getElementById('voidReasonPreset');
       const custom = document.getElementById('voidReasonCustom');
@@ -3349,23 +3368,41 @@
       .filter(r=> stockOverviewFilter === 'all' ? true : stockStatus(r) === stockOverviewFilter)
       .filter(r=> !query || String(r.name || '').toLowerCase().includes(query) || String(r.id || '').toLowerCase().includes(query))
       .sort((a,b)=>String(a.name || '').localeCompare(String(b.name || '')));
-    host.innerHTML = `
-      <div class="stock-overview-summary">
-        <div class="stock-kpi"><span>Tracked</span><b>${tracked.length}</b></div>
-        <div class="stock-kpi crit"><span>Critical</span><b>${criticalCount}</b></div>
-        <div class="stock-kpi refill"><span>Refill</span><b>${refillCount}</b></div>
-        <div class="stock-kpi"><span>Buy</span><b>${buyCount}</b></div>
-      </div>
-      <div class="stock-overview-filters">
-        <input id="stockOverviewSearch" class="dialog-field" placeholder="Search stock item" value="${escapeHtml(stockOverviewQuery)}" />
-        <button class="stock-filter ${stockOverviewFilter==='all'?'active':''}" data-stock-filter="all">All</button>
-        <button class="stock-filter ${stockOverviewFilter==='ok'?'active':''}" data-stock-filter="ok">OK</button>
-        <button class="stock-filter ${stockOverviewFilter==='refill'?'active':''}" data-stock-filter="refill">Refill</button>
-        <button class="stock-filter ${stockOverviewFilter==='buy'?'active':''}" data-stock-filter="buy">Critical / Buy</button>
-      </div>
-      <div class="stock-overview-list" id="stockOverviewList"></div>
-    `;
-    const list = host.querySelector('#stockOverviewList');
+    const summary = document.createElement('div');
+    summary.className = 'stock-overview-summary';
+    [
+      ['Tracked', tracked.length, ''],
+      ['Critical', criticalCount, 'crit'],
+      ['Refill', refillCount, 'refill'],
+      ['Buy', buyCount, '']
+    ].forEach(([label,value,className])=>{
+      const kpi = document.createElement('div');
+      kpi.className = `stock-kpi${className ? ` ${className}` : ''}`;
+      kpi.append(textEl('span', label), textEl('b', value));
+      summary.appendChild(kpi);
+    });
+    const filters = document.createElement('div');
+    filters.className = 'stock-overview-filters';
+    const searchInputNode = document.createElement('input');
+    searchInputNode.id = 'stockOverviewSearch';
+    searchInputNode.className = 'dialog-field';
+    searchInputNode.placeholder = 'Search stock item';
+    searchInputNode.value = stockOverviewQuery;
+    filters.appendChild(searchInputNode);
+    [
+      ['all', 'All'],
+      ['ok', 'OK'],
+      ['refill', 'Refill'],
+      ['buy', 'Critical / Buy']
+    ].forEach(([value,label])=>{
+      const filterBtn = dialogButton('', label, `stock-filter ${stockOverviewFilter === value ? 'active' : ''}`.trim());
+      filterBtn.dataset.stockFilter = value;
+      filters.appendChild(filterBtn);
+    });
+    const list = document.createElement('div');
+    list.className = 'stock-overview-list';
+    list.id = 'stockOverviewList';
+    host.replaceChildren(summary, filters, list);
     const searchInput = host.querySelector('#stockOverviewSearch');
     if(searchInput){
       searchInput.oninput = event=>{ stockOverviewQuery = event.target.value; renderStock(); };
@@ -3383,11 +3420,11 @@
       const statusLabel = status === 'buy' ? 'Critical' : (status === 'refill' ? 'Refill' : 'OK');
       const row = document.createElement('div');
       row.className = 'stock-overview-row';
-      row.innerHTML = `
-        <div><b>${r.name}</b><small>Used ${r.used} ${r.unit || ''}</small></div>
-        <div class="stock-overview-meta">Block Factory ${r.leftTruck} · Store ${r.leftStorage} ${r.unit || ''}</div>
-        <span class="stock-status ${status}">${statusLabel}</span>
-      `;
+      const item = document.createElement('div');
+      item.append(textEl('b', r.name), textEl('small', `Used ${r.used} ${r.unit || ''}`));
+      const meta = textEl('div', `Block Factory ${r.leftTruck} · Store ${r.leftStorage} ${r.unit || ''}`, 'stock-overview-meta');
+      const badgeNode = textEl('span', statusLabel, `stock-status ${status}`);
+      row.append(item, meta, badgeNode);
       list.appendChild(row);
     });
     host.querySelectorAll('[data-stock-filter]').forEach(btn=>{
@@ -3518,15 +3555,18 @@
   function openGroup(){
     groupSel = new Set();
     const {slots} = BK_STATE.getState();
-    const body = document.getElementById('groupBody'); body.innerHTML='';
+    const body = document.getElementById('groupBody'); body.replaceChildren();
     slots.forEach((s,i)=>{
       const c = BK_LOGIC.computeSlot(s);
-      const row = document.createElement('div'); row.className='row';
-      row.innerHTML = `
-        <span class="left">
-          <input type="checkbox" onchange="BK_UI.toggleGroup(${i},this.checked)">
-          <b>${s.name}</b> <small>· ${c.subtotal} GHS · ${s.pay.toUpperCase()}</small>
-        </span>`;
+      const row = document.createElement('div');
+      row.className = 'row';
+      const left = document.createElement('span');
+      left.className = 'left';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.onchange = event=> toggleGroup(i, event.target.checked);
+      left.append(input, textEl('b', s.name), textEl('small', `· ${c.subtotal} GHS · ${s.pay.toUpperCase()}`));
+      row.appendChild(left);
       body.appendChild(row);
     });
     document.getElementById('modalGroup').classList.add('open');

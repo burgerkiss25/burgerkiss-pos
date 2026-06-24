@@ -124,3 +124,18 @@ test('modifier, meal, fulfilment and packing dialogs render bodies with DOM node
   assert.match(fulfilmentDialog, /optionNode\('customer-rider'/);
   assert.match(packingDialog, /select\.dataset\.itemIndex = String\(entry\.index\)/);
 });
+
+test('product and cart containers are cleared with replaceChildren', () => {
+  const pager = ui.slice(ui.indexOf('function updateProductPager'), ui.indexOf('function buildProducts'));
+  const buildProducts = ui.slice(ui.indexOf('function buildProducts'), ui.indexOf('function openModifierSheet'));
+  const renderOrder = ui.slice(ui.indexOf('function renderOrder'), ui.indexOf('function removeItem'));
+  const flowActions = ui.slice(ui.indexOf('function ensureFlowActions'), ui.indexOf('function createFreshOrderSlot'));
+  assert.doesNotMatch(pager, /dots\.innerHTML\s*=/);
+  assert.doesNotMatch(buildProducts, /grid\.innerHTML\s*=/);
+  assert.doesNotMatch(renderOrder, /lines\.innerHTML\s*=/);
+  assert.doesNotMatch(flowActions, /row\.innerHTML\s*=/);
+  assert.match(pager, /dots\.replaceChildren\(\)/);
+  assert.match(buildProducts, /grid\.replaceChildren\(\)/);
+  assert.match(renderOrder, /lines\.replaceChildren\(\)/);
+  assert.match(flowActions, /row\.replaceChildren\(\)/);
+});
