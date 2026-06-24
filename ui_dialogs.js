@@ -43,18 +43,83 @@
     return node;
   }
 
-  function appendTrustedMarkup(target, markup){
-    if(markup && typeof markup === 'object' && markup.nodeType){
-      target.appendChild(markup);
+  function appendContent(target, content){
+    if(content && typeof content === 'object' && content.nodeType){
+      target.appendChild(content);
       return;
     }
-    if(root.DOMParser){
-      const parser = new root.DOMParser();
-      const doc = parser.parseFromString(String(markup || ''), 'text/html');
-      Array.from(doc.body.childNodes).forEach(node=>target.appendChild(root.document.importNode(node, true)));
+    target.textContent = content == null ? '' : String(content);
+  }
+
+  function checklistLine(row){
+    const line = root.document.createElement('span');
+    line.className = 'handover-card-line';
+    const name = root.document.createElement('b');
+    name.textContent = `${Number(row && row.qty) || 1}x ${(row && row.name) || ''}`;
+    line.appendChild(name);
+    if(row && row.detail){
+      const detail = root.document.createElement('small');
+      detail.textContent = row.detail;
+      line.appendChild(detail);
+    }
+    return line;
+  }
+
+  function checklistCard(card){
+    const label = root.document.createElement('label');
+    label.className = 'handover-card-check';
+    const input = root.document.createElement('input');
+    input.type = 'checkbox';
+    input.dataset.handoverCheck = '';
+    const body = root.document.createElement('span');
+    body.className = 'handover-card-body';
+    const heading = root.document.createElement('span');
+    heading.className = 'handover-menu-heading';
+    const title = root.document.createElement('strong');
+    title.textContent = (card && card.title) || '';
+    heading.appendChild(title);
+    if(card && card.badge){
+      const badge = root.document.createElement('span');
+      badge.textContent = card.badge;
+      heading.appendChild(badge);
+    }
+    const lines = root.document.createElement('span');
+    lines.className = 'handover-card-lines';
+    (card && Array.isArray(card.lines) ? card.lines : []).forEach(row=>lines.appendChild(checklistLine(row)));
+    body.append(heading, lines);
+    label.append(input, body);
+    return label;
+  }
+
+  function appendChecklistContent(target, content){
+    if(!content || typeof content !== 'object' || content.nodeType){
+      appendContent(target, content);
       return;
     }
-    target.textContent = markup == null ? '' : String(markup);
+    if(content.intro){
+      const intro = root.document.createElement('div');
+      intro.style.marginBottom = '8px';
+      intro.textContent = content.intro;
+      target.appendChild(intro);
+    }
+    if(content.preferenceLabel || content.menuRule){
+      const mode = root.document.createElement('div');
+      mode.className = 'final-packaging-mode';
+      const preferenceLabel = root.document.createElement('b');
+      preferenceLabel.textContent = 'Customer preference:';
+      mode.append(preferenceLabel, root.document.createTextNode(` ${content.preferenceLabel || 'Not set'} · `));
+      const menuRuleLabel = root.document.createElement('b');
+      menuRuleLabel.textContent = 'Menu rule:';
+      mode.append(menuRuleLabel, root.document.createTextNode(` ${content.menuRule || 'every menu stays separate'}`));
+      target.appendChild(mode);
+    }
+    const cards = Array.isArray(content.cards) ? content.cards : [];
+    if(cards.length) cards.forEach(card=>target.appendChild(checklistCard(card)));
+    else {
+      const empty = root.document.createElement('div');
+      empty.textContent = 'No items in this order.';
+      target.appendChild(empty);
+    }
   }
 
   function open(host){
@@ -119,7 +184,7 @@
       const body = dialogBody();
       const dialog = root.document.createElement('div');
       dialog.className = 'handover-checklist-dialog';
-      appendTrustedMarkup(dialog, message);
+      appendChecklistContent(dialog, message);
       const progress = root.document.createElement('div');
       progress.className = 'handover-check-progress';
       progress.id = 'handoverCheckProgress';

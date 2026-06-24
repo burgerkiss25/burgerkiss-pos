@@ -44,8 +44,19 @@ test('shared dialog module builds modal chrome and messages without innerHTML', 
 
 test('handover checklist keeps generated checklist markup isolated from plain messages', () => {
   const handoverDialog = dialogs.slice(dialogs.indexOf('function handoverChecklist'), dialogs.indexOf('root.BK_DIALOGS'));
-  assert.match(handoverDialog, /appendTrustedMarkup\(dialog, message\)/);
+  assert.match(handoverDialog, /appendChecklistContent\(dialog, message\)/);
   assert.match(handoverDialog, /root\.document\.createElement\('div'\)/);
   assert.match(handoverDialog, /progress\.setAttribute\('aria-live', 'polite'\)/);
   assert.doesNotMatch(handoverDialog, /appDialogBody'\)\.innerHTML/);
+  assert.doesNotMatch(dialogs, /DOMParser|parseFromString/);
+  assert.match(dialogs, /input\.dataset\.handoverCheck = ''/);
+  assert.match(dialogs, /name\.textContent = `\$\{Number\(row && row\.qty\) \|\| 1\}x/);
+});
+
+test('handover issue flow passes structured checklist data instead of HTML markup', () => {
+  const issueFlow = ui.slice(ui.indexOf('function markIssued'), ui.indexOf('function prettyName'));
+  assert.match(ui, /function handoverPlanChecklist\(plan\)/);
+  assert.match(issueFlow, /cards: handoverPlanChecklist\(handoverPlan\)/);
+  assert.doesNotMatch(issueFlow, /handoverPlanHtml\(handoverPlan\)/);
+  assert.doesNotMatch(issueFlow, /<div style="margin-bottom:8px">/);
 });

@@ -2697,31 +2697,38 @@
   function handoverCardLine(name, detail, qty){
     return `<span class="handover-card-line"><b>${Number(qty)||1}x ${escapeHtml(name)}</b>${detail ? `<small>${escapeHtml(detail)}</small>` : ''}</span>`;
   }
-  function handoverPlanHtml(plan){
-    const menuHtml = plan.menus.map((menu,index)=>{
-      const lines = menu.items.map(item=>{
-        const detail = item.cat === 'drink' || item.role === 'drink'
-          ? 'Drinks plastic bag'
-          : staffFacingNote(item.note).join(' · ');
-        return handoverCardLine(staffFacingItemName(item), detail, item.qty);
-      });
-      if(menu.noSauce) lines.push(handoverCardLine('No sauce requested', '', 1));
-      lines.push(handoverCardLine('Napkins', '', 2));
-      if(menu.wings) lines.push(handoverCardLine('Wings Box', '', 1));
-      lines.push(handoverCardLine('Large Paper Bag', 'Food only · this menu stays separate', 1));
-      return handoverCard(`MENU ${index+1} — ${menu.name}`, `BAG ${index+1}`, lines);
-    }).join('');
-    const standaloneHtml = plan.standalone.map((entry,index)=>{
-      const lines = [handoverCardLine(entry.name, staffFacingNote(entry.note).join(' · '), entry.qty)];
-      (entry.children || []).forEach(child=>lines.push(handoverCardLine(staffFacingItemName(child), '', child.qty)));
-      const groupLabel = entry.customerGroupId ? `CUSTOMER ${entry.customerGroupId}` : '';
-      return handoverCard(`SINGLE ITEM ${index+1} — ${entry.name}`, groupLabel, lines);
-    }).join('');
+  function handoverPlanChecklist(plan){
+    const cards = [];
+    plan.menus.forEach((menu,index)=>{
+      const lines = menu.items.map(item=>({
+        name: staffFacingItemName(item),
+        detail: item.cat === 'drink' || item.role === 'drink' ? 'Drinks plastic bag' : staffFacingNote(item.note).join(' · '),
+        qty: item.qty
+      }));
+      if(menu.noSauce) lines.push({name:'No sauce requested', detail:'', qty:1});
+      lines.push({name:'Napkins', detail:'', qty:2});
+      if(menu.wings) lines.push({name:'Wings Box', detail:'', qty:1});
+      lines.push({name:'Large Paper Bag', detail:'Food only · this menu stays separate', qty:1});
+      cards.push({title:`MENU ${index+1} — ${menu.name}`, badge:`BAG ${index+1}`, lines});
+    });
+    plan.standalone.forEach((entry,index)=>{
+      const lines = [{name:entry.name, detail:staffFacingNote(entry.note).join(' · '), qty:entry.qty}];
+      (entry.children || []).forEach(child=>lines.push({name:staffFacingItemName(child), detail:'', qty:child.qty}));
+      cards.push({title:`SINGLE ITEM ${index+1} — ${entry.name}`, badge:entry.customerGroupId ? `CUSTOMER ${entry.customerGroupId}` : '', lines});
+    });
     const essentials = [];
-    if(plan.standaloneNapkins) essentials.push(handoverCardLine('Napkins', 'For single food items', plan.standaloneNapkins));
-    (plan.packaging || []).forEach(row=>essentials.push(handoverCardLine(row.name, row.kind === 'drink' ? 'Cold drinks only' : '', row.qty)));
-    const essentialsHtml = essentials.length ? handoverCard('PACKAGING & ESSENTIALS', '', essentials) : '';
-    return `${menuHtml}${standaloneHtml}${essentialsHtml}` || '<div>No items in this order.</div>';
+    if(plan.standaloneNapkins) essentials.push({name:'Napkins', detail:'For single food items', qty:plan.standaloneNapkins});
+    (plan.packaging || []).forEach(row=>essentials.push({name:row.name, detail:row.kind === 'drink' ? 'Cold drinks only' : '', qty:row.qty}));
+    if(essentials.length) cards.push({title:'PACKAGING & ESSENTIALS', badge:'', lines:essentials});
+    return cards;
+  }
+  function handoverPlanHtml(plan){
+    const cards = handoverPlanChecklist(plan).map(card=>handoverCard(
+      card.title,
+      card.badge,
+      card.lines.map(line=>handoverCardLine(line.name, line.detail, line.qty))
+    )).join('');
+    return cards || '<div>No items in this order.</div>';
   }
 
   function markIssued(i){
@@ -2733,10 +2740,14 @@
     renderIssue();
     refreshTotals();
     const handoverPlan = buildHandoverPlan(slot);
-    const checklistHtml = handoverPlanHtml(handoverPlan);
     handoverChecklistDialog(
       `${isOnlineOrder(slot) ? (slot.finalChannel === 'direct' ? 'Direct delivery check' : `${platformLabel(slot.orderSource)} rider pickup check`) : 'Final handover check'} – ${slot.externalOrderNo || slot.orderNo || slot.name}`,
-      `<div style="margin-bottom:8px">Read from top to bottom. Every menu has its own food bag; cold drinks always use plastic bags.</div><div class="final-packaging-mode"><b>Customer preference:</b> ${packagingLabel(slot)} · <b>Menu rule:</b> every menu stays separate</div>${checklistHtml}`
+      {
+        intro: 'Read from top to bottom. Every menu has its own food bag; cold drinks always use plastic bags.',
+        preferenceLabel: packagingLabel(slot),
+        menuRule: 'every menu stays separate',
+        cards: handoverPlanChecklist(handoverPlan)
+      }
     ).then(ok=>{
       if(!ok) return;
       const latestSlot = BK_STATE.getState().slots[i];
@@ -3534,7 +3545,7 @@
     renderStock,
     openSummary, closeSummary, openHistory, closeHistory, openHistoryPurge, closeHistoryPurge, submitHistoryPurge, renderHistoryPurgeList, openHistoryOrder, closeHistoryOrder, reprintHistoryOrder, voidSelectedHistoryOrder,
     exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, filterHistoryYesterday, clearHistoryFilters,
-    openDailyReport, closeDailyReport, renderDailyReport, exportDailyReportCsv, printDailyReport, dailyReportData, voidHistoryOrder, archiveCompletedSlots, workflowNextState, buildHandoverPlan, handoverPlanHtml,
+    openDailyReport, closeDailyReport, renderDailyReport, exportDailyReportCsv, printDailyReport, dailyReportData, voidHistoryOrder, archiveCompletedSlots, workflowNextState, buildHandoverPlan, handoverPlanHtml, handoverPlanChecklist,
     openStockOverview, closeStockOverview,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
