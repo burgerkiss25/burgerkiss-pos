@@ -202,3 +202,12 @@ test('order history detail modal renders with DOM text nodes', () => {
   assert.match(detail, /notice\.append\(/);
   assert.match(detail, /totals\.className = 'history-totals'/);
 });
+
+test('active order summary modal renders grouped rows with DOM nodes', () => {
+  const summary = ui.slice(ui.indexOf('function openSummary'), ui.indexOf('function closeSummary'));
+  assert.doesNotMatch(summary, /body\.innerHTML\s*=/);
+  assert.match(ui, /function groupedRowsNode\(items\)/);
+  assert.match(summary, /body\.replaceChildren\(groupedRowsNode\(s\.items\), subtotal, meta\)/);
+  assert.match(summary, /meta\.className = 'summary-meta'/);
+  assert.match(css, /\.summary-meta\{/);
+});

@@ -91,6 +91,20 @@
       </div>
     `).join('');
   }
+  function groupedRowsNode(items){
+    const fragment = document.createDocumentFragment();
+    BK_LOGIC.groupedLines(items).forEach(({name, qty, note, total})=>{
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.style.borderTop = '1px dashed #2a2f39';
+      row.style.padding = '6px 0';
+      const left = document.createElement('span');
+      left.append(textEl('b', name), textEl('small', `× ${qty}${note ? ` · ${note}` : ''}`));
+      row.append(left, textEl('span', `${total} GHS`));
+      fragment.appendChild(row);
+    });
+    return fragment;
+  }
 
   function escapeHtml(value){
     return String(value == null ? '' : value)
@@ -3541,11 +3555,13 @@
     const s = slots[active]; const c = BK_LOGIC.computeSlot(s);
     document.getElementById('sumTitle').textContent = `Summary – ${s.name}`;
     const body = document.getElementById('sumBody');
-    body.innerHTML = htmlGroupedRows(s.items) +
-      `<div class="sumline"><span>Slot Subtotal</span><b>${c.subtotal} GHS</b></div>
-       <div style="padding:8px 0;color:#9aa3ad;font-size:12px">
-         Combos in slot: <b>${c.combos}</b> · Order Discount: ${Math.round((s.discountRate||0)*100)}%
-       </div>`;
+    const subtotal = document.createElement('div');
+    subtotal.className = 'sumline';
+    subtotal.append(textEl('span', 'Slot Subtotal'), textEl('b', `${c.subtotal} GHS`));
+    const meta = document.createElement('div');
+    meta.className = 'summary-meta';
+    meta.append(textEl('span', `Combos in slot: ${c.combos}`), textEl('span', `Order Discount: ${Math.round((s.discountRate||0)*100)}%`));
+    body.replaceChildren(groupedRowsNode(s.items), subtotal, meta);
     document.getElementById('modalSummary').classList.add('open');
   }
   function closeSummary(){ document.getElementById('modalSummary').classList.remove('open'); }
