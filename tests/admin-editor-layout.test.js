@@ -7,6 +7,7 @@ const prices = fs.readFileSync('prices.js', 'utf8');
 const menus = fs.readFileSync('menus.js', 'utf8');
 const images = fs.readFileSync('images.js', 'utf8');
 const stock = fs.readFileSync('stock.js', 'utf8');
+const catalog = fs.readFileSync('catalog.js', 'utf8');
 const ui = fs.readFileSync('ui.js', 'utf8');
 const css = fs.readFileSync('style.css', 'utf8');
 
@@ -35,6 +36,10 @@ assert.match(images, /body\.replaceChildren\(intro, categoriesWrap\)/);
 assert.match(images, /input\.dataset\.imgId = it\.id/);
 assert.match(stock, /recipe-ingredient-chip/);
 assert.match(stock, /Advanced raw recipe/);
+assert.doesNotMatch(catalog, /\.innerHTML\s*=|insertAdjacentHTML/);
+assert.match(catalog, /function productCard\(item, index\)/);
+assert.match(catalog, /body\.replaceChildren\(toolbar/);
+assert.match(catalog, /function renderRecipeChips\(list, item, index\)/);
 assert.match(css, /\.admin-editor-modal/);
 
 console.log('Unified admin editor layout checks passed.');
