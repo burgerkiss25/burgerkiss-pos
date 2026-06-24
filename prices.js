@@ -94,25 +94,61 @@
     const modal = document.getElementById('modalPrices');
     const body  = document.getElementById('pricesBody');
     if(!body) return;
-    if(force) body.innerHTML = '';
-    if(!body.innerHTML){
+    if(force) body.replaceChildren();
+    if(!body.childElementCount){
       const labels = {burger:'Burgers',wings:'Wings',fries:'Fries',salad:'Salads',drink:'Drinks',extra:'Add-ons',sauce:'Sauces'};
-      body.innerHTML = '<div class="admin-editor-intro"><div><h4>Product prices</h4><p>Prices follow the same category and display order used in the POS.</p></div></div>';
+      const intro = document.createElement('div');
+      intro.className = 'admin-editor-intro';
+      const introCopy = document.createElement('div');
+      const introTitle = document.createElement('h4');
+      introTitle.textContent = 'Product prices';
+      const introText = document.createElement('p');
+      introText.textContent = 'Prices follow the same category and display order used in the POS.';
+      introCopy.append(introTitle, introText);
+      intro.appendChild(introCopy);
+      body.appendChild(intro);
       Object.entries(labels).forEach(([cat,label])=>{
         const products = BK_DATA.BASE.filter(item=>item.cat === cat).sort((a,b)=>Number(a.categoryOrder||0)-Number(b.categoryOrder||0));
         if(!products.length) return;
         const section = document.createElement('section');
         section.className = 'admin-category-group';
-        section.innerHTML = `<header><div><h4>${label}</h4><small>${products.length} item${products.length === 1 ? '' : 's'}</small></div></header><div class="price-editor-list"></div>`;
-        const list = section.querySelector('.price-editor-list');
+        const header = document.createElement('header');
+        const headerCopy = document.createElement('div');
+        const headerTitle = document.createElement('h4');
+        headerTitle.textContent = label;
+        const count = document.createElement('small');
+        count.textContent = `${products.length} item${products.length === 1 ? '' : 's'}`;
+        headerCopy.append(headerTitle, count);
+        header.appendChild(headerCopy);
+        const list = document.createElement('div');
+        list.className = 'price-editor-list';
+        section.append(header, list);
         products.forEach(it=>{
           const row = document.createElement('div');
           row.className='admin-data-row price-editor-row';
-        const val = getPrice(it.id);
-        row.innerHTML = `
-          <span class="admin-item-identity"><b>${it.name}</b><small>${it.id}</small></span>
-          <label><span>Selling price</span><span class="currency-field"><input type="number" step="1" min="0" value="${val}" data-id="${it.id}"><b>GHS</b></span></label>
-        `;
+          const identity = document.createElement('span');
+          identity.className = 'admin-item-identity';
+          const name = document.createElement('b');
+          name.textContent = it.name;
+          const id = document.createElement('small');
+          id.textContent = it.id;
+          identity.append(name, id);
+          const priceLabel = document.createElement('label');
+          const priceText = document.createElement('span');
+          priceText.textContent = 'Selling price';
+          const currency = document.createElement('span');
+          currency.className = 'currency-field';
+          const input = document.createElement('input');
+          input.type = 'number';
+          input.step = '1';
+          input.min = '0';
+          input.value = getPrice(it.id);
+          input.dataset.id = it.id;
+          const suffix = document.createElement('b');
+          suffix.textContent = 'GHS';
+          currency.append(input, suffix);
+          priceLabel.append(priceText, currency);
+          row.append(identity, priceLabel);
           list.appendChild(row);
         });
         body.appendChild(section);

@@ -1,5 +1,9 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const shiftSource = fs.readFileSync(path.join(__dirname, '..', 'shift.js'), 'utf8');
 
 function loadPlannerWithStore(){
   const store = {};
@@ -59,4 +63,12 @@ test('employees cannot edit and only owners can approve schedules', () => {
 
   delete global.localStorage;
   delete global.BK_ACCESS;
+});
+
+test('shift planner, absence and payroll lists render with DOM nodes', () => {
+  assert.match(shiftSource, /function optionEl\(value, label\)/);
+  assert.match(shiftSource, /plannerGrid\.replaceChildren/);
+  assert.match(shiftSource, /absenceList\.replaceChildren/);
+  assert.match(shiftSource, /payrollList\.replaceChildren/);
+  assert.doesNotMatch(shiftSource, /plannerGrid'\)\.innerHTML|absenceList'\)\.innerHTML|payrollList'\)\.innerHTML|plannerStaff'\)\.innerHTML|advanceStaff'\)\.innerHTML/);
 });
