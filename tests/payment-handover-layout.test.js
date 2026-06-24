@@ -149,3 +149,14 @@ test('payment card renders dynamic payment copy without innerHTML or inline hand
   assert.match(renderPay, /summaryTitle\.textContent = payment\.label/);
   assert.match(renderPay, /button\.onclick = \(\)=> requestSlotPayment\(active, method, provider\)/);
 });
+
+
+test('handover card renders dynamic readiness copy without innerHTML templates', () => {
+  const renderIssue = ui.slice(ui.indexOf('function renderIssue()'), ui.indexOf('function goTab'));
+  assert.doesNotMatch(renderIssue, /card\.innerHTML\s*=/);
+  assert.match(renderIssue, /orderTitle\.textContent = `Order #\$\{shortOrderNumber\(s\.orderNo\)\}`/);
+  assert.match(renderIssue, /payStatus\.textContent = `\$\{s\.pay !== 'unpaid' \? '✓' : '○'\} \$\{paymentLabel\(s\.pay\)\}`/);
+  assert.match(renderIssue, /packagingValue\.textContent = packagingLabel\(s\)/);
+  assert.match(renderIssue, /readinessTitle\.textContent = readiness\.label/);
+  assert.match(renderIssue, /riderMissedButton\.onclick = \(\)=> convertOnlineOrder\(active\)/);
+});

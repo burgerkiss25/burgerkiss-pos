@@ -1841,22 +1841,59 @@
     const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
     const readiness = issueReadiness(s);
     const card = document.createElement('div'); card.className='slot-card workflow-order-card';
-    card.innerHTML = `
-        <div class="workflow-order-identity handover-identity">
-          <div><strong>Order #${escapeHtml(shortOrderNumber(s.orderNo))}</strong><span>${escapeHtml(orderChannelText(s))} · waiting ${formatAge(s.createdAt)}</span></div>
-          <div class="handover-statuses" aria-label="Order completion status">
-            <span class="${s.pay !== 'unpaid' ? 'complete' : 'pending'}">${s.pay !== 'unpaid' ? '✓' : '○'} ${escapeHtml(paymentLabel(s.pay))}</span>
-            <span class="${allDone ? 'complete' : 'pending'}">${allDone ? '✓' : '○'} Kitchen ${allDone ? 'complete' : 'open'}</span>
-          </div>
-        </div>
-        <div class="handover-packaging"><small>Packaging</small><strong>${escapeHtml(packagingLabel(s))}</strong></div>
-        <div class="workflow-next issue-readiness ${readiness.state}">
-          <div class="workflow-next-copy"><strong>${readiness.label}</strong><small>${readiness.detail}</small></div>
-          <div class="issue-action-group"><button class="workflow-next-button issue-next-action" ${readiness.disabled ? 'disabled' : ''}>${readiness.action}</button>${readiness.state === 'ready' && isOnlineOrder(s) && s.finalChannel !== 'direct' ? `<button class="x rider-missed-action" type="button">Rider Did Not Pick Up</button>` : ''}</div>
-        </div>`;
-    const riderMissedButton = card.querySelector('.rider-missed-action');
-    if(riderMissedButton) riderMissedButton.onclick = ()=>convertOnlineOrder(active);
-    const actionButton = card.querySelector('.issue-next-action');
+    const identity = document.createElement('div');
+    identity.className = 'workflow-order-identity handover-identity';
+    const identityText = document.createElement('div');
+    const orderTitle = document.createElement('strong');
+    orderTitle.textContent = `Order #${shortOrderNumber(s.orderNo)}`;
+    const orderMeta = document.createElement('span');
+    orderMeta.textContent = `${orderChannelText(s)} · waiting ${formatAge(s.createdAt)}`;
+    identityText.append(orderTitle, orderMeta);
+    const statuses = document.createElement('div');
+    statuses.className = 'handover-statuses';
+    statuses.setAttribute('aria-label', 'Order completion status');
+    const payStatus = document.createElement('span');
+    payStatus.className = s.pay !== 'unpaid' ? 'complete' : 'pending';
+    payStatus.textContent = `${s.pay !== 'unpaid' ? '✓' : '○'} ${paymentLabel(s.pay)}`;
+    const kitchenStatus = document.createElement('span');
+    kitchenStatus.className = allDone ? 'complete' : 'pending';
+    kitchenStatus.textContent = `${allDone ? '✓' : '○'} Kitchen ${allDone ? 'complete' : 'open'}`;
+    statuses.append(payStatus, kitchenStatus);
+    identity.append(identityText, statuses);
+    const packaging = document.createElement('div');
+    packaging.className = 'handover-packaging';
+    const packagingLabelNode = document.createElement('small');
+    packagingLabelNode.textContent = 'Packaging';
+    const packagingValue = document.createElement('strong');
+    packagingValue.textContent = packagingLabel(s);
+    packaging.append(packagingLabelNode, packagingValue);
+    const readinessBox = document.createElement('div');
+    readinessBox.className = `workflow-next issue-readiness ${readiness.state}`;
+    const readinessCopy = document.createElement('div');
+    readinessCopy.className = 'workflow-next-copy';
+    const readinessTitle = document.createElement('strong');
+    readinessTitle.textContent = readiness.label;
+    const readinessDetail = document.createElement('small');
+    readinessDetail.textContent = readiness.detail;
+    readinessCopy.append(readinessTitle, readinessDetail);
+    const actions = document.createElement('div');
+    actions.className = 'issue-action-group';
+    const actionButton = document.createElement('button');
+    actionButton.className = 'workflow-next-button issue-next-action';
+    actionButton.type = 'button';
+    actionButton.disabled = !!readiness.disabled;
+    actionButton.textContent = readiness.action;
+    actions.appendChild(actionButton);
+    if(readiness.state === 'ready' && isOnlineOrder(s) && s.finalChannel !== 'direct'){
+      const riderMissedButton = document.createElement('button');
+      riderMissedButton.className = 'x rider-missed-action';
+      riderMissedButton.type = 'button';
+      riderMissedButton.textContent = 'Rider Did Not Pick Up';
+      riderMissedButton.onclick = ()=> convertOnlineOrder(active);
+      actions.appendChild(riderMissedButton);
+    }
+    readinessBox.append(readinessCopy, actions);
+    card.append(identity, packaging, readinessBox);
     actionButton.onclick = ()=>{
       if(readiness.disabled) return;
       if(readiness.state === 'ready') markIssued(active);
