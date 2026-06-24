@@ -138,3 +138,14 @@ test('stock overview has search and sorted results', () => {
   assert.match(ui, /stockOverviewQuery/);
   assert.match(ui, /localeCompare/);
 });
+
+
+test('payment card renders dynamic payment copy without innerHTML or inline handlers', () => {
+  const renderPay = ui.slice(ui.indexOf('function renderPay()'), ui.indexOf('function continueFromPayment'));
+  assert.doesNotMatch(renderPay, /card\.innerHTML\s*=/);
+  assert.doesNotMatch(renderPay, /onclick="BK_UI\.requestSlotPayment/);
+  assert.match(renderPay, /orderTitle\.textContent = `Order #\$\{shortOrderNumber\(s\.orderNo\)\}`/);
+  assert.match(renderPay, /amountDueValue\.textContent = `\$\{amountDue\} GHS`/);
+  assert.match(renderPay, /summaryTitle\.textContent = payment\.label/);
+  assert.match(renderPay, /button\.onclick = \(\)=> requestSlotPayment\(active, method, provider\)/);
+});

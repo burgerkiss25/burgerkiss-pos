@@ -1679,32 +1679,90 @@
     const canReversePayment = !isPrepaidPlatform(s) && s.pay !== 'unpaid' && !s.issued;
     const card = document.createElement('div'); card.className='slot-card workflow-order-card';
     card.dataset.paymentSlot = String(active);
-    card.innerHTML = `
-      <div class="workflow-order-identity">
-        <div><strong>Order #${escapeHtml(shortOrderNumber(s.orderNo))}</strong><span>${escapeHtml(orderChannelText(s))}</span></div>
-        <div class="amount-due"><small>Amount due</small><strong>${amountDue} GHS</strong></div>
-      </div>
-      <div class="payment-totals" aria-label="Payment total">
-        <span>Subtotal <b>${c.subtotal} GHS</b></span>
-        <span>Discount <b>-${discount} GHS</b></span>
-      </div>
-      <div class="payment-panel ${payment.state}">
-        <div class="payment-summary"><strong>${payment.label}</strong><small>${payment.detail}</small></div>
-        ${isPrepaidPlatform(s)
-          ? `<div class="online-paid-lock"><b>${platformLabel(s.orderSource)} payment recorded</b><small>No additional payment step is required.</small></div>`
-          : s.pay === 'unpaid'
-            ? `<div class="payment-methods" role="group" aria-label="Payment method for Order ${escapeHtml(shortOrderNumber(s.orderNo))}">
-                <button class="payment-method" ${(paymentDisabled || (isWhatsapp(s) && s.fulfilment === 'delivery')) ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${active},'cash');">Cash</button>
-                <button class="payment-method" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${active},'momo','telecel');">Telecel MoMo</button>
-                <button class="payment-method" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${active},'momo','mtn');">MTN MoMo</button>
-              </div>`
-            : `<button class="x change-payment-action" type="button">Change payment</button>`}
-        <button type="button" class="workflow-next-button payment-next-action" ${payNext.disabled ? 'disabled' : ''}>${payNext.label}</button>
-      </div>`;
-    const paymentNext = card.querySelector('.payment-next-action');
+    const identity = document.createElement('div');
+    identity.className = 'workflow-order-identity';
+    const identityText = document.createElement('div');
+    const orderTitle = document.createElement('strong');
+    orderTitle.textContent = `Order #${shortOrderNumber(s.orderNo)}`;
+    const orderChannel = document.createElement('span');
+    orderChannel.textContent = orderChannelText(s);
+    identityText.append(orderTitle, orderChannel);
+    const amountDueBox = document.createElement('div');
+    amountDueBox.className = 'amount-due';
+    const amountDueLabel = document.createElement('small');
+    amountDueLabel.textContent = 'Amount due';
+    const amountDueValue = document.createElement('strong');
+    amountDueValue.textContent = `${amountDue} GHS`;
+    amountDueBox.append(amountDueLabel, amountDueValue);
+    identity.append(identityText, amountDueBox);
+    const totals = document.createElement('div');
+    totals.className = 'payment-totals';
+    totals.setAttribute('aria-label', 'Payment total');
+    const subtotalRow = document.createElement('span');
+    subtotalRow.append('Subtotal ');
+    const subtotalValue = document.createElement('b');
+    subtotalValue.textContent = `${c.subtotal} GHS`;
+    subtotalRow.appendChild(subtotalValue);
+    const discountRow = document.createElement('span');
+    discountRow.append('Discount ');
+    const discountValue = document.createElement('b');
+    discountValue.textContent = `-${discount} GHS`;
+    discountRow.appendChild(discountValue);
+    totals.append(subtotalRow, discountRow);
+    const panel = document.createElement('div');
+    panel.className = `payment-panel ${payment.state}`;
+    const summary = document.createElement('div');
+    summary.className = 'payment-summary';
+    const summaryTitle = document.createElement('strong');
+    summaryTitle.textContent = payment.label;
+    const summaryDetail = document.createElement('small');
+    summaryDetail.textContent = payment.detail;
+    summary.append(summaryTitle, summaryDetail);
+    panel.appendChild(summary);
+    if(isPrepaidPlatform(s)){
+      const lock = document.createElement('div');
+      lock.className = 'online-paid-lock';
+      const lockTitle = document.createElement('b');
+      lockTitle.textContent = `${platformLabel(s.orderSource)} payment recorded`;
+      const lockDetail = document.createElement('small');
+      lockDetail.textContent = 'No additional payment step is required.';
+      lock.append(lockTitle, lockDetail);
+      panel.appendChild(lock);
+    }else if(s.pay === 'unpaid'){
+      const methods = document.createElement('div');
+      methods.className = 'payment-methods';
+      methods.setAttribute('role', 'group');
+      methods.setAttribute('aria-label', `Payment method for Order ${shortOrderNumber(s.orderNo)}`);
+      const addPaymentButton = (label, method, provider, disabled)=>{
+        const button = document.createElement('button');
+        button.className = 'payment-method';
+        button.type = 'button';
+        button.disabled = !!disabled;
+        button.textContent = label;
+        button.onclick = ()=> requestSlotPayment(active, method, provider);
+        methods.appendChild(button);
+      };
+      addPaymentButton('Cash', 'cash', '', paymentDisabled || (isWhatsapp(s) && s.fulfilment === 'delivery'));
+      addPaymentButton('Telecel MoMo', 'momo', 'telecel', paymentDisabled);
+      addPaymentButton('MTN MoMo', 'momo', 'mtn', paymentDisabled);
+      panel.appendChild(methods);
+    }else{
+      const change = document.createElement('button');
+      change.className = 'x change-payment-action';
+      change.type = 'button';
+      change.textContent = 'Change payment';
+      change.disabled = !canReversePayment;
+      if(canReversePayment) change.onclick = ()=> requestSlotPayment(active, 'unpaid');
+      panel.appendChild(change);
+    }
+    const paymentNext = document.createElement('button');
+    paymentNext.type = 'button';
+    paymentNext.className = 'workflow-next-button payment-next-action';
+    paymentNext.disabled = !!payNext.disabled;
+    paymentNext.textContent = payNext.label;
     paymentNext.onclick = ()=> continueFromPayment(active);
-    const changePayment = card.querySelector('.change-payment-action');
-    if(changePayment && canReversePayment) changePayment.onclick = ()=>requestSlotPayment(active, 'unpaid');
+    panel.appendChild(paymentNext);
+    card.append(identity, totals, panel);
     box.appendChild(card);
   }
 
