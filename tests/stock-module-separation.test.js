@@ -32,3 +32,12 @@ test('stock recipe editor cards render with DOM nodes', () => {
   assert.match(stock, /recipeWrap\.replaceChildren\(\.\.\.sections\)/);
   assert.doesNotMatch(stock, /recipeWrap\.innerHTML|replacement\.innerHTML|recipeRowHtml/);
 });
+
+test('stock ingredient lists and transfers render with DOM nodes', () => {
+  assert.match(stock, /function ingredientRowNode\(id, def\)/);
+  assert.match(stock, /function stockLocationCard/);
+  assert.match(stock, /body\.replaceChildren\(\.\.\.sections\)/);
+  assert.match(stock, /list\.replaceChildren\(\.\.\.recent\.map/);
+  assert.match(stock, /generalGroup\.appendChild\(ingredientRowNode/);
+  assert.doesNotMatch(stock, /ingredientRowHtml|transferRowHtml|insertAdjacentHTML/);
+});

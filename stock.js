@@ -339,66 +339,92 @@
   }
   function getRecipes(){ return clone(RECIPES); }
 
-  function ingredientRowHtml(id, def){
-    const locationOptions = ['storage', 'foodtruck', 'both'].map(loc=>
-      `<option value="${loc}" ${def.stock_location===loc?'selected':''}>${locationLabel(loc)}</option>`
-    ).join('');
-    return `<article class="stock-ingredient-card" data-ing-row>
-      <div class="stock-ingredient-head">
-        <div class="stock-field stock-field-id">
-          <label>ID</label>
-          <input data-field="id" value="${id}" placeholder="ingredient_id">
-        </div>
-        <div class="stock-field stock-field-name">
-          <label>Name</label>
-          <input data-field="name" value="${def.name || ''}" placeholder="Name">
-        </div>
-        <div class="stock-field">
-          <label>Category</label>
-          <input data-field="category" value="${def.category || ''}" placeholder="category">
-        </div>
-        <div class="stock-field stock-field-unit">
-          <label>Unit</label>
-          <input data-field="unit" value="${def.unit || ''}" placeholder="unit">
-        </div>
-        <div class="stock-field stock-field-location">
-          <label>Available at</label>
-          <select data-field="stock_location">${locationOptions}</select>
-        </div>
-        <label class="stock-track"><input data-field="track_stock" type="checkbox" ${def.track_stock !== false ? 'checked' : ''}> Track</label>
-        <button class="mini" data-remove>Delete</button>
-      </div>
-      <div class="stock-location-grid">
-        <section class="stock-location-card stock-location-store">
-          <div class="stock-location-title">
-            <span>BurgerKiss Store</span>
-            <small>Main warehouse</small>
-          </div>
-          <div class="stock-location-fields">
-            <label>Current stock
-              <input data-field="current_stock_storage" type="number" min="0" step="1" value="${num(def.current_stock_storage,0)}">
-            </label>
-            <label>Minimum stock
-              <input data-field="moq_storage" type="number" min="0" step="1" value="${num(def.moq_storage,0)}">
-            </label>
-          </div>
-        </section>
-        <section class="stock-location-card stock-location-branch">
-          <div class="stock-location-title">
-            <span>BurgerKiss Block Factory</span>
-            <small>Restaurant / production stock</small>
-          </div>
-          <div class="stock-location-fields">
-            <label>Current stock
-              <input data-field="current_stock_foodtruck" type="number" min="0" step="1" value="${num(def.current_stock_foodtruck,0)}">
-            </label>
-            <label>Minimum stock
-              <input data-field="moq_foodtruck" type="number" min="0" step="1" value="${num(def.moq_foodtruck,0)}">
-            </label>
-          </div>
-        </section>
-      </div>
-    </article>`;
+  function stockField(labelText, field, value, opts){
+    const wrap = document.createElement('div');
+    wrap.className = `stock-field${opts && opts.className ? ` ${opts.className}` : ''}`;
+    wrap.appendChild(textEl('label', labelText));
+    const input = document.createElement('input');
+    input.dataset.field = field;
+    input.value = value == null ? '' : String(value);
+    if(opts && opts.placeholder) input.placeholder = opts.placeholder;
+    if(opts && opts.type) input.type = opts.type;
+    if(opts && opts.min != null) input.min = String(opts.min);
+    if(opts && opts.step != null) input.step = String(opts.step);
+    wrap.appendChild(input);
+    return wrap;
+  }
+
+  function stockLocationCard(className, title, subtitle, stockFieldName, moqFieldName, def){
+    const section = document.createElement('section');
+    section.className = `stock-location-card ${className}`;
+    const heading = document.createElement('div');
+    heading.className = 'stock-location-title';
+    heading.append(textEl('span', title), textEl('small', subtitle));
+    const fields = document.createElement('div');
+    fields.className = 'stock-location-fields';
+    [
+      ['Current stock', stockFieldName, num(def[stockFieldName], 0)],
+      ['Minimum stock', moqFieldName, num(def[moqFieldName], 0)]
+    ].forEach(([label, field, value])=>{
+      const control = document.createElement('label');
+      control.appendChild(document.createTextNode(label));
+      const input = document.createElement('input');
+      input.dataset.field = field;
+      input.type = 'number';
+      input.min = '0';
+      input.step = '1';
+      input.value = String(value);
+      control.appendChild(input);
+      fields.appendChild(control);
+    });
+    section.append(heading, fields);
+    return section;
+  }
+
+  function ingredientRowNode(id, def){
+    const article = document.createElement('article');
+    article.className = 'stock-ingredient-card';
+    article.dataset.ingRow = '';
+    const head = document.createElement('div');
+    head.className = 'stock-ingredient-head';
+    head.append(
+      stockField('ID', 'id', id, {className:'stock-field-id', placeholder:'ingredient_id'}),
+      stockField('Name', 'name', def.name || '', {className:'stock-field-name', placeholder:'Name'}),
+      stockField('Category', 'category', def.category || '', {placeholder:'category'}),
+      stockField('Unit', 'unit', def.unit || '', {className:'stock-field-unit', placeholder:'unit'})
+    );
+    const locationWrap = document.createElement('div');
+    locationWrap.className = 'stock-field stock-field-location';
+    locationWrap.appendChild(textEl('label', 'Available at'));
+    const locationSelect = document.createElement('select');
+    locationSelect.dataset.field = 'stock_location';
+    ['storage', 'foodtruck', 'both'].forEach(loc=>{
+      const option = document.createElement('option');
+      option.value = loc;
+      option.textContent = locationLabel(loc);
+      option.selected = def.stock_location === loc;
+      locationSelect.appendChild(option);
+    });
+    locationWrap.appendChild(locationSelect);
+    const track = document.createElement('label');
+    track.className = 'stock-track';
+    const trackInput = document.createElement('input');
+    trackInput.dataset.field = 'track_stock';
+    trackInput.type = 'checkbox';
+    trackInput.checked = def.track_stock !== false;
+    track.append(trackInput, document.createTextNode(' Track'));
+    const remove = textEl('button', 'Delete', 'mini');
+    remove.type = 'button';
+    remove.dataset.remove = '';
+    head.append(locationWrap, track, remove);
+    const grid = document.createElement('div');
+    grid.className = 'stock-location-grid';
+    grid.append(
+      stockLocationCard('stock-location-store', 'BurgerKiss Store', 'Main warehouse', 'current_stock_storage', 'moq_storage', def),
+      stockLocationCard('stock-location-branch', 'BurgerKiss Block Factory', 'Restaurant / production stock', 'current_stock_foodtruck', 'moq_foodtruck', def)
+    );
+    article.append(head, grid);
+    return article;
   }
 
   function textEl(tag, text, className){
@@ -518,18 +544,27 @@
     });
     const categories = Array.from(new Set(entries.map(([, def])=>String(def.category || 'general')))).sort();
     if(!entries.length){
-      body.innerHTML = '<div class="empty-state">No matching ingredients.</div>';
+      body.replaceChildren(textEl('div', 'No matching ingredients.', 'empty-state'));
       return;
     }
-    body.innerHTML = categories.map(category=>{
+    const sections = categories.map(category=>{
       const rows = entries
         .filter(([, def])=>String(def.category || 'general') === category)
         .sort(([, a],[, b])=>String(a.name || '').localeCompare(String(b.name || '')));
-      return `<section class="admin-category-group" data-ingredient-category="${category}">
-        <header><div><h4>${ingredientCategoryLabel(category)}</h4><small>${rows.length} ${rows.length === 1 ? 'ingredient' : 'ingredients'}</small></div><span>Sorted by name</span></header>
-        <div class="stock-ingredient-category">${rows.map(([id, def])=>ingredientRowHtml(id, def)).join('')}</div>
-      </section>`;
-    }).join('');
+      const section = document.createElement('section');
+      section.className = 'admin-category-group';
+      section.dataset.ingredientCategory = category;
+      const header = document.createElement('header');
+      const copy = document.createElement('div');
+      copy.append(textEl('h4', ingredientCategoryLabel(category)), textEl('small', `${rows.length} ${rows.length === 1 ? 'ingredient' : 'ingredients'}`));
+      header.append(copy, textEl('span', 'Sorted by name'));
+      const list = document.createElement('div');
+      list.className = 'stock-ingredient-category';
+      rows.forEach(([id, def])=> list.appendChild(ingredientRowNode(id, def)));
+      section.append(header, list);
+      return section;
+    });
+    body.replaceChildren(...sections);
   }
 
 
@@ -557,21 +592,23 @@
     return Object.keys(ingNext).length ? ingNext : null;
   }
 
-  function transferRowHtml(t){
-    const when = t && t.ts ? new Date(t.ts).toLocaleString() : '';
-    return `<div class="stock-transfer-row">
-      <span><b>${t.ingredient_name || t.ingredient_id}</b> <small>${when}</small></span>
-      <span>${t.qty} ${t.unit || ''} · BurgerKiss Store → BurgerKiss Block Factory</span>
-    </div>`;
-  }
-
   function renderTransferHistory(){
     const list = document.getElementById('stockTransferHistory');
     if(!list) return;
     const recent = TRANSFERS.slice(-5).reverse();
-    list.innerHTML = recent.length
-      ? recent.map(transferRowHtml).join('')
-      : '<div class="empty-state">No transfers yet.</div>';
+    if(!recent.length){
+      list.replaceChildren(textEl('div', 'No transfers yet.', 'empty-state'));
+      return;
+    }
+    list.replaceChildren(...recent.map(t=>{
+      const when = t && t.ts ? new Date(t.ts).toLocaleString() : '';
+      const row = document.createElement('div');
+      row.className = 'stock-transfer-row';
+      const left = document.createElement('span');
+      left.append(textEl('b', t.ingredient_name || t.ingredient_id), textEl('small', when));
+      row.append(left, textEl('span', `${t.qty} ${t.unit || ''} · BurgerKiss Store → BurgerKiss Block Factory`));
+      return row;
+    }));
   }
 
   function transferPanelHtml(){
@@ -713,10 +750,19 @@
       document.getElementById('sAddIngredient').onclick = ()=>{
         let generalGroup = ingWrap.querySelector('[data-ingredient-category="general"] .stock-ingredient-category');
         if(!generalGroup){
-          ingWrap.insertAdjacentHTML('beforeend', '<section class="admin-category-group" data-ingredient-category="general"><header><div><h4>General</h4><small>New ingredient</small></div></header><div class="stock-ingredient-category"></div></section>');
-          generalGroup = ingWrap.querySelector('[data-ingredient-category="general"] .stock-ingredient-category');
+          const section = document.createElement('section');
+          section.className = 'admin-category-group';
+          section.dataset.ingredientCategory = 'general';
+          const header = document.createElement('header');
+          const copy = document.createElement('div');
+          copy.append(textEl('h4', 'General'), textEl('small', 'New ingredient'));
+          header.appendChild(copy);
+          generalGroup = document.createElement('div');
+          generalGroup.className = 'stock-ingredient-category';
+          section.append(header, generalGroup);
+          ingWrap.appendChild(section);
         }
-        generalGroup.insertAdjacentHTML('beforeend', ingredientRowHtml('', {name:'', category:'general', unit:'', track_stock:true, stock_location:'both', current_stock_storage:0, current_stock_foodtruck:0, moq_storage:0, moq_foodtruck:0}));
+        generalGroup.appendChild(ingredientRowNode('', {name:'', category:'general', unit:'', track_stock:true, stock_location:'both', current_stock_storage:0, current_stock_foodtruck:0, moq_storage:0, moq_foodtruck:0}));
         bindIngredientActions(ingWrap);
         generalGroup.lastElementChild.querySelector('[data-field="name"]').focus();
       };
