@@ -1,7 +1,11 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const access = require('../access.js');
+const accessSource = fs.readFileSync(path.join(__dirname, '..', 'access.js'), 'utf8');
+const styleSource = fs.readFileSync(path.join(__dirname, '..', 'style.css'), 'utf8');
 
 function at(hour, minute = 0, day = 13){
   return new Date(2026, 5, day, hour, minute, 0, 0);
@@ -81,4 +85,13 @@ test('electricity credit validation accepts positive decimal readings only', () 
   assert.equal(access.normalizeElectricityCredit('0'), 0);
   assert.equal(access.normalizeElectricityCredit('-1'), null);
   assert.equal(access.normalizeElectricityCredit('not a number'), null);
+});
+
+test('operational electricity flows use BurgerKiss dialogs instead of browser prompts', () => {
+  assert.equal(/\broot\.prompt\b|\broot\.alert\b/.test(accessSource), false);
+  assert.match(accessSource, /function accessOperationalDialog/);
+  assert.match(accessSource, /Close shift before signing out/);
+  assert.match(accessSource, /Record electricity top-up/);
+  assert.match(styleSource, /\.access-operational-dialog/);
+  assert.equal(typeof access.accessOperationalDialog, 'function');
 });
