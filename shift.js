@@ -86,7 +86,21 @@
     if(!document.querySelector(`[data-shift-panel="${saved}"]`)) saved = 'schedule';
     setShiftView(saved);
   }
-  function escapeHtml(value){ return BK_REPORTS && BK_REPORTS.escapeHtml ? BK_REPORTS.escapeHtml(value) : String(value || '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
+  function textEl(tag, text, className){
+    const el = document.createElement(tag);
+    if(className) el.className = className;
+    el.textContent = text == null ? '' : String(text);
+    return el;
+  }
+  function optionEl(value, label){
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    return option;
+  }
+  function emptyState(className, message){
+    return textEl('div', message, className);
+  }
   function currentActor(){ return window.BK_ACCESS && BK_ACCESS.actor ? BK_ACCESS.actor() : null; }
   function canManagePlanner(){ return window.BK_SHIFT_PLANNER && BK_SHIFT_PLANNER.canManageSchedule(currentActor()); }
   function plannerMonth(){ return document.getElementById('plannerMonth').value || BK_SHIFT_PLANNER.monthValue(new Date()); }
@@ -94,9 +108,11 @@
   function setAbsenceMessage(message){ document.getElementById('absenceMessage').textContent = message || ''; }
   function setPayrollMessage(message){ document.getElementById('payrollMessage').textContent = message || ''; }
   function fillPlannerOptions(){
-    document.getElementById('plannerStaff').innerHTML = BK_ACCESS.STAFF.filter(person=>person.role !== 'owner').map(person=>`<option value="${escapeHtml(person.id)}">${escapeHtml(person.name)} · ${escapeHtml(person.roleLabel)}</option>`).join('');
-    const shifts = Object.values(BK_ACCESS.SHIFTS).map(shift=>`<option value="${escapeHtml(shift.id)}">${escapeHtml(shift.label)} · ${escapeHtml(shift.hours)}</option>`).join('');
-    document.getElementById('plannerShift').innerHTML = `<option value="off">Off day</option>${shifts}`;
+    document.getElementById('plannerStaff').replaceChildren(...BK_ACCESS.STAFF.filter(person=>person.role !== 'owner').map(person=>optionEl(person.id, `${person.name} · ${person.roleLabel}`)));
+    document.getElementById('plannerShift').replaceChildren(
+      optionEl('off', 'Off day'),
+      ...Object.values(BK_ACCESS.SHIFTS).map(shift=>optionEl(shift.id, `${shift.label} · ${shift.hours}`))
+    );
   }
   function renderPlanner(){
     if(!(window.BK_SHIFT_PLANNER && window.BK_ACCESS)) return;
@@ -116,18 +132,42 @@
     if(!document.getElementById('plannerDate').value || !document.getElementById('plannerDate').value.startsWith(month)) document.getElementById('plannerDate').value = days[0] || '';
     const entriesByDate = {};
     schedule.entries.forEach(entry=>{ (entriesByDate[entry.date] = entriesByDate[entry.date] || []).push(entry); });
-    document.getElementById('plannerGrid').innerHTML = days.map(date=>{
+    const plannerGrid = document.getElementById('plannerGrid');
+    plannerGrid.replaceChildren(...days.map(date=>{
       const entries = entriesByDate[date] || [];
       const weekday = new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
-      const body = entries.length ? entries.map(entry=>{
-        const person = BK_ACCESS.STAFF.find(item=>item.id === entry.staffId);
-        const shift = entry.shiftId === 'off' ? { label:'Off day' } : BK_ACCESS.SHIFTS[entry.shiftId];
-        const absence = window.BK_ABSENCES && BK_ABSENCES.staffAbsentOn ? BK_ABSENCES.staffAbsentOn(entry.staffId, entry.date) : null;
-        const absenceNote = absence ? ` <span class="absence-badge ${absence.paid ? 'paid' : 'unpaid'}">${escapeHtml(absence.typeLabel)} · ${absence.paid ? 'paid' : 'unpaid'}</span>` : '';
-        return `<div class="planner-entry"><span><b>${escapeHtml(person && person.name || entry.staffId)}</b> · ${escapeHtml(shift && shift.label || entry.shiftId)} <small>${Number(entry.workDayCredit || 0).toFixed(1)} day</small>${absenceNote}${entry.note ? `<small> · ${escapeHtml(entry.note)}</small>` : ''}</span>${canManage ? `<button class="x" type="button" data-planner-remove="${escapeHtml(entry.id)}">Remove</button>` : ''}</div>`;
-      }).join('') : '<div class="planner-empty">No shifts planned.</div>';
-      return `<details class="planner-day"><summary>${escapeHtml(weekday)}</summary>${body}</details>`;
-    }).join('');
+      const details = document.createElement('details');
+      details.className = 'planner-day';
+      details.appendChild(textEl('summary', weekday));
+      if(entries.length){
+        entries.forEach(entry=>{
+          const person = BK_ACCESS.STAFF.find(item=>item.id === entry.staffId);
+          const shift = entry.shiftId === 'off' ? { label:'Off day' } : BK_ACCESS.SHIFTS[entry.shiftId];
+          const absence = window.BK_ABSENCES && BK_ABSENCES.staffAbsentOn ? BK_ABSENCES.staffAbsentOn(entry.staffId, entry.date) : null;
+          const row = document.createElement('div');
+          row.className = 'planner-entry';
+          const copy = document.createElement('span');
+          copy.append(textEl('b', person && person.name || entry.staffId), document.createTextNode(` · ${shift && shift.label || entry.shiftId} `), textEl('small', `${Number(entry.workDayCredit || 0).toFixed(1)} day`));
+          if(absence){
+            copy.appendChild(document.createTextNode(' '));
+            const badge = textEl('span', `${absence.typeLabel} · ${absence.paid ? 'paid' : 'unpaid'}`, `absence-badge ${absence.paid ? 'paid' : 'unpaid'}`);
+            copy.appendChild(badge);
+          }
+          if(entry.note) copy.append(textEl('small', ` · ${entry.note}`));
+          row.appendChild(copy);
+          if(canManage){
+            const remove = textEl('button', 'Remove', 'x');
+            remove.type = 'button';
+            remove.dataset.plannerRemove = entry.id;
+            row.appendChild(remove);
+          }
+          details.appendChild(row);
+        });
+      }else{
+        details.appendChild(emptyState('planner-empty', 'No shifts planned.'));
+      }
+      return details;
+    }));
     document.querySelectorAll('[data-planner-remove]').forEach(button=>{
       button.onclick = ()=>{
         const result = BK_SHIFT_PLANNER.removeEntry(month, button.dataset.plannerRemove, currentActor());
@@ -169,8 +209,8 @@
     renderPlanner();
   }
   function fillAbsenceOptions(){
-    document.getElementById('absenceStaff').innerHTML = BK_ACCESS.STAFF.filter(person=>person.role !== 'owner').map(person=>`<option value="${escapeHtml(person.id)}">${escapeHtml(person.name)} · ${escapeHtml(person.roleLabel)}</option>`).join('');
-    document.getElementById('absenceType').innerHTML = Object.entries(BK_ABSENCES.TYPES).map(([id,label])=>`<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`).join('');
+    document.getElementById('absenceStaff').replaceChildren(...BK_ACCESS.STAFF.filter(person=>person.role !== 'owner').map(person=>optionEl(person.id, `${person.name} · ${person.roleLabel}`)));
+    document.getElementById('absenceType').replaceChildren(...Object.entries(BK_ABSENCES.TYPES).map(([id,label])=>optionEl(id, label)));
   }
   function renderAbsences(){
     if(!(window.BK_ABSENCES && window.BK_ACCESS)) return;
@@ -179,10 +219,27 @@
     const canManage = BK_ABSENCES.canManageAbsences(actor);
     document.getElementById('absenceForm').classList.toggle('hidden', !canManage);
     const absences = BK_ABSENCES.absencesForMonth(month);
-    document.getElementById('absenceList').innerHTML = absences.length ? absences.map(absence=>{
+    const absenceList = document.getElementById('absenceList');
+    if(!absences.length){
+      absenceList.replaceChildren(emptyState('absence-empty', 'No absences in this month.'));
+    }else{
+      absenceList.replaceChildren(...absences.map(absence=>{
       const person = BK_ACCESS.STAFF.find(item=>item.id === absence.staffId);
-      return `<div class="absence-entry"><span><b>${escapeHtml(person && person.name || absence.staffId)}</b> · ${escapeHtml(absence.typeLabel)} <small>${escapeHtml(absence.fromDate)}–${escapeHtml(absence.toDate)}</small> <span class="absence-badge ${absence.paid ? 'paid' : 'unpaid'}">${absence.paid ? 'Paid' : 'Unpaid'}</span>${absence.note ? `<small> · ${escapeHtml(absence.note)}</small>` : ''}</span>${canManage ? `<button class="x" type="button" data-absence-cancel="${escapeHtml(absence.id)}">Cancel</button>` : ''}</div>`;
-    }).join('') : '<div class="absence-empty">No absences in this month.</div>';
+      const row = document.createElement('div');
+      row.className = 'absence-entry';
+      const copy = document.createElement('span');
+      copy.append(textEl('b', person && person.name || absence.staffId), document.createTextNode(` · ${absence.typeLabel} `), textEl('small', `${absence.fromDate}–${absence.toDate}`), document.createTextNode(' '), textEl('span', absence.paid ? 'Paid' : 'Unpaid', `absence-badge ${absence.paid ? 'paid' : 'unpaid'}`));
+      if(absence.note) copy.append(textEl('small', ` · ${absence.note}`));
+      row.appendChild(copy);
+      if(canManage){
+        const cancel = textEl('button', 'Cancel', 'x');
+        cancel.type = 'button';
+        cancel.dataset.absenceCancel = absence.id;
+        row.appendChild(cancel);
+      }
+      return row;
+    }));
+    }
     document.querySelectorAll('[data-absence-cancel]').forEach(button=>{
       button.onclick = ()=>{
         const result = BK_ABSENCES.cancelAbsence(button.dataset.absenceCancel, currentActor());
@@ -212,7 +269,7 @@
     renderAbsences();
   }
   function fillAdvanceOptions(){
-    document.getElementById('advanceStaff').innerHTML = BK_ACCESS.STAFF.filter(person=>BK_PAYROLL.profileFor(person.id)).map(person=>`<option value="${escapeHtml(person.id)}">${escapeHtml(person.name)} · ${escapeHtml(person.roleLabel)}</option>`).join('');
+    document.getElementById('advanceStaff').replaceChildren(...BK_ACCESS.STAFF.filter(person=>BK_PAYROLL.profileFor(person.id)).map(person=>optionEl(person.id, `${person.name} · ${person.roleLabel}`)));
   }
   function formatGhs(value){ return `GHS ${Number(value || 0).toFixed(2)}`; }
   function renderPayroll(){
@@ -222,11 +279,32 @@
     const canManage = BK_PAYROLL.canManagePayroll(actor);
     document.getElementById('advanceForm').classList.toggle('hidden', !canManage);
     const rows = BK_PAYROLL.payrollRows(month, actor);
-    document.getElementById('payrollList').innerHTML = rows.length ? rows.map(row=>{
+    const payrollList = document.getElementById('payrollList');
+    if(!rows.length){
+      payrollList.replaceChildren(emptyState('absence-empty', 'No payroll rows visible for this account.'));
+      return;
+    }
+    payrollList.replaceChildren(...rows.map(row=>{
       const person = BK_ACCESS.STAFF.find(item=>item.id === row.staffId);
-      const advanceList = row.advances.length ? row.advances.map(advance=>`<small>${escapeHtml(advance.date)} · ${formatGhs(advance.amount)} · ${escapeHtml(advance.method || 'Advance')}${advance.staffConfirmed ? ' · confirmed' : ''}</small>`).join('<br>') : '<small>No salary advances.</small>';
-      return `<div class="payroll-entry"><span><b>${escapeHtml(person && person.name || row.staffId)}</b><br><small>Fixed salary ${formatGhs(row.monthlySalary)} · planned days ${row.plannedWorkDays} · day value ${formatGhs(row.dayValue)}</small><br><small>Unpaid absences ${row.unpaidAbsenceDays} (${formatGhs(row.absenceDeduction)}) · double-shift extras ${row.extraWorkDayCredits} (${formatGhs(row.extraPay)})</small><br>${advanceList}</span><span><small>Gross ${formatGhs(row.grossPay)}</small><br><small>Advances -${formatGhs(row.advancesTotal)}</small><br><strong>To pay ${formatGhs(row.netPay)}</strong></span></div>`;
-    }).join('') : '<div class="absence-empty">No payroll rows visible for this account.</div>';
+      const entry = document.createElement('div');
+      entry.className = 'payroll-entry';
+      const left = document.createElement('span');
+      left.append(textEl('b', person && person.name || row.staffId), document.createElement('br'));
+      left.append(textEl('small', `Fixed salary ${formatGhs(row.monthlySalary)} · planned days ${row.plannedWorkDays} · day value ${formatGhs(row.dayValue)}`), document.createElement('br'));
+      left.append(textEl('small', `Unpaid absences ${row.unpaidAbsenceDays} (${formatGhs(row.absenceDeduction)}) · double-shift extras ${row.extraWorkDayCredits} (${formatGhs(row.extraPay)})`), document.createElement('br'));
+      if(row.advances.length){
+        row.advances.forEach((advance,index)=>{
+          if(index) left.appendChild(document.createElement('br'));
+          left.appendChild(textEl('small', `${advance.date} · ${formatGhs(advance.amount)} · ${advance.method || 'Advance'}${advance.staffConfirmed ? ' · confirmed' : ''}`));
+        });
+      }else{
+        left.appendChild(textEl('small', 'No salary advances.'));
+      }
+      const right = document.createElement('span');
+      right.append(textEl('small', `Gross ${formatGhs(row.grossPay)}`), document.createElement('br'), textEl('small', `Advances -${formatGhs(row.advancesTotal)}`), document.createElement('br'), textEl('strong', `To pay ${formatGhs(row.netPay)}`));
+      entry.append(left, right);
+      return entry;
+    }));
   }
   function initPayroll(){
     if(initPayroll.done || !(window.BK_PAYROLL && window.BK_ACCESS)) return;

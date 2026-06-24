@@ -401,30 +401,80 @@
     </article>`;
   }
 
-  function recipeRowHtml(p, ingredientOptions){
-    const recipe = RECIPES[p.id] || {};
-    const ingredients = Object.entries(recipe).map(([id, qty])=>{
+  function textEl(tag, text, className){
+    const el = document.createElement(tag);
+    if(className) el.className = className;
+    el.textContent = text == null ? '' : String(text);
+    return el;
+  }
+  function ingredientOption(id, def){
+    const option = document.createElement('option');
+    option.value = id;
+    option.textContent = `${def.name || id} (${id})`;
+    return option;
+  }
+  function renderRecipeChips(list, recipe){
+    const entries = Object.entries(recipe || {});
+    if(!entries.length){
+      list.replaceChildren(textEl('span', 'No ingredients configured', 'admin-empty-inline'));
+      return;
+    }
+    list.replaceChildren(...entries.map(([id, qty])=>{
       const def = INGREDIENTS[id] || {};
-      return `<span class="recipe-ingredient-chip"><b>${def.name || id}</b><span>${qty} ${def.unit || ''}</span><button type="button" data-recipe-remove="${id}" aria-label="Remove ${def.name || id}">×</button></span>`;
-    }).join('');
-    return `<article class="admin-recipe-card" data-recipe-row>
-      <header><div><h4>${p.name}</h4><small>${p.id}</small></div><span class="admin-count-badge">${Object.keys(recipe).length} ingredients</span></header>
-      <div class="recipe-ingredient-list" data-recipe-list>${ingredients || '<span class="admin-empty-inline">No ingredients configured</span>'}</div>
-      <div class="recipe-add-row">
-            <select data-recipe-ing>${ingredientOptions}</select>
-            <input data-recipe-qty type="number" min="0.25" step="0.25" value="1">
-            <button class="x" type="button" data-recipe-add>Add ingredient</button>
-      </div>
-      <details class="admin-advanced"><summary>Advanced raw recipe</summary><input data-product-id="${p.id}" data-recipe-input placeholder="ingredient_id:qty, ingredient_id2:qty" value="${recipeToText(recipe)}"></details>
-    </article>`;
+      const chip = document.createElement('span');
+      chip.className = 'recipe-ingredient-chip';
+      const remove = textEl('button', '×');
+      remove.type = 'button';
+      remove.dataset.recipeRemove = id;
+      remove.setAttribute('aria-label', `Remove ${def.name || id}`);
+      chip.append(textEl('b', def.name || id), textEl('span', `${qty} ${def.unit || ''}`), remove);
+      return chip;
+    }));
+  }
+  function recipeRowNode(p){
+    const recipe = RECIPES[p.id] || {};
+    const article = document.createElement('article');
+    article.className = 'admin-recipe-card';
+    article.dataset.recipeRow = '';
+    const header = document.createElement('header');
+    const copy = document.createElement('div');
+    copy.append(textEl('h4', p.name), textEl('small', p.id));
+    header.append(copy, textEl('span', `${Object.keys(recipe).length} ingredients`, 'admin-count-badge'));
+    const list = document.createElement('div');
+    list.className = 'recipe-ingredient-list';
+    list.dataset.recipeList = '';
+    renderRecipeChips(list, recipe);
+    const addRow = document.createElement('div');
+    addRow.className = 'recipe-add-row';
+    const select = document.createElement('select');
+    select.dataset.recipeIng = '';
+    select.replaceChildren(...Object.entries(INGREDIENTS).map(([id, def])=>ingredientOption(id, def)));
+    const qty = document.createElement('input');
+    qty.dataset.recipeQty = '';
+    qty.type = 'number';
+    qty.min = '0.25';
+    qty.step = '0.25';
+    qty.value = '1';
+    const add = textEl('button', 'Add ingredient', 'x');
+    add.type = 'button';
+    add.dataset.recipeAdd = '';
+    addRow.append(select, qty, add);
+    const advanced = document.createElement('details');
+    advanced.className = 'admin-advanced';
+    const input = document.createElement('input');
+    input.dataset.productId = p.id;
+    input.dataset.recipeInput = '';
+    input.placeholder = 'ingredient_id:qty, ingredient_id2:qty';
+    input.value = recipeToText(recipe);
+    advanced.append(textEl('summary', 'Advanced raw recipe'), input);
+    article.append(header, list, addRow, advanced);
+    return article;
   }
   function bindRecipeBuilder(body){
     const refreshCard = row=>{
       const input = row.querySelector('[data-recipe-input]');
       const product = {id:input.dataset.productId, name:row.querySelector('h4').textContent};
-      const replacement = document.createElement('div');
-      replacement.innerHTML = recipeRowHtml(product, row.querySelector('[data-recipe-ing]').innerHTML);
-      row.replaceWith(replacement.firstElementChild);
+      row.replaceWith(recipeRowNode(product));
       bindRecipeBuilder(body);
     };
     body.querySelectorAll('[data-recipe-row]').forEach(row=>{
@@ -673,12 +723,23 @@
     }
     if(showRecipes){
       const recipeWrap = document.getElementById('stockRecipes');
-      const ingredientOptions = Object.entries(INGREDIENTS).map(([id, def])=> `<option value="${id}">${def.name || id} (${id})</option>`).join('');
       const categoryLabels = {burger:'Burgers',wings:'Wings',fries:'Fries',salad:'Salads',drink:'Drinks',extra:'Add-ons',sauce:'Sauces'};
-      recipeWrap.innerHTML = Object.entries(categoryLabels).map(([cat,label])=>{
+      const sections = Object.entries(categoryLabels).map(([cat,label])=>{
         const rows = recipeProducts.filter(product=>product.cat === cat).sort((a,b)=>Number(a.categoryOrder||0)-Number(b.categoryOrder||0));
-        return rows.length ? `<section class="admin-category-group"><header><div><h4>${label}</h4><small>${rows.length} recipes</small></div></header><div class="admin-recipe-grid">${rows.map(p=>recipeRowHtml(p, ingredientOptions)).join('')}</div></section>` : '';
-      }).join('');
+        if(!rows.length) return null;
+        const section = document.createElement('section');
+        section.className = 'admin-category-group';
+        const header = document.createElement('header');
+        const copy = document.createElement('div');
+        copy.append(textEl('h4', label), textEl('small', `${rows.length} recipes`));
+        header.appendChild(copy);
+        const grid = document.createElement('div');
+        grid.className = 'admin-recipe-grid';
+        rows.forEach(product=>grid.appendChild(recipeRowNode(product)));
+        section.append(header, grid);
+        return section;
+      }).filter(Boolean);
+      recipeWrap.replaceChildren(...sections);
       bindRecipeBuilder(recipeWrap);
     }
     const modal = editorModalId ? document.getElementById(editorModalId) : null;

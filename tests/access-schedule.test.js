@@ -95,3 +95,11 @@ test('operational electricity flows use BurgerKiss dialogs instead of browser pr
   assert.match(styleSource, /\.access-operational-dialog/);
   assert.equal(typeof access.accessOperationalDialog, 'function');
 });
+
+test('access gate, staff header and operational dialogs render without innerHTML', () => {
+  assert.doesNotMatch(accessSource, /\.innerHTML\s*=/);
+  assert.match(accessSource, /function fieldLabel\(field\)/);
+  assert.match(accessSource, /host\.replaceChildren\(details, sales, electricityNode\)/);
+  assert.match(accessSource, /form\.append\(picker, modeLabel, electricityStart, electricityNote, pin, error, submit\)/);
+  assert.match(accessSource, /host\.replaceChildren\(accessCard\('', 'Loading staff access…'/);
+});
