@@ -22,3 +22,15 @@ test('pages load dialog helpers before ui.js', () => {
   assert.ok(order.indexOf('ui_dialogs.js') < order.indexOf('ui.js'), 'order page should load dialogs before ui.js');
   assert.ok(admin.indexOf('ui_dialogs.js') < admin.indexOf('ui.js'), 'admin page should load dialogs before ui.js');
 });
+
+
+test('owner approval and prompt dialogs build bodies without innerHTML', () => {
+  const discountDialog = ui.slice(ui.indexOf('function requestDiscountApproval'), ui.indexOf('function promptDialog'));
+  const promptDialog = ui.slice(ui.indexOf('function promptDialog'), ui.indexOf('function productsPerPage'));
+  assert.doesNotMatch(discountDialog, /appDialogBody'\)\.innerHTML/);
+  assert.doesNotMatch(promptDialog, /appDialogBody'\)\.innerHTML/);
+  assert.match(discountDialog, /copy\.textContent = `The employee remains signed in/);
+  assert.match(discountDialog, /pinInput\.type = 'password'/);
+  assert.match(promptDialog, /input\.value = initial \|\| ''/);
+  assert.match(promptDialog, /body\.append\(input, actions\)/);
+});

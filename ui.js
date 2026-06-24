@@ -123,11 +123,40 @@
     const requestedRate = Math.max(0, Number(rate) || 0);
     const host = ensureDialogHost();
     document.getElementById('appDialogTitle').textContent = requestedRate ? `Owner approval: ${Math.round(requestedRate * 100)}% discount` : 'Owner approval: remove discount';
-    document.getElementById('appDialogBody').innerHTML = `
-      <p>The employee remains signed in. Mr Asamoah must enter the owner PIN to approve this change for Order #${escapeHtml(shortOrderNumber(slot.orderNo))}.</p>
-      <label class="dialog-label">Owner PIN<input id="discountOwnerPin" class="dialog-field" type="password" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off"></label>
-      <div id="discountApprovalError" class="field-error" aria-live="polite"></div>
-      <div class="dialog-actions"><button class="x" id="dlgCancel" type="button">Cancel</button><button class="x modifier-primary" id="dlgConfirm" type="button">Approve</button></div>`;
+    const body = document.getElementById('appDialogBody');
+    body.textContent = '';
+    const copy = document.createElement('p');
+    copy.textContent = `The employee remains signed in. Mr Asamoah must enter the owner PIN to approve this change for Order #${shortOrderNumber(slot.orderNo)}.`;
+    const pinLabel = document.createElement('label');
+    pinLabel.className = 'dialog-label';
+    pinLabel.append('Owner PIN');
+    const pinInput = document.createElement('input');
+    pinInput.id = 'discountOwnerPin';
+    pinInput.className = 'dialog-field';
+    pinInput.type = 'password';
+    pinInput.inputMode = 'numeric';
+    pinInput.pattern = '[0-9]{4,6}';
+    pinInput.maxLength = 6;
+    pinInput.autocomplete = 'off';
+    pinLabel.appendChild(pinInput);
+    const error = document.createElement('div');
+    error.id = 'discountApprovalError';
+    error.className = 'field-error';
+    error.setAttribute('aria-live', 'polite');
+    const actions = document.createElement('div');
+    actions.className = 'dialog-actions';
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'x';
+    cancelButton.id = 'dlgCancel';
+    cancelButton.type = 'button';
+    cancelButton.textContent = 'Cancel';
+    const confirmButton = document.createElement('button');
+    confirmButton.className = 'x modifier-primary';
+    confirmButton.id = 'dlgConfirm';
+    confirmButton.type = 'button';
+    confirmButton.textContent = 'Approve';
+    actions.append(cancelButton, confirmButton);
+    body.append(copy, pinLabel, error, actions);
     host.classList.add('open');
     const pin = document.getElementById('discountOwnerPin');
     pin.focus();
@@ -156,13 +185,28 @@
     return new Promise(resolve=>{
       const host = ensureDialogHost();
       document.getElementById('appDialogTitle').textContent = title;
-      document.getElementById('appDialogBody').innerHTML = `
-        <input id="dlgInput" value="${(initial||'').replace(/"/g,'&quot;')}" style="width:100%;margin-bottom:10px;background:#101319;border:1px solid #28303a;color:#e6ebf0;border-radius:10px;padding:10px" />
-        <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="x" id="dlgCancel">Cancel</button>
-          <button class="x" id="dlgSave">Save</button>
-        </div>
-      `;
+      const body = document.getElementById('appDialogBody');
+      body.textContent = '';
+      const input = document.createElement('input');
+      input.id = 'dlgInput';
+      input.value = initial || '';
+      input.className = 'dialog-field';
+      input.style.width = '100%';
+      input.style.marginBottom = '10px';
+      const actions = document.createElement('div');
+      actions.className = 'dialog-actions';
+      const cancel = document.createElement('button');
+      cancel.className = 'x';
+      cancel.id = 'dlgCancel';
+      cancel.type = 'button';
+      cancel.textContent = 'Cancel';
+      const save = document.createElement('button');
+      save.className = 'x';
+      save.id = 'dlgSave';
+      save.type = 'button';
+      save.textContent = 'Save';
+      actions.append(cancel, save);
+      body.append(input, actions);
       host.classList.add('open');
       const inp = document.getElementById('dlgInput');
       inp.focus();
