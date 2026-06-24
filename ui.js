@@ -98,52 +98,16 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   }
 
-  function ensureDialogHost(){
-    let host = document.getElementById('appDialog');
-    if(host) return host;
-    host = document.createElement('div');
-    host.id = 'appDialog';
-    host.className = 'modal';
-    host.innerHTML = '<div class="sheet"><header><b id="appDialogTitle"></b></header><div class="body" id="appDialogBody"></div></div>';
-    document.body.appendChild(host);
-    return host;
-  }
-
+  const DIALOGS = window.BK_DIALOGS || {};
+  function ensureDialogHost(){ return DIALOGS.ensureHost ? DIALOGS.ensureHost() : null; }
   function closeDialog(){
+    if(DIALOGS.close){ DIALOGS.close(); return; }
     const host = document.getElementById('appDialog');
     if(host) host.classList.remove('open', 'modifier-dialog');
   }
-
-  function infoDialog(message){
-    const host = ensureDialogHost();
-    document.getElementById('appDialogTitle').textContent = 'Info';
-    document.getElementById('appDialogBody').innerHTML = `
-      <div style="margin-bottom:10px">${message}</div>
-      <div style="display:flex;justify-content:flex-end"><button class="x" id="dlgOk">OK</button></div>
-    `;
-    host.classList.add('open');
-    document.getElementById('dlgOk').onclick = closeDialog;
-  }
-
-  function confirmDialog(title, message, opts){
-    return new Promise(resolve=>{
-      const options = opts || {};
-      const cancelLabel = options.cancelLabel || 'Cancel';
-      const confirmLabel = options.confirmLabel || 'Confirm';
-      const host = ensureDialogHost();
-      document.getElementById('appDialogTitle').textContent = title;
-      document.getElementById('appDialogBody').innerHTML = `
-        <div style="margin-bottom:10px">${message}</div>
-        <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="x" id="dlgCancel">${cancelLabel}</button>
-          <button class="x" id="dlgConfirm">${confirmLabel}</button>
-        </div>
-      `;
-      host.classList.add('open');
-      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(false); };
-      document.getElementById('dlgConfirm').onclick = ()=>{ closeDialog(); resolve(true); };
-    });
-  }
+  function infoDialog(message){ if(DIALOGS.info) DIALOGS.info(message); }
+  function confirmDialog(title, message, opts){ return DIALOGS.confirm ? DIALOGS.confirm(title, message, opts) : Promise.resolve(false); }
+  function handoverChecklistDialog(title, message){ return DIALOGS.handoverChecklist ? DIALOGS.handoverChecklist(title, message) : Promise.resolve(false); }
 
   function requestDiscountApproval(rate){
     const st = BK_STATE.getState();
@@ -159,11 +123,40 @@
     const requestedRate = Math.max(0, Number(rate) || 0);
     const host = ensureDialogHost();
     document.getElementById('appDialogTitle').textContent = requestedRate ? `Owner approval: ${Math.round(requestedRate * 100)}% discount` : 'Owner approval: remove discount';
-    document.getElementById('appDialogBody').innerHTML = `
-      <p>The employee remains signed in. Mr Asamoah must enter the owner PIN to approve this change for Order #${escapeHtml(shortOrderNumber(slot.orderNo))}.</p>
-      <label class="dialog-label">Owner PIN<input id="discountOwnerPin" class="dialog-field" type="password" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off"></label>
-      <div id="discountApprovalError" class="field-error" aria-live="polite"></div>
-      <div class="dialog-actions"><button class="x" id="dlgCancel" type="button">Cancel</button><button class="x modifier-primary" id="dlgConfirm" type="button">Approve</button></div>`;
+    const body = document.getElementById('appDialogBody');
+    body.textContent = '';
+    const copy = document.createElement('p');
+    copy.textContent = `The employee remains signed in. Mr Asamoah must enter the owner PIN to approve this change for Order #${shortOrderNumber(slot.orderNo)}.`;
+    const pinLabel = document.createElement('label');
+    pinLabel.className = 'dialog-label';
+    pinLabel.append('Owner PIN');
+    const pinInput = document.createElement('input');
+    pinInput.id = 'discountOwnerPin';
+    pinInput.className = 'dialog-field';
+    pinInput.type = 'password';
+    pinInput.inputMode = 'numeric';
+    pinInput.pattern = '[0-9]{4,6}';
+    pinInput.maxLength = 6;
+    pinInput.autocomplete = 'off';
+    pinLabel.appendChild(pinInput);
+    const error = document.createElement('div');
+    error.id = 'discountApprovalError';
+    error.className = 'field-error';
+    error.setAttribute('aria-live', 'polite');
+    const actions = document.createElement('div');
+    actions.className = 'dialog-actions';
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'x';
+    cancelButton.id = 'dlgCancel';
+    cancelButton.type = 'button';
+    cancelButton.textContent = 'Cancel';
+    const confirmButton = document.createElement('button');
+    confirmButton.className = 'x modifier-primary';
+    confirmButton.id = 'dlgConfirm';
+    confirmButton.type = 'button';
+    confirmButton.textContent = 'Approve';
+    actions.append(cancelButton, confirmButton);
+    body.append(copy, pinLabel, error, actions);
     host.classList.add('open');
     const pin = document.getElementById('discountOwnerPin');
     pin.focus();
@@ -188,53 +181,32 @@
     };
   }
 
-  function handoverChecklistDialog(title, message){
-    return new Promise(resolve=>{
-      const host = ensureDialogHost();
-      document.getElementById('appDialogTitle').textContent = title;
-      document.getElementById('appDialogBody').innerHTML = `
-        <div class="handover-checklist-dialog">
-          ${message}
-          <div class="handover-check-progress" id="handoverCheckProgress" role="status" aria-live="polite"></div>
-          <div class="handover-check-actions">
-            <button class="x" id="dlgCancel" type="button">Cancel</button>
-            <button class="x modifier-primary" id="dlgConfirm" type="button" disabled>Confirm handover</button>
-          </div>
-        </div>
-      `;
-      host.classList.add('open');
-      const checks = Array.from(host.querySelectorAll('[data-handover-check]'));
-      const confirm = document.getElementById('dlgConfirm');
-      const progress = document.getElementById('handoverCheckProgress');
-      const update = ()=>{
-        const complete = checks.filter(input=>input.checked).length;
-        const total = checks.length;
-        progress.textContent = `${complete} of ${total} required checks confirmed`;
-        progress.classList.toggle('complete', total > 0 && complete === total);
-        confirm.disabled = total === 0 || complete !== total;
-      };
-      checks.forEach(input=>input.addEventListener('change', update));
-      update();
-      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(false); };
-      confirm.onclick = ()=>{
-        if(confirm.disabled) return;
-        closeDialog();
-        resolve(true);
-      };
-    });
-  }
-
   function promptDialog(title, initial){
     return new Promise(resolve=>{
       const host = ensureDialogHost();
       document.getElementById('appDialogTitle').textContent = title;
-      document.getElementById('appDialogBody').innerHTML = `
-        <input id="dlgInput" value="${(initial||'').replace(/"/g,'&quot;')}" style="width:100%;margin-bottom:10px;background:#101319;border:1px solid #28303a;color:#e6ebf0;border-radius:10px;padding:10px" />
-        <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="x" id="dlgCancel">Cancel</button>
-          <button class="x" id="dlgSave">Save</button>
-        </div>
-      `;
+      const body = document.getElementById('appDialogBody');
+      body.textContent = '';
+      const input = document.createElement('input');
+      input.id = 'dlgInput';
+      input.value = initial || '';
+      input.className = 'dialog-field';
+      input.style.width = '100%';
+      input.style.marginBottom = '10px';
+      const actions = document.createElement('div');
+      actions.className = 'dialog-actions';
+      const cancel = document.createElement('button');
+      cancel.className = 'x';
+      cancel.id = 'dlgCancel';
+      cancel.type = 'button';
+      cancel.textContent = 'Cancel';
+      const save = document.createElement('button');
+      save.className = 'x';
+      save.id = 'dlgSave';
+      save.type = 'button';
+      save.textContent = 'Save';
+      actions.append(cancel, save);
+      body.append(input, actions);
       host.classList.add('open');
       const inp = document.getElementById('dlgInput');
       inp.focus();
@@ -291,7 +263,11 @@
     if(!items.length){
       const empty = document.createElement('div');
       empty.className = 'empty-state product-empty';
-      empty.innerHTML = `<strong>No products found</strong><span>Try another category or clear the search.</span>`;
+      const emptyTitle = document.createElement('strong');
+      emptyTitle.textContent = 'No products found';
+      const emptyHint = document.createElement('span');
+      emptyHint.textContent = 'Try another category or clear the search.';
+      empty.append(emptyTitle, emptyHint);
       empty.style.gridColumn = '1 / -1';
       grid.appendChild(empty);
       return;
@@ -309,13 +285,29 @@
         b.style.backgroundImage = '';
       }
       const catLabel = CATEGORY_LABELS[it.cat] || it.cat || 'Item';
-      b.innerHTML = `<span class="cat-badge">${catLabel}</span>
-                     <div class="name">${it.name}</div>
-                     ${it.subtitle ? `<small class="item-subtitle">${it.subtitle}</small>` : ''}
-                     <div class="item-meta">
-                       <div class="price">${itemDisplayPrice(it)} GHS</div>
-                       <span class="badge">+1</span>
-                     </div>`;
+      const catBadge = document.createElement('span');
+      catBadge.className = 'cat-badge';
+      catBadge.textContent = catLabel;
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = it.name;
+      const meta = document.createElement('div');
+      meta.className = 'item-meta';
+      const price = document.createElement('div');
+      price.className = 'price';
+      price.textContent = `${itemDisplayPrice(it)} GHS`;
+      const addBadge = document.createElement('span');
+      addBadge.className = 'badge';
+      addBadge.textContent = '+1';
+      meta.append(price, addBadge);
+      b.append(catBadge, name);
+      if(it.subtitle){
+        const subtitle = document.createElement('small');
+        subtitle.className = 'item-subtitle';
+        subtitle.textContent = it.subtitle;
+        b.appendChild(subtitle);
+      }
+      b.appendChild(meta);
       b.onclick = ()=> addProductWithFlow(it);
       grid.appendChild(b);
     });
@@ -878,8 +870,24 @@
       if(i === active) el.setAttribute('aria-current', 'true');
       el.title = `${status.label} · ${status.detail}`;
       const orderLabel = isOnlineOrder(s) ? platformLabel(s.orderSource).toUpperCase() : `Order #${shortOrderNumber(s.orderNo)}`;
-      const orderDetail = isOnlineOrder(s) ? escapeHtml(s.externalOrderNo || shortOrderNumber(s.orderNo)) : 'Walk-in';
-      el.innerHTML = `<span class="status-dot" aria-hidden="true"></span><span class="slot-chip-order"><b>${orderLabel}</b><small>${orderDetail}</small></span><span class="slot-chip-status">${status.label}</span><span class="slot-chip-progress">${status.shortDetail}</span>`;
+      const orderDetail = isOnlineOrder(s) ? (s.externalOrderNo || shortOrderNumber(s.orderNo)) : 'Walk-in';
+      const statusDot = document.createElement('span');
+      statusDot.className = 'status-dot';
+      statusDot.setAttribute('aria-hidden', 'true');
+      const orderWrap = document.createElement('span');
+      orderWrap.className = 'slot-chip-order';
+      const orderTitle = document.createElement('b');
+      orderTitle.textContent = orderLabel;
+      const orderSmall = document.createElement('small');
+      orderSmall.textContent = orderDetail;
+      orderWrap.append(orderTitle, orderSmall);
+      const statusLabel = document.createElement('span');
+      statusLabel.className = 'slot-chip-status';
+      statusLabel.textContent = status.label;
+      const statusProgress = document.createElement('span');
+      statusProgress.className = 'slot-chip-progress';
+      statusProgress.textContent = status.shortDetail;
+      el.append(statusDot, orderWrap, statusLabel, statusProgress);
       el.onclick = ()=> focusSlot(i, currentWorkflowTab());
       bar.appendChild(el);
     });
@@ -1478,9 +1486,11 @@
 
   function workflowNextState(stage, slot){
     const hasItems = !!(slot && Array.isArray(slot.items) && slot.items.length);
-    if(stage === 'order') return hasItems
-      ? {state:'ready', title:'Order ready for kitchen', detail:'Products and packaging can now be sent to preparation.', label:'Continue to Kitchen', target:'make', disabled:false}
-      : {state:'blocked', title:'Order not ready', detail:'Add at least one product to continue.', label:'Continue to Kitchen', target:'make', disabled:true};
+    if(stage === 'order'){
+      if(!hasItems) return {state:'blocked', title:'Add products first', detail:'Choose at least one product from the product grid before sending this order to Kitchen.', label:'Continue to Kitchen', target:'make', disabled:true};
+      if(slot && isOnlineOrder(slot)) return {state:'ready', title:`${platformLabel(slot.orderSource)} order ready`, detail:'Reference is saved. Check products, then send the order to Kitchen.', label:'Continue to Kitchen', target:'make', disabled:false};
+      return {state:'ready', title:'Order ready for kitchen', detail:'Check the cart, then send the order to preparation.', label:'Continue to Kitchen', target:'make', disabled:false};
+    }
     if(stage === 'make'){
       const done = hasItems && slot.items.every(item=>!!item.done);
       return done
@@ -1498,8 +1508,20 @@
     if(!host) return;
     const opts = options || {};
     host.className = `workflow-next ${opts.state || 'blocked'}`;
-    host.innerHTML = `<div class="workflow-next-copy"><strong>${escapeHtml(opts.title || '')}</strong><small>${escapeHtml(opts.detail || '')}</small></div><button type="button" class="workflow-next-button" ${opts.disabled ? 'disabled' : ''}>${escapeHtml(opts.label || 'Continue')}</button>`;
-    const button = host.querySelector('.workflow-next-button');
+    host.textContent = '';
+    const copy = document.createElement('div');
+    copy.className = 'workflow-next-copy';
+    const title = document.createElement('strong');
+    title.textContent = opts.title || '';
+    const detail = document.createElement('small');
+    detail.textContent = opts.detail || '';
+    copy.append(title, detail);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'workflow-next-button';
+    button.disabled = !!opts.disabled;
+    button.textContent = opts.label || 'Continue';
+    host.append(copy, button);
     button.onclick = ()=>{ if(!button.disabled && typeof opts.onClick === 'function') opts.onClick(); };
   }
 
@@ -1562,20 +1584,50 @@
       const progress = kitchenProgress(s);
       const makeNext = workflowNextState('make', s);
       const card = document.createElement('div'); card.className='slot-card kitchen-order-card';
-      card.innerHTML = `
-        <div class="slot-head kitchen-order-head">
-          <div class="kitchen-order-identity">
-            <strong>Order #${escapeHtml(shortOrderNumber(s.orderNo))}</strong>
-            <span>${escapeHtml(orderChannelText(s))} · waiting ${formatAge(s.createdAt)}</span>
-          </div>
-          <span class="kitchen-packaging">Packaging: ${escapeHtml(packagingLabel(s))}</span>
-        </div>
-        <div class="kitchen-progress ${progress.state}">
-          <div class="kitchen-progress-copy"><strong>${progress.label}</strong><span>${progress.complete} / ${progress.total} prepared</span></div>
-          <div class="kitchen-progress-track" role="progressbar" aria-label="Kitchen progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="width:${progress.percent}%"></span></div>
-          ${progress.state === 'complete' && !s.issued ? `<button class="workflow-next-button kitchen-next-action" type="button">${makeNext.label}</button>` : ''}
-        </div>
-        <div class="todo grouped-todo" id="todo-${i}"></div>`;
+      const head = document.createElement('div');
+      head.className = 'slot-head kitchen-order-head';
+      const identity = document.createElement('div');
+      identity.className = 'kitchen-order-identity';
+      const orderTitle = document.createElement('strong');
+      orderTitle.textContent = `Order #${shortOrderNumber(s.orderNo)}`;
+      const orderMeta = document.createElement('span');
+      orderMeta.textContent = `${orderChannelText(s)} · waiting ${formatAge(s.createdAt)}`;
+      identity.append(orderTitle, orderMeta);
+      const packaging = document.createElement('span');
+      packaging.className = 'kitchen-packaging';
+      packaging.textContent = `Packaging: ${packagingLabel(s)}`;
+      head.append(identity, packaging);
+      const progressBox = document.createElement('div');
+      progressBox.className = `kitchen-progress ${progress.state}`;
+      const progressCopy = document.createElement('div');
+      progressCopy.className = 'kitchen-progress-copy';
+      const progressTitle = document.createElement('strong');
+      progressTitle.textContent = progress.label;
+      const progressDetail = document.createElement('span');
+      progressDetail.textContent = `${progress.complete} / ${progress.total} prepared`;
+      progressCopy.append(progressTitle, progressDetail);
+      const progressTrack = document.createElement('div');
+      progressTrack.className = 'kitchen-progress-track';
+      progressTrack.setAttribute('role', 'progressbar');
+      progressTrack.setAttribute('aria-label', 'Kitchen progress');
+      progressTrack.setAttribute('aria-valuemin', '0');
+      progressTrack.setAttribute('aria-valuemax', '100');
+      progressTrack.setAttribute('aria-valuenow', String(progress.percent));
+      const progressFill = document.createElement('span');
+      progressFill.style.width = `${progress.percent}%`;
+      progressTrack.appendChild(progressFill);
+      progressBox.append(progressCopy, progressTrack);
+      if(progress.state === 'complete' && !s.issued){
+        const nextButton = document.createElement('button');
+        nextButton.className = 'workflow-next-button kitchen-next-action';
+        nextButton.type = 'button';
+        nextButton.textContent = makeNext.label;
+        progressBox.appendChild(nextButton);
+      }
+      const todo = document.createElement('div');
+      todo.className = 'todo grouped-todo';
+      todo.id = `todo-${i}`;
+      card.append(head, progressBox, todo);
       const nextAction = card.querySelector('.kitchen-next-action');
       if(nextAction) nextAction.onclick = ()=> focusSlot(i, makeNext.target);
       makeSlotCardSelectable(card, i, 'make', i === active);
@@ -1671,32 +1723,90 @@
     const canReversePayment = !isPrepaidPlatform(s) && s.pay !== 'unpaid' && !s.issued;
     const card = document.createElement('div'); card.className='slot-card workflow-order-card';
     card.dataset.paymentSlot = String(active);
-    card.innerHTML = `
-      <div class="workflow-order-identity">
-        <div><strong>Order #${escapeHtml(shortOrderNumber(s.orderNo))}</strong><span>${escapeHtml(orderChannelText(s))}</span></div>
-        <div class="amount-due"><small>Amount due</small><strong>${amountDue} GHS</strong></div>
-      </div>
-      <div class="payment-totals" aria-label="Payment total">
-        <span>Subtotal <b>${c.subtotal} GHS</b></span>
-        <span>Discount <b>-${discount} GHS</b></span>
-      </div>
-      <div class="payment-panel ${payment.state}">
-        <div class="payment-summary"><strong>${payment.label}</strong><small>${payment.detail}</small></div>
-        ${isPrepaidPlatform(s)
-          ? `<div class="online-paid-lock"><b>${platformLabel(s.orderSource)} payment recorded</b><small>No additional payment step is required.</small></div>`
-          : s.pay === 'unpaid'
-            ? `<div class="payment-methods" role="group" aria-label="Payment method for Order ${escapeHtml(shortOrderNumber(s.orderNo))}">
-                <button class="payment-method" ${(paymentDisabled || (isWhatsapp(s) && s.fulfilment === 'delivery')) ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${active},'cash');">Cash</button>
-                <button class="payment-method" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${active},'momo','telecel');">Telecel MoMo</button>
-                <button class="payment-method" ${paymentDisabled ? 'disabled' : ''} onclick="BK_UI.requestSlotPayment(${active},'momo','mtn');">MTN MoMo</button>
-              </div>`
-            : `<button class="x change-payment-action" type="button">Change payment</button>`}
-        <button type="button" class="workflow-next-button payment-next-action" ${payNext.disabled ? 'disabled' : ''}>${payNext.label}</button>
-      </div>`;
-    const paymentNext = card.querySelector('.payment-next-action');
+    const identity = document.createElement('div');
+    identity.className = 'workflow-order-identity';
+    const identityText = document.createElement('div');
+    const orderTitle = document.createElement('strong');
+    orderTitle.textContent = `Order #${shortOrderNumber(s.orderNo)}`;
+    const orderChannel = document.createElement('span');
+    orderChannel.textContent = orderChannelText(s);
+    identityText.append(orderTitle, orderChannel);
+    const amountDueBox = document.createElement('div');
+    amountDueBox.className = 'amount-due';
+    const amountDueLabel = document.createElement('small');
+    amountDueLabel.textContent = 'Amount due';
+    const amountDueValue = document.createElement('strong');
+    amountDueValue.textContent = `${amountDue} GHS`;
+    amountDueBox.append(amountDueLabel, amountDueValue);
+    identity.append(identityText, amountDueBox);
+    const totals = document.createElement('div');
+    totals.className = 'payment-totals';
+    totals.setAttribute('aria-label', 'Payment total');
+    const subtotalRow = document.createElement('span');
+    subtotalRow.append('Subtotal ');
+    const subtotalValue = document.createElement('b');
+    subtotalValue.textContent = `${c.subtotal} GHS`;
+    subtotalRow.appendChild(subtotalValue);
+    const discountRow = document.createElement('span');
+    discountRow.append('Discount ');
+    const discountValue = document.createElement('b');
+    discountValue.textContent = `-${discount} GHS`;
+    discountRow.appendChild(discountValue);
+    totals.append(subtotalRow, discountRow);
+    const panel = document.createElement('div');
+    panel.className = `payment-panel ${payment.state}`;
+    const summary = document.createElement('div');
+    summary.className = 'payment-summary';
+    const summaryTitle = document.createElement('strong');
+    summaryTitle.textContent = payment.label;
+    const summaryDetail = document.createElement('small');
+    summaryDetail.textContent = payment.detail;
+    summary.append(summaryTitle, summaryDetail);
+    panel.appendChild(summary);
+    if(isPrepaidPlatform(s)){
+      const lock = document.createElement('div');
+      lock.className = 'online-paid-lock';
+      const lockTitle = document.createElement('b');
+      lockTitle.textContent = `${platformLabel(s.orderSource)} payment recorded`;
+      const lockDetail = document.createElement('small');
+      lockDetail.textContent = 'No additional payment step is required.';
+      lock.append(lockTitle, lockDetail);
+      panel.appendChild(lock);
+    }else if(s.pay === 'unpaid'){
+      const methods = document.createElement('div');
+      methods.className = 'payment-methods';
+      methods.setAttribute('role', 'group');
+      methods.setAttribute('aria-label', `Payment method for Order ${shortOrderNumber(s.orderNo)}`);
+      const addPaymentButton = (label, method, provider, disabled)=>{
+        const button = document.createElement('button');
+        button.className = 'payment-method';
+        button.type = 'button';
+        button.disabled = !!disabled;
+        button.textContent = label;
+        button.onclick = ()=> requestSlotPayment(active, method, provider);
+        methods.appendChild(button);
+      };
+      addPaymentButton('Cash', 'cash', '', paymentDisabled || (isWhatsapp(s) && s.fulfilment === 'delivery'));
+      addPaymentButton('Telecel MoMo', 'momo', 'telecel', paymentDisabled);
+      addPaymentButton('MTN MoMo', 'momo', 'mtn', paymentDisabled);
+      panel.appendChild(methods);
+    }else{
+      const change = document.createElement('button');
+      change.className = 'x change-payment-action';
+      change.type = 'button';
+      change.textContent = 'Change payment';
+      change.disabled = !canReversePayment;
+      if(canReversePayment) change.onclick = ()=> requestSlotPayment(active, 'unpaid');
+      panel.appendChild(change);
+    }
+    const paymentNext = document.createElement('button');
+    paymentNext.type = 'button';
+    paymentNext.className = 'workflow-next-button payment-next-action';
+    paymentNext.disabled = !!payNext.disabled;
+    paymentNext.textContent = payNext.label;
     paymentNext.onclick = ()=> continueFromPayment(active);
-    const changePayment = card.querySelector('.change-payment-action');
-    if(changePayment && canReversePayment) changePayment.onclick = ()=>requestSlotPayment(active, 'unpaid');
+    panel.appendChild(paymentNext);
+    card.append(identity, totals, panel);
     box.appendChild(card);
   }
 
@@ -1775,22 +1885,59 @@
     const allDone = s.items.length>0 && s.items.every(it=>!!it.done);
     const readiness = issueReadiness(s);
     const card = document.createElement('div'); card.className='slot-card workflow-order-card';
-    card.innerHTML = `
-        <div class="workflow-order-identity handover-identity">
-          <div><strong>Order #${escapeHtml(shortOrderNumber(s.orderNo))}</strong><span>${escapeHtml(orderChannelText(s))} · waiting ${formatAge(s.createdAt)}</span></div>
-          <div class="handover-statuses" aria-label="Order completion status">
-            <span class="${s.pay !== 'unpaid' ? 'complete' : 'pending'}">${s.pay !== 'unpaid' ? '✓' : '○'} ${escapeHtml(paymentLabel(s.pay))}</span>
-            <span class="${allDone ? 'complete' : 'pending'}">${allDone ? '✓' : '○'} Kitchen ${allDone ? 'complete' : 'open'}</span>
-          </div>
-        </div>
-        <div class="handover-packaging"><small>Packaging</small><strong>${escapeHtml(packagingLabel(s))}</strong></div>
-        <div class="workflow-next issue-readiness ${readiness.state}">
-          <div class="workflow-next-copy"><strong>${readiness.label}</strong><small>${readiness.detail}</small></div>
-          <div class="issue-action-group"><button class="workflow-next-button issue-next-action" ${readiness.disabled ? 'disabled' : ''}>${readiness.action}</button>${readiness.state === 'ready' && isOnlineOrder(s) && s.finalChannel !== 'direct' ? `<button class="x rider-missed-action" type="button">Rider Did Not Pick Up</button>` : ''}</div>
-        </div>`;
-    const riderMissedButton = card.querySelector('.rider-missed-action');
-    if(riderMissedButton) riderMissedButton.onclick = ()=>convertOnlineOrder(active);
-    const actionButton = card.querySelector('.issue-next-action');
+    const identity = document.createElement('div');
+    identity.className = 'workflow-order-identity handover-identity';
+    const identityText = document.createElement('div');
+    const orderTitle = document.createElement('strong');
+    orderTitle.textContent = `Order #${shortOrderNumber(s.orderNo)}`;
+    const orderMeta = document.createElement('span');
+    orderMeta.textContent = `${orderChannelText(s)} · waiting ${formatAge(s.createdAt)}`;
+    identityText.append(orderTitle, orderMeta);
+    const statuses = document.createElement('div');
+    statuses.className = 'handover-statuses';
+    statuses.setAttribute('aria-label', 'Order completion status');
+    const payStatus = document.createElement('span');
+    payStatus.className = s.pay !== 'unpaid' ? 'complete' : 'pending';
+    payStatus.textContent = `${s.pay !== 'unpaid' ? '✓' : '○'} ${paymentLabel(s.pay)}`;
+    const kitchenStatus = document.createElement('span');
+    kitchenStatus.className = allDone ? 'complete' : 'pending';
+    kitchenStatus.textContent = `${allDone ? '✓' : '○'} Kitchen ${allDone ? 'complete' : 'open'}`;
+    statuses.append(payStatus, kitchenStatus);
+    identity.append(identityText, statuses);
+    const packaging = document.createElement('div');
+    packaging.className = 'handover-packaging';
+    const packagingLabelNode = document.createElement('small');
+    packagingLabelNode.textContent = 'Packaging';
+    const packagingValue = document.createElement('strong');
+    packagingValue.textContent = packagingLabel(s);
+    packaging.append(packagingLabelNode, packagingValue);
+    const readinessBox = document.createElement('div');
+    readinessBox.className = `workflow-next issue-readiness ${readiness.state}`;
+    const readinessCopy = document.createElement('div');
+    readinessCopy.className = 'workflow-next-copy';
+    const readinessTitle = document.createElement('strong');
+    readinessTitle.textContent = readiness.label;
+    const readinessDetail = document.createElement('small');
+    readinessDetail.textContent = readiness.detail;
+    readinessCopy.append(readinessTitle, readinessDetail);
+    const actions = document.createElement('div');
+    actions.className = 'issue-action-group';
+    const actionButton = document.createElement('button');
+    actionButton.className = 'workflow-next-button issue-next-action';
+    actionButton.type = 'button';
+    actionButton.disabled = !!readiness.disabled;
+    actionButton.textContent = readiness.action;
+    actions.appendChild(actionButton);
+    if(readiness.state === 'ready' && isOnlineOrder(s) && s.finalChannel !== 'direct'){
+      const riderMissedButton = document.createElement('button');
+      riderMissedButton.className = 'x rider-missed-action';
+      riderMissedButton.type = 'button';
+      riderMissedButton.textContent = 'Rider Did Not Pick Up';
+      riderMissedButton.onclick = ()=> convertOnlineOrder(active);
+      actions.appendChild(riderMissedButton);
+    }
+    readinessBox.append(readinessCopy, actions);
+    card.append(identity, packaging, readinessBox);
     actionButton.onclick = ()=>{
       if(readiness.disabled) return;
       if(readiness.state === 'ready') markIssued(active);
@@ -2006,17 +2153,95 @@
   function openOnlineOrderDialog(){
     const host = ensureDialogHost();
     document.getElementById('appDialogTitle').textContent = 'New online order';
-    document.getElementById('appDialogBody').innerHTML = `
-      <p>Choose the order channel. Bolt, Chowdeck and Hubtel are already paid online. WhatsApp orders remain unpaid until pickup or delivery.</p>
-      <label class="dialog-label">Channel<select id="onlinePlatform" class="dialog-field"><option value="whatsapp">WhatsApp</option><option value="bolt">Bolt</option><option value="chowdeck">Chowdeck</option><option value="hubtel">Hubtel</option></select></label>
-      <label class="dialog-label">Order reference / customer name<input id="onlineReference" class="dialog-field" maxlength="80" placeholder="e.g. Ama or BOLT-847263" autocomplete="off"></label>
-      <label class="dialog-label hidden" id="onlinePhoneRow">Customer phone<input id="onlinePhone" class="dialog-field" maxlength="30" inputmode="tel" placeholder="Optional for pickup; needed for delivery"></label>
-      <div id="onlineOrderError" class="field-error"></div>
-      <div class="dialog-actions"><button class="x" id="dlgCancel">Cancel</button><button class="x modifier-primary" id="dlgConfirm">Create Online Order</button></div>`;
+    const body = document.getElementById('appDialogBody');
+    body.textContent = '';
+    const guide = document.createElement('div');
+    guide.className = 'online-order-guide';
+    const guideTitle = document.createElement('strong');
+    guideTitle.textContent = 'Start with the platform details.';
+    const guideCopy = document.createElement('span');
+    guideCopy.textContent = 'After creating the slot, add products exactly like a walk-in order.';
+    guide.append(guideTitle, guideCopy);
+    const platformLabelNode = document.createElement('label');
+    platformLabelNode.className = 'dialog-label';
+    platformLabelNode.append('Platform');
+    const platformSelect = document.createElement('select');
+    platformSelect.id = 'onlinePlatform';
+    platformSelect.className = 'dialog-field';
+    [['whatsapp','WhatsApp'], ['bolt','Bolt'], ['chowdeck','Chowdeck'], ['hubtel','Hubtel']].forEach(([value,label])=>{
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      platformSelect.appendChild(option);
+    });
+    platformLabelNode.appendChild(platformSelect);
+    const hint = document.createElement('div');
+    hint.className = 'online-platform-hint';
+    hint.id = 'onlinePaymentHint';
+    hint.setAttribute('role', 'status');
+    hint.setAttribute('aria-live', 'polite');
+    const referenceLabel = document.createElement('label');
+    referenceLabel.className = 'dialog-label';
+    referenceLabel.append('Order reference');
+    const referenceInput = document.createElement('input');
+    referenceInput.id = 'onlineReference';
+    referenceInput.className = 'dialog-field';
+    referenceInput.maxLength = 80;
+    referenceInput.placeholder = 'Customer name or platform order number';
+    referenceInput.autocomplete = 'off';
+    referenceLabel.appendChild(referenceInput);
+    const nameLabel = document.createElement('label');
+    nameLabel.className = 'dialog-label';
+    nameLabel.id = 'onlineNameRow';
+    nameLabel.append('Customer name optional');
+    const nameInput = document.createElement('input');
+    nameInput.id = 'onlineCustomerName';
+    nameInput.className = 'dialog-field';
+    nameInput.maxLength = 80;
+    nameInput.placeholder = 'Shown on receipts and handover notes';
+    nameInput.autocomplete = 'off';
+    nameLabel.appendChild(nameInput);
+    const phoneLabel = document.createElement('label');
+    phoneLabel.className = 'dialog-label hidden';
+    phoneLabel.id = 'onlinePhoneRow';
+    phoneLabel.append('Customer phone optional');
+    const phoneInput = document.createElement('input');
+    phoneInput.id = 'onlinePhone';
+    phoneInput.className = 'dialog-field';
+    phoneInput.maxLength = 30;
+    phoneInput.inputMode = 'tel';
+    phoneInput.placeholder = 'Useful for WhatsApp delivery or rider calls';
+    phoneLabel.appendChild(phoneInput);
+    const error = document.createElement('div');
+    error.id = 'onlineOrderError';
+    error.className = 'field-error';
+    const actions = document.createElement('div');
+    actions.className = 'dialog-actions';
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'x';
+    cancelButton.id = 'dlgCancel';
+    cancelButton.type = 'button';
+    cancelButton.textContent = 'Cancel';
+    const confirmButton = document.createElement('button');
+    confirmButton.className = 'x modifier-primary';
+    confirmButton.id = 'dlgConfirm';
+    confirmButton.type = 'button';
+    confirmButton.textContent = 'Create Online Order';
+    actions.append(cancelButton, confirmButton);
+    body.append(guide, platformLabelNode, hint, referenceLabel, nameLabel, phoneLabel, error, actions);
     host.classList.add('open');
     const reference = document.getElementById('onlineReference');
     const platformInput = document.getElementById('onlinePlatform');
-    const syncOnlineFields = ()=> document.getElementById('onlinePhoneRow').classList.toggle('hidden', platformInput.value !== 'whatsapp');
+    const syncOnlineFields = ()=>{
+      const platform = platformInput.value;
+      const whatsapp = platform === 'whatsapp';
+      document.getElementById('onlinePhoneRow').classList.toggle('hidden', !whatsapp);
+      document.getElementById('onlineNameRow').classList.toggle('hidden', whatsapp);
+      document.getElementById('onlinePaymentHint').textContent = whatsapp
+        ? 'WhatsApp stays unpaid until pickup/delivery is confirmed before Kitchen.'
+        : `${platformLabel(platform)} is treated as paid online; only enter the platform order number and products.`;
+      reference.placeholder = whatsapp ? 'e.g. Ama pickup or Ama delivery' : `e.g. ${platformLabel(platform).toUpperCase()}-847263`;
+    };
     platformInput.onchange = syncOnlineFields; syncOnlineFields();
     reference.focus();
     document.getElementById('dlgCancel').onclick = ()=>{
@@ -2026,9 +2251,10 @@
     document.getElementById('dlgConfirm').onclick = ()=>{
       const platform = document.getElementById('onlinePlatform').value;
       const externalOrderNo = reference.value.trim();
+      const customerName = document.getElementById('onlineCustomerName').value.trim();
       const customerPhone = document.getElementById('onlinePhone').value.trim();
       const error = document.getElementById('onlineOrderError');
-      if(!externalOrderNo){ error.textContent = 'The platform order number is required.'; return; }
+      if(!externalOrderNo){ error.textContent = platform === 'whatsapp' ? 'Enter the customer name or WhatsApp reference.' : 'Enter the platform order number.'; return; }
       if(onlineOrderExists(platform, externalOrderNo)){ error.textContent = `This ${platformLabel(platform)} order already exists.`; return; }
       const state = BK_STATE.getState();
       const current = state.slots[state.active];
@@ -2037,13 +2263,13 @@
         closeDialog();
         renderAll();
         goTab('order');
-        infoDialog(platform === 'whatsapp' ? `WhatsApp order for ${externalOrderNo} created. Enter the products; fulfilment and payment rules are confirmed before Kitchen.` : `${platformLabel(platform)} order ${externalOrderNo} created. Payment is already recorded; enter the products and continue to Kitchen.`);
+        infoDialog(platform === 'whatsapp' ? `WhatsApp order for ${externalOrderNo} created. Add products next; fulfilment and payment are confirmed before Kitchen.` : `${platformLabel(platform)} order ${externalOrderNo} created as paid online. Add products next, then send to Kitchen.`);
       };
       if(current && !current.items.length && current.pay === 'unpaid'){
-        BK_STATE.updateSlot(state.active, {orderSource:platform, externalOrderNo, customerName:platform === 'whatsapp' ? externalOrderNo : '', customerPhone, pay:platform === 'whatsapp' ? 'unpaid' : platform});
+        BK_STATE.updateSlot(state.active, {orderSource:platform, externalOrderNo, customerName:platform === 'whatsapp' ? externalOrderNo : customerName, customerPhone, pay:platform === 'whatsapp' ? 'unpaid' : platform});
         finish(state.active);
       }else{
-        BK_STATE.addSlot(undefined, {orderSource:platform, externalOrderNo, customerName:platform === 'whatsapp' ? externalOrderNo : '', customerPhone, pay:platform === 'whatsapp' ? 'unpaid' : platform}).then(finish).catch(showOrderNumberError);
+        BK_STATE.addSlot(undefined, {orderSource:platform, externalOrderNo, customerName:platform === 'whatsapp' ? externalOrderNo : customerName, customerPhone, pay:platform === 'whatsapp' ? 'unpaid' : platform}).then(finish).catch(showOrderNumberError);
       }
     };
   }
@@ -2053,12 +2279,57 @@
     const host = ensureDialogHost();
     const platform = platformLabel(slot.orderSource);
     document.getElementById('appDialogTitle').textContent = `${platform} rider did not pick up`;
-    document.getElementById('appDialogBody').innerHTML = `
-      <p>The platform refund is expected and may remain pending for several hours. Convert this same prepared order without waiting for platform confirmation.</p>
-      <div class="online-conversion-summary"><b>${escapeHtml(slot.externalOrderNo || slot.orderNo)}</b><span>${BK_LOGIC.computeSlot(slot).subtotal} GHS</span></div>
-      <label class="dialog-label">Delivery<select id="conversionFulfilment" class="dialog-field"><option value="burgerkiss-delivery">BurgerKiss will deliver</option><option value="customer-rider">Customer will send a rider</option></select></label>
-      <label class="dialog-label">Direct payment<select id="conversionPayment" class="dialog-field"><option value="cash">Collect Cash</option><option value="momo">Collect MoMo</option></select></label>
-      <div class="dialog-actions"><button class="x" id="dlgCancel">Keep Waiting</button><button class="x modifier-primary" id="dlgConfirm">Convert to Direct Order</button></div>`;
+    const body = document.getElementById('appDialogBody');
+    body.textContent = '';
+    const copy = document.createElement('p');
+    copy.textContent = 'The platform refund is expected and may remain pending for several hours. Convert this same prepared order without waiting for platform confirmation.';
+    const summary = document.createElement('div');
+    summary.className = 'online-conversion-summary';
+    const reference = document.createElement('b');
+    reference.textContent = slot.externalOrderNo || slot.orderNo;
+    const amount = document.createElement('span');
+    amount.textContent = `${BK_LOGIC.computeSlot(slot).subtotal} GHS`;
+    summary.append(reference, amount);
+    const deliveryLabel = document.createElement('label');
+    deliveryLabel.className = 'dialog-label';
+    deliveryLabel.append('Delivery');
+    const deliverySelect = document.createElement('select');
+    deliverySelect.id = 'conversionFulfilment';
+    deliverySelect.className = 'dialog-field';
+    [['burgerkiss-delivery','BurgerKiss will deliver'], ['customer-rider','Customer will send a rider']].forEach(([value,label])=>{
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      deliverySelect.appendChild(option);
+    });
+    deliveryLabel.appendChild(deliverySelect);
+    const paymentLabelNode = document.createElement('label');
+    paymentLabelNode.className = 'dialog-label';
+    paymentLabelNode.append('Direct payment');
+    const paymentSelect = document.createElement('select');
+    paymentSelect.id = 'conversionPayment';
+    paymentSelect.className = 'dialog-field';
+    [['cash','Collect Cash'], ['momo','Collect MoMo']].forEach(([value,label])=>{
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      paymentSelect.appendChild(option);
+    });
+    paymentLabelNode.appendChild(paymentSelect);
+    const actions = document.createElement('div');
+    actions.className = 'dialog-actions';
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'x';
+    cancelButton.id = 'dlgCancel';
+    cancelButton.type = 'button';
+    cancelButton.textContent = 'Keep Waiting';
+    const confirmButton = document.createElement('button');
+    confirmButton.className = 'x modifier-primary';
+    confirmButton.id = 'dlgConfirm';
+    confirmButton.type = 'button';
+    confirmButton.textContent = 'Convert to Direct Order';
+    actions.append(cancelButton, confirmButton);
+    body.append(copy, summary, deliveryLabel, paymentLabelNode, actions);
     host.classList.add('open');
     document.getElementById('dlgCancel').onclick = closeDialog;
     document.getElementById('dlgConfirm').onclick = ()=>{
@@ -2540,11 +2811,31 @@
     if(!list) return;
     const entries = historyPurgeCandidates();
     if(message) message.textContent = '';
+    list.textContent = '';
     if(!entries.length){
-      list.innerHTML = '<div class="empty-state">No orders found for this date range.</div>';
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No orders found for this date range.';
+      list.appendChild(empty);
       return;
     }
-    list.innerHTML = entries.map(entry=>`<label class="history-purge-row"><input type="checkbox" value="${escapeHtml(entry.id)}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(entry.externalOrderNo || entry.slotName)} · ${escapeHtml(paymentLabel(entry.pay))} · ${new Date(entry.closedAt).toLocaleString()}</small></span><strong>${Number(entry.total || entry.subtotal || 0)} GHS</strong></label>`).join('');
+    entries.forEach(entry=>{
+      const row = document.createElement('label');
+      row.className = 'history-purge-row';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = entry.id || '';
+      const details = document.createElement('span');
+      const order = document.createElement('b');
+      order.textContent = entry.orderNo || '';
+      const meta = document.createElement('small');
+      meta.textContent = `${entry.externalOrderNo || entry.slotName || ''} · ${paymentLabel(entry.pay)} · ${new Date(entry.closedAt).toLocaleString()}`;
+      details.append(order, meta);
+      const total = document.createElement('strong');
+      total.textContent = `${Number(entry.total || entry.subtotal || 0)} GHS`;
+      row.append(checkbox, details, total);
+      list.appendChild(row);
+    });
   }
   function openHistoryPurge(){
     if(!isOwnerSession()) return infoDialog('Only the owner can delete order history.');

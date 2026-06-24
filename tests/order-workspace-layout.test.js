@@ -42,6 +42,70 @@ test('empty orders use employee-friendly status language', () => {
 
 test('continue to kitchen remains compact inside the current order', () => {
   assert.match(css, /#orderFlowNav\.workflow-next\{flex-wrap:nowrap/);
-  assert.match(css, /#orderFlowNav \.workflow-next-copy small\{display:none\}/);
+  assert.match(css, /#orderFlowNav \.workflow-next-copy small\{display:block/);
   assert.match(css, /#orderFlowNav \.workflow-next-button\{min-height:38px/);
+});
+
+test('order step explains blockers and next action', () => {
+  assert.match(ui, /title:'Add products first'/);
+  assert.match(ui, /Choose at least one product from the product grid before sending this order to Kitchen/);
+  assert.match(ui, /title:`\$\{platformLabel\(slot\.orderSource\)\} order ready`/);
+  assert.match(css, /#orderFlowNav \.workflow-next-copy small\{display:block/);
+});
+
+test('online order dialog guides platform entry before products', () => {
+  assert.match(ui, /guide\.className = 'online-order-guide'/);
+  assert.match(ui, /hint\.id = 'onlinePaymentHint'/);
+  assert.match(ui, /nameInput\.id = 'onlineCustomerName'/);
+  assert.match(ui, /WhatsApp stays unpaid until pickup\/delivery is confirmed before Kitchen/);
+  assert.match(ui, /is treated as paid online/);
+  assert.match(css, /\.online-order-guide,\.online-platform-hint/);
+});
+
+
+test('product grid renders dynamic labels with textContent instead of card innerHTML', () => {
+  assert.doesNotMatch(ui, /b\.innerHTML\s*=/);
+  assert.doesNotMatch(ui, /empty\.innerHTML\s*=/);
+  assert.match(ui, /catBadge\.textContent = catLabel/);
+  assert.match(ui, /name\.textContent = it\.name/);
+  assert.match(ui, /subtitle\.textContent = it\.subtitle/);
+  assert.match(ui, /price\.textContent = `\$\{itemDisplayPrice\(it\)\} GHS`/);
+});
+
+
+test('order slot chips render dynamic status text with textContent', () => {
+  assert.doesNotMatch(ui, /el\.innerHTML\s*=\s*`<span class="status-dot"/);
+  assert.match(ui, /orderTitle\.textContent = orderLabel/);
+  assert.match(ui, /orderSmall\.textContent = orderDetail/);
+  assert.match(ui, /statusLabel\.textContent = status\.label/);
+  assert.match(ui, /statusProgress\.textContent = status\.shortDetail/);
+});
+
+
+test('workflow next action renders dynamic copy without innerHTML templates', () => {
+  assert.doesNotMatch(ui, /host\.innerHTML\s*=\s*`<div class="workflow-next-copy"/);
+  assert.match(ui, /title\.textContent = opts\.title \|\| ''/);
+  assert.match(ui, /detail\.textContent = opts\.detail \|\| ''/);
+  assert.match(ui, /button\.textContent = opts\.label \|\| 'Continue'/);
+});
+
+
+test('kitchen order cards render dynamic progress copy with textContent', () => {
+  assert.doesNotMatch(ui, /card\.innerHTML\s*=\s*`\s*<div class="slot-head kitchen-order-head"/);
+  assert.match(ui, /orderTitle\.textContent = `Order #\$\{shortOrderNumber\(s\.orderNo\)\}`/);
+  assert.match(ui, /packaging\.textContent = `Packaging: \$\{packagingLabel\(s\)\}`/);
+  assert.match(ui, /progressTitle\.textContent = progress\.label/);
+  assert.match(ui, /nextButton\.textContent = makeNext\.label/);
+});
+
+
+test('online order and conversion dialogs render bodies without innerHTML', () => {
+  const onlineDialog = ui.slice(ui.indexOf('function openOnlineOrderDialog'), ui.indexOf('function convertOnlineOrder'));
+  const conversionDialog = ui.slice(ui.indexOf('function convertOnlineOrder'), ui.indexOf('function historyRemoteEnabled'));
+  assert.doesNotMatch(onlineDialog, /appDialogBody'\)\.innerHTML/);
+  assert.doesNotMatch(conversionDialog, /appDialogBody'\)\.innerHTML/);
+  assert.match(onlineDialog, /guide\.className = 'online-order-guide'/);
+  assert.match(onlineDialog, /confirmButton\.textContent = 'Create Online Order'/);
+  assert.match(conversionDialog, /summary\.className = 'online-conversion-summary'/);
+  assert.match(conversionDialog, /confirmButton\.textContent = 'Convert to Direct Order'/);
 });

@@ -23,8 +23,8 @@ test('make workflow hides ordering and commercial controls', () => {
 
 test('kitchen tickets show concise operational details', () => {
   const renderMake = ui.slice(ui.indexOf('function renderMake()'), ui.indexOf('function paymentDisplay'));
-  assert.match(renderMake, /Order #\$\{escapeHtml\(shortOrderNumber\(s\.orderNo\)\)\}/);
-  assert.match(renderMake, /Packaging: \$\{escapeHtml\(packagingLabel\(s\)\)\}/);
+  assert.match(renderMake, /orderTitle\.textContent = `Order #\$\{shortOrderNumber\(s\.orderNo\)\}`/);
+  assert.match(renderMake, /packaging\.textContent = `Packaging: \$\{packagingLabel\(s\)\}`/);
   assert.match(renderMake, /`\$\{entry\.qty\}× \$\{entry\.name\}`/);
   assert.match(renderMake, /menuEntryCount > 1/);
   assert.doesNotMatch(renderMake, /SINGLE ITEM \$\{\+\+singleNumber\}/);
