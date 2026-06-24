@@ -153,6 +153,20 @@
   function categoryOptions(selected){
     return CATEGORIES.map(([value,label])=>`<option value="${value}" ${value === selected ? 'selected' : ''}>${label}</option>`).join('');
   }
+  function notifyValidation(message){
+    const body = document.getElementById('productsBody');
+    if(!body) return false;
+    let notice = body.querySelector('.admin-validation-message');
+    if(!notice){
+      notice = document.createElement('div');
+      notice.className = 'admin-validation-message';
+      notice.setAttribute('role', 'alert');
+      body.prepend(notice);
+    }
+    notice.textContent = message;
+    notice.scrollIntoView({block:'nearest'});
+    return false;
+  }
   function rowHtml(p){
     return `
       <div class="admin-data-row product-editor-row" data-prod-row draggable="true">
@@ -279,19 +293,20 @@
   }
 
   function save(){
-    const rows = sanitizeRows(collectRows().filter(r=> r.id || r.name));
-    if(!rows.length){ alert('Add at least one product.'); return; }
+    const rawRows = collectRows().filter(r=> r.id || r.name);
+    if(!rawRows.length) return notifyValidation('Add at least one product.');
 
     const idSet = new Set();
-    for(const r of rows){
-      if(!r.id){ alert('Each product needs an id.'); return; }
-      if(!r.name){ alert(`Product ${r.id} needs a name.`); return; }
-      if(!Number.isFinite(r.price) || r.price < 0){ alert(`Invalid price for ${r.id}.`); return; }
-      if(!r.cat){ alert(`Product ${r.id} needs a category.`); return; }
-      if(idSet.has(r.id)){ alert(`Duplicate id: ${r.id}`); return; }
+    for(const r of rawRows){
+      if(!r.id) return notifyValidation('Each product needs an id.');
+      if(!r.name) return notifyValidation(`Product ${r.id} needs a name.`);
+      if(!Number.isFinite(r.price) || r.price < 0) return notifyValidation(`Invalid price for ${r.id}.`);
+      if(!r.cat) return notifyValidation(`Product ${r.id} needs a category.`);
+      if(idSet.has(r.id)) return notifyValidation(`Duplicate id: ${r.id}.`);
       idSet.add(r.id);
     }
 
+    const rows = sanitizeRows(rawRows);
     applyRows(rows);
     saveRemoteSoon();
     closeEditor();
