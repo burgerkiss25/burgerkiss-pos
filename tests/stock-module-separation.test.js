@@ -25,3 +25,19 @@ test('all stock pages load remote helpers before stock.js', () => {
     assert.ok(html.indexOf('stock_remote.js') < html.indexOf('stock.js'), `${page} should load stock_remote.js before stock.js`);
   }
 });
+
+test('stock recipe editor cards render with DOM nodes', () => {
+  assert.match(stock, /function recipeRowNode\(p\)/);
+  assert.match(stock, /function renderRecipeChips\(list, recipe\)/);
+  assert.match(stock, /recipeWrap\.replaceChildren\(\.\.\.sections\)/);
+  assert.doesNotMatch(stock, /recipeWrap\.innerHTML|replacement\.innerHTML|recipeRowHtml/);
+});
+
+test('stock ingredient lists and transfers render with DOM nodes', () => {
+  assert.match(stock, /function ingredientRowNode\(id, def\)/);
+  assert.match(stock, /function stockLocationCard/);
+  assert.match(stock, /body\.replaceChildren\(\.\.\.sections\)/);
+  assert.match(stock, /list\.replaceChildren\(\.\.\.recent\.map/);
+  assert.match(stock, /generalGroup\.appendChild\(ingredientRowNode/);
+  assert.doesNotMatch(stock, /ingredientRowHtml|transferRowHtml|insertAdjacentHTML/);
+});

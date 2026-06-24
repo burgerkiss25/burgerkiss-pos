@@ -339,92 +339,168 @@
   }
   function getRecipes(){ return clone(RECIPES); }
 
-  function ingredientRowHtml(id, def){
-    const locationOptions = ['storage', 'foodtruck', 'both'].map(loc=>
-      `<option value="${loc}" ${def.stock_location===loc?'selected':''}>${locationLabel(loc)}</option>`
-    ).join('');
-    return `<article class="stock-ingredient-card" data-ing-row>
-      <div class="stock-ingredient-head">
-        <div class="stock-field stock-field-id">
-          <label>ID</label>
-          <input data-field="id" value="${id}" placeholder="ingredient_id">
-        </div>
-        <div class="stock-field stock-field-name">
-          <label>Name</label>
-          <input data-field="name" value="${def.name || ''}" placeholder="Name">
-        </div>
-        <div class="stock-field">
-          <label>Category</label>
-          <input data-field="category" value="${def.category || ''}" placeholder="category">
-        </div>
-        <div class="stock-field stock-field-unit">
-          <label>Unit</label>
-          <input data-field="unit" value="${def.unit || ''}" placeholder="unit">
-        </div>
-        <div class="stock-field stock-field-location">
-          <label>Available at</label>
-          <select data-field="stock_location">${locationOptions}</select>
-        </div>
-        <label class="stock-track"><input data-field="track_stock" type="checkbox" ${def.track_stock !== false ? 'checked' : ''}> Track</label>
-        <button class="mini" data-remove>Delete</button>
-      </div>
-      <div class="stock-location-grid">
-        <section class="stock-location-card stock-location-store">
-          <div class="stock-location-title">
-            <span>BurgerKiss Store</span>
-            <small>Main warehouse</small>
-          </div>
-          <div class="stock-location-fields">
-            <label>Current stock
-              <input data-field="current_stock_storage" type="number" min="0" step="1" value="${num(def.current_stock_storage,0)}">
-            </label>
-            <label>Minimum stock
-              <input data-field="moq_storage" type="number" min="0" step="1" value="${num(def.moq_storage,0)}">
-            </label>
-          </div>
-        </section>
-        <section class="stock-location-card stock-location-branch">
-          <div class="stock-location-title">
-            <span>BurgerKiss Block Factory</span>
-            <small>Restaurant / production stock</small>
-          </div>
-          <div class="stock-location-fields">
-            <label>Current stock
-              <input data-field="current_stock_foodtruck" type="number" min="0" step="1" value="${num(def.current_stock_foodtruck,0)}">
-            </label>
-            <label>Minimum stock
-              <input data-field="moq_foodtruck" type="number" min="0" step="1" value="${num(def.moq_foodtruck,0)}">
-            </label>
-          </div>
-        </section>
-      </div>
-    </article>`;
+  function stockField(labelText, field, value, opts){
+    const wrap = document.createElement('div');
+    wrap.className = `stock-field${opts && opts.className ? ` ${opts.className}` : ''}`;
+    wrap.appendChild(textEl('label', labelText));
+    const input = document.createElement('input');
+    input.dataset.field = field;
+    input.value = value == null ? '' : String(value);
+    if(opts && opts.placeholder) input.placeholder = opts.placeholder;
+    if(opts && opts.type) input.type = opts.type;
+    if(opts && opts.min != null) input.min = String(opts.min);
+    if(opts && opts.step != null) input.step = String(opts.step);
+    wrap.appendChild(input);
+    return wrap;
   }
 
-  function recipeRowHtml(p, ingredientOptions){
-    const recipe = RECIPES[p.id] || {};
-    const ingredients = Object.entries(recipe).map(([id, qty])=>{
+  function stockLocationCard(className, title, subtitle, stockFieldName, moqFieldName, def){
+    const section = document.createElement('section');
+    section.className = `stock-location-card ${className}`;
+    const heading = document.createElement('div');
+    heading.className = 'stock-location-title';
+    heading.append(textEl('span', title), textEl('small', subtitle));
+    const fields = document.createElement('div');
+    fields.className = 'stock-location-fields';
+    [
+      ['Current stock', stockFieldName, num(def[stockFieldName], 0)],
+      ['Minimum stock', moqFieldName, num(def[moqFieldName], 0)]
+    ].forEach(([label, field, value])=>{
+      const control = document.createElement('label');
+      control.appendChild(document.createTextNode(label));
+      const input = document.createElement('input');
+      input.dataset.field = field;
+      input.type = 'number';
+      input.min = '0';
+      input.step = '1';
+      input.value = String(value);
+      control.appendChild(input);
+      fields.appendChild(control);
+    });
+    section.append(heading, fields);
+    return section;
+  }
+
+  function ingredientRowNode(id, def){
+    const article = document.createElement('article');
+    article.className = 'stock-ingredient-card';
+    article.dataset.ingRow = '';
+    const head = document.createElement('div');
+    head.className = 'stock-ingredient-head';
+    head.append(
+      stockField('ID', 'id', id, {className:'stock-field-id', placeholder:'ingredient_id'}),
+      stockField('Name', 'name', def.name || '', {className:'stock-field-name', placeholder:'Name'}),
+      stockField('Category', 'category', def.category || '', {placeholder:'category'}),
+      stockField('Unit', 'unit', def.unit || '', {className:'stock-field-unit', placeholder:'unit'})
+    );
+    const locationWrap = document.createElement('div');
+    locationWrap.className = 'stock-field stock-field-location';
+    locationWrap.appendChild(textEl('label', 'Available at'));
+    const locationSelect = document.createElement('select');
+    locationSelect.dataset.field = 'stock_location';
+    ['storage', 'foodtruck', 'both'].forEach(loc=>{
+      const option = document.createElement('option');
+      option.value = loc;
+      option.textContent = locationLabel(loc);
+      option.selected = def.stock_location === loc;
+      locationSelect.appendChild(option);
+    });
+    locationWrap.appendChild(locationSelect);
+    const track = document.createElement('label');
+    track.className = 'stock-track';
+    const trackInput = document.createElement('input');
+    trackInput.dataset.field = 'track_stock';
+    trackInput.type = 'checkbox';
+    trackInput.checked = def.track_stock !== false;
+    track.append(trackInput, document.createTextNode(' Track'));
+    const remove = textEl('button', 'Delete', 'mini');
+    remove.type = 'button';
+    remove.dataset.remove = '';
+    head.append(locationWrap, track, remove);
+    const grid = document.createElement('div');
+    grid.className = 'stock-location-grid';
+    grid.append(
+      stockLocationCard('stock-location-store', 'BurgerKiss Store', 'Main warehouse', 'current_stock_storage', 'moq_storage', def),
+      stockLocationCard('stock-location-branch', 'BurgerKiss Block Factory', 'Restaurant / production stock', 'current_stock_foodtruck', 'moq_foodtruck', def)
+    );
+    article.append(head, grid);
+    return article;
+  }
+
+  function textEl(tag, text, className){
+    const el = document.createElement(tag);
+    if(className) el.className = className;
+    el.textContent = text == null ? '' : String(text);
+    return el;
+  }
+  function ingredientOption(id, def){
+    const option = document.createElement('option');
+    option.value = id;
+    option.textContent = `${def.name || id} (${id})`;
+    return option;
+  }
+  function renderRecipeChips(list, recipe){
+    const entries = Object.entries(recipe || {});
+    if(!entries.length){
+      list.replaceChildren(textEl('span', 'No ingredients configured', 'admin-empty-inline'));
+      return;
+    }
+    list.replaceChildren(...entries.map(([id, qty])=>{
       const def = INGREDIENTS[id] || {};
-      return `<span class="recipe-ingredient-chip"><b>${def.name || id}</b><span>${qty} ${def.unit || ''}</span><button type="button" data-recipe-remove="${id}" aria-label="Remove ${def.name || id}">×</button></span>`;
-    }).join('');
-    return `<article class="admin-recipe-card" data-recipe-row>
-      <header><div><h4>${p.name}</h4><small>${p.id}</small></div><span class="admin-count-badge">${Object.keys(recipe).length} ingredients</span></header>
-      <div class="recipe-ingredient-list" data-recipe-list>${ingredients || '<span class="admin-empty-inline">No ingredients configured</span>'}</div>
-      <div class="recipe-add-row">
-            <select data-recipe-ing>${ingredientOptions}</select>
-            <input data-recipe-qty type="number" min="0.25" step="0.25" value="1">
-            <button class="x" type="button" data-recipe-add>Add ingredient</button>
-      </div>
-      <details class="admin-advanced"><summary>Advanced raw recipe</summary><input data-product-id="${p.id}" data-recipe-input placeholder="ingredient_id:qty, ingredient_id2:qty" value="${recipeToText(recipe)}"></details>
-    </article>`;
+      const chip = document.createElement('span');
+      chip.className = 'recipe-ingredient-chip';
+      const remove = textEl('button', '×');
+      remove.type = 'button';
+      remove.dataset.recipeRemove = id;
+      remove.setAttribute('aria-label', `Remove ${def.name || id}`);
+      chip.append(textEl('b', def.name || id), textEl('span', `${qty} ${def.unit || ''}`), remove);
+      return chip;
+    }));
+  }
+  function recipeRowNode(p){
+    const recipe = RECIPES[p.id] || {};
+    const article = document.createElement('article');
+    article.className = 'admin-recipe-card';
+    article.dataset.recipeRow = '';
+    const header = document.createElement('header');
+    const copy = document.createElement('div');
+    copy.append(textEl('h4', p.name), textEl('small', p.id));
+    header.append(copy, textEl('span', `${Object.keys(recipe).length} ingredients`, 'admin-count-badge'));
+    const list = document.createElement('div');
+    list.className = 'recipe-ingredient-list';
+    list.dataset.recipeList = '';
+    renderRecipeChips(list, recipe);
+    const addRow = document.createElement('div');
+    addRow.className = 'recipe-add-row';
+    const select = document.createElement('select');
+    select.dataset.recipeIng = '';
+    select.replaceChildren(...Object.entries(INGREDIENTS).map(([id, def])=>ingredientOption(id, def)));
+    const qty = document.createElement('input');
+    qty.dataset.recipeQty = '';
+    qty.type = 'number';
+    qty.min = '0.25';
+    qty.step = '0.25';
+    qty.value = '1';
+    const add = textEl('button', 'Add ingredient', 'x');
+    add.type = 'button';
+    add.dataset.recipeAdd = '';
+    addRow.append(select, qty, add);
+    const advanced = document.createElement('details');
+    advanced.className = 'admin-advanced';
+    const input = document.createElement('input');
+    input.dataset.productId = p.id;
+    input.dataset.recipeInput = '';
+    input.placeholder = 'ingredient_id:qty, ingredient_id2:qty';
+    input.value = recipeToText(recipe);
+    advanced.append(textEl('summary', 'Advanced raw recipe'), input);
+    article.append(header, list, addRow, advanced);
+    return article;
   }
   function bindRecipeBuilder(body){
     const refreshCard = row=>{
       const input = row.querySelector('[data-recipe-input]');
       const product = {id:input.dataset.productId, name:row.querySelector('h4').textContent};
-      const replacement = document.createElement('div');
-      replacement.innerHTML = recipeRowHtml(product, row.querySelector('[data-recipe-ing]').innerHTML);
-      row.replaceWith(replacement.firstElementChild);
+      row.replaceWith(recipeRowNode(product));
       bindRecipeBuilder(body);
     };
     body.querySelectorAll('[data-recipe-row]').forEach(row=>{
@@ -468,18 +544,27 @@
     });
     const categories = Array.from(new Set(entries.map(([, def])=>String(def.category || 'general')))).sort();
     if(!entries.length){
-      body.innerHTML = '<div class="empty-state">No matching ingredients.</div>';
+      body.replaceChildren(textEl('div', 'No matching ingredients.', 'empty-state'));
       return;
     }
-    body.innerHTML = categories.map(category=>{
+    const sections = categories.map(category=>{
       const rows = entries
         .filter(([, def])=>String(def.category || 'general') === category)
         .sort(([, a],[, b])=>String(a.name || '').localeCompare(String(b.name || '')));
-      return `<section class="admin-category-group" data-ingredient-category="${category}">
-        <header><div><h4>${ingredientCategoryLabel(category)}</h4><small>${rows.length} ${rows.length === 1 ? 'ingredient' : 'ingredients'}</small></div><span>Sorted by name</span></header>
-        <div class="stock-ingredient-category">${rows.map(([id, def])=>ingredientRowHtml(id, def)).join('')}</div>
-      </section>`;
-    }).join('');
+      const section = document.createElement('section');
+      section.className = 'admin-category-group';
+      section.dataset.ingredientCategory = category;
+      const header = document.createElement('header');
+      const copy = document.createElement('div');
+      copy.append(textEl('h4', ingredientCategoryLabel(category)), textEl('small', `${rows.length} ${rows.length === 1 ? 'ingredient' : 'ingredients'}`));
+      header.append(copy, textEl('span', 'Sorted by name'));
+      const list = document.createElement('div');
+      list.className = 'stock-ingredient-category';
+      rows.forEach(([id, def])=> list.appendChild(ingredientRowNode(id, def)));
+      section.append(header, list);
+      return section;
+    });
+    body.replaceChildren(...sections);
   }
 
 
@@ -507,21 +592,23 @@
     return Object.keys(ingNext).length ? ingNext : null;
   }
 
-  function transferRowHtml(t){
-    const when = t && t.ts ? new Date(t.ts).toLocaleString() : '';
-    return `<div class="stock-transfer-row">
-      <span><b>${t.ingredient_name || t.ingredient_id}</b> <small>${when}</small></span>
-      <span>${t.qty} ${t.unit || ''} · BurgerKiss Store → BurgerKiss Block Factory</span>
-    </div>`;
-  }
-
   function renderTransferHistory(){
     const list = document.getElementById('stockTransferHistory');
     if(!list) return;
     const recent = TRANSFERS.slice(-5).reverse();
-    list.innerHTML = recent.length
-      ? recent.map(transferRowHtml).join('')
-      : '<div class="empty-state">No transfers yet.</div>';
+    if(!recent.length){
+      list.replaceChildren(textEl('div', 'No transfers yet.', 'empty-state'));
+      return;
+    }
+    list.replaceChildren(...recent.map(t=>{
+      const when = t && t.ts ? new Date(t.ts).toLocaleString() : '';
+      const row = document.createElement('div');
+      row.className = 'stock-transfer-row';
+      const left = document.createElement('span');
+      left.append(textEl('b', t.ingredient_name || t.ingredient_id), textEl('small', when));
+      row.append(left, textEl('span', `${t.qty} ${t.unit || ''} · BurgerKiss Store → BurgerKiss Block Factory`));
+      return row;
+    }));
   }
 
   function transferPanelHtml(){
@@ -663,22 +750,42 @@
       document.getElementById('sAddIngredient').onclick = ()=>{
         let generalGroup = ingWrap.querySelector('[data-ingredient-category="general"] .stock-ingredient-category');
         if(!generalGroup){
-          ingWrap.insertAdjacentHTML('beforeend', '<section class="admin-category-group" data-ingredient-category="general"><header><div><h4>General</h4><small>New ingredient</small></div></header><div class="stock-ingredient-category"></div></section>');
-          generalGroup = ingWrap.querySelector('[data-ingredient-category="general"] .stock-ingredient-category');
+          const section = document.createElement('section');
+          section.className = 'admin-category-group';
+          section.dataset.ingredientCategory = 'general';
+          const header = document.createElement('header');
+          const copy = document.createElement('div');
+          copy.append(textEl('h4', 'General'), textEl('small', 'New ingredient'));
+          header.appendChild(copy);
+          generalGroup = document.createElement('div');
+          generalGroup.className = 'stock-ingredient-category';
+          section.append(header, generalGroup);
+          ingWrap.appendChild(section);
         }
-        generalGroup.insertAdjacentHTML('beforeend', ingredientRowHtml('', {name:'', category:'general', unit:'', track_stock:true, stock_location:'both', current_stock_storage:0, current_stock_foodtruck:0, moq_storage:0, moq_foodtruck:0}));
+        generalGroup.appendChild(ingredientRowNode('', {name:'', category:'general', unit:'', track_stock:true, stock_location:'both', current_stock_storage:0, current_stock_foodtruck:0, moq_storage:0, moq_foodtruck:0}));
         bindIngredientActions(ingWrap);
         generalGroup.lastElementChild.querySelector('[data-field="name"]').focus();
       };
     }
     if(showRecipes){
       const recipeWrap = document.getElementById('stockRecipes');
-      const ingredientOptions = Object.entries(INGREDIENTS).map(([id, def])=> `<option value="${id}">${def.name || id} (${id})</option>`).join('');
       const categoryLabels = {burger:'Burgers',wings:'Wings',fries:'Fries',salad:'Salads',drink:'Drinks',extra:'Add-ons',sauce:'Sauces'};
-      recipeWrap.innerHTML = Object.entries(categoryLabels).map(([cat,label])=>{
+      const sections = Object.entries(categoryLabels).map(([cat,label])=>{
         const rows = recipeProducts.filter(product=>product.cat === cat).sort((a,b)=>Number(a.categoryOrder||0)-Number(b.categoryOrder||0));
-        return rows.length ? `<section class="admin-category-group"><header><div><h4>${label}</h4><small>${rows.length} recipes</small></div></header><div class="admin-recipe-grid">${rows.map(p=>recipeRowHtml(p, ingredientOptions)).join('')}</div></section>` : '';
-      }).join('');
+        if(!rows.length) return null;
+        const section = document.createElement('section');
+        section.className = 'admin-category-group';
+        const header = document.createElement('header');
+        const copy = document.createElement('div');
+        copy.append(textEl('h4', label), textEl('small', `${rows.length} recipes`));
+        header.appendChild(copy);
+        const grid = document.createElement('div');
+        grid.className = 'admin-recipe-grid';
+        rows.forEach(product=>grid.appendChild(recipeRowNode(product)));
+        section.append(header, grid);
+        return section;
+      }).filter(Boolean);
+      recipeWrap.replaceChildren(...sections);
       bindRecipeBuilder(recipeWrap);
     }
     const modal = editorModalId ? document.getElementById(editorModalId) : null;

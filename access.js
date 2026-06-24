@@ -279,6 +279,40 @@
     const existing = root.document && root.document.getElementById('accessOperationalDialog');
     if(existing) existing.remove();
   }
+  function textEl(tag, text, className){
+    const el = document.createElement(tag);
+    if(className) el.className = className;
+    el.textContent = text == null ? '' : String(text);
+    return el;
+  }
+  function fieldLabel(field){
+    const label = document.createElement('label');
+    label.appendChild(textEl('span', field.label));
+    const input = document.createElement('input');
+    input.name = field.name;
+    input.type = field.type || 'text';
+    input.inputMode = field.inputmode || 'text';
+    if(field.min != null) input.min = String(field.min);
+    if(field.step != null) input.step = String(field.step);
+    if(field.minlength != null) input.minLength = Number(field.minlength);
+    if(field.maxlength != null) input.maxLength = Number(field.maxlength);
+    if(field.placeholder) input.placeholder = field.placeholder;
+    if(field.required) input.required = true;
+    if(field.pattern) input.pattern = field.pattern;
+    if(field.autocomplete) input.autocomplete = field.autocomplete;
+    if(field.value != null) input.value = String(field.value);
+    label.appendChild(input);
+    return label;
+  }
+  function accessCard(kicker, title, copy){
+    const card = document.createElement('div');
+    card.className = 'access-card';
+    card.appendChild(textEl('div', 'BK', 'brand-mark'));
+    if(kicker) card.appendChild(textEl('p', kicker, 'access-kicker'));
+    card.appendChild(textEl('h1', title));
+    if(copy) card.appendChild(textEl('p', copy, 'access-copy'));
+    return card;
+  }
   function accessOperationalDialog(title, copy, fields, submitLabel, onSubmit){
     if(!(root.document && root.document.body)) return Promise.resolve(null);
     removeAccessDialog();
@@ -289,25 +323,31 @@
       host.setAttribute('role', 'dialog');
       host.setAttribute('aria-modal', 'true');
       host.setAttribute('aria-labelledby', 'accessOperationalTitle');
-      host.innerHTML = `<div class="access-operational-card">
-        <div class="access-operational-heading">
-          <p class="access-kicker">BurgerKiss POS</p>
-          <h2 id="accessOperationalTitle">${escapeHtml(title)}</h2>
-          <p>${escapeHtml(copy)}</p>
-        </div>
-        <form id="accessOperationalForm" class="access-form">
-          ${(fields || []).map(field=>`<label><span>${escapeHtml(field.label)}</span><input name="${escapeHtml(field.name)}" type="${escapeHtml(field.type || 'text')}" inputmode="${escapeHtml(field.inputmode || 'text')}" min="${escapeHtml(field.min || '')}" step="${escapeHtml(field.step || '')}" maxlength="${escapeHtml(field.maxlength || '')}" placeholder="${escapeHtml(field.placeholder || '')}" ${field.required ? 'required' : ''}></label>`).join('')}
-          <div class="access-error" id="accessOperationalError" aria-live="polite"></div>
-          <div class="access-operational-actions">
-            <button class="x" id="accessOperationalCancel" type="button">Cancel</button>
-            <button class="access-primary" type="submit">${escapeHtml(submitLabel || 'Confirm')}</button>
-          </div>
-        </form>
-      </div>`;
+      const card = document.createElement('div');
+      card.className = 'access-operational-card';
+      const heading = document.createElement('div');
+      heading.className = 'access-operational-heading';
+      heading.append(textEl('p', 'BurgerKiss POS', 'access-kicker'), textEl('h2', title), textEl('p', copy));
+      heading.querySelector('h2').id = 'accessOperationalTitle';
+      const form = document.createElement('form');
+      form.id = 'accessOperationalForm';
+      form.className = 'access-form';
+      (fields || []).forEach(field=>form.appendChild(fieldLabel(field)));
+      const error = textEl('div', '', 'access-error');
+      error.id = 'accessOperationalError';
+      error.setAttribute('aria-live', 'polite');
+      const actions = document.createElement('div');
+      actions.className = 'access-operational-actions';
+      const cancel = textEl('button', 'Cancel', 'x');
+      cancel.id = 'accessOperationalCancel';
+      cancel.type = 'button';
+      const submit = textEl('button', submitLabel || 'Confirm', 'access-primary');
+      submit.type = 'submit';
+      actions.append(cancel, submit);
+      form.append(error, actions);
+      card.append(heading, form);
+      host.appendChild(card);
       root.document.body.appendChild(host);
-      const form = root.document.getElementById('accessOperationalForm');
-      const cancel = root.document.getElementById('accessOperationalCancel');
-      const error = root.document.getElementById('accessOperationalError');
       const firstInput = form && form.querySelector('input');
       const close = value=>{ host.remove(); resolve(value); };
       cancel.onclick = ()=>close(null);
@@ -416,7 +456,39 @@
     const status = salesStatus();
     const electricity = electricityStatus();
     const electricityLabel = electricity.creditGhs == null ? 'Electricity unknown' : `Electricity GHS ${electricity.creditGhs.toFixed(2)}`;
-    host.innerHTML = `<details class="staff-session-menu"><summary class="staff-session-button"><b>${escapeHtml(session.name)}</b><span>${escapeHtml(session.roleLabel)} · ${escapeHtml(session.shiftLabel)}</span></summary><div class="staff-session-dropdown"><button type="button" id="btnStockOverview">Stock <span class="stock-alert-badge hidden" id="stockAlertBadge">0</span></button><button type="button" id="btnHistory">History / Daily Report</button><button type="button" id="btnReceipt">Receipt</button><button type="button" id="btnElectricityTopup">Electricity top-up</button><button type="button" id="btnClearStorage" data-permission="maintenance">Clear Storage</button><a href="shift.html">Shift Tools</a><a href="admin.html" data-permission="admin">Admin</a><button type="button" id="btnStaffSwitch">Switch staff / Sign out</button></div></details><span class="sales-status ${status.state}"><b>${escapeHtml(status.label)}</b><small>${escapeHtml(status.detail)}</small></span><span class="sales-status ${electricity.state}"><b>${escapeHtml(electricityLabel)}</b><small>Prepaid meter</small></span>`;
+    const details = document.createElement('details');
+    details.className = 'staff-session-menu';
+    const summary = document.createElement('summary');
+    summary.className = 'staff-session-button';
+    summary.append(textEl('b', session.name), textEl('span', `${session.roleLabel} · ${session.shiftLabel}`));
+    const dropdown = document.createElement('div');
+    dropdown.className = 'staff-session-dropdown';
+    const stockButton = textEl('button', 'Stock ');
+    stockButton.type = 'button';
+    stockButton.id = 'btnStockOverview';
+    const stockBadge = textEl('span', '0', 'stock-alert-badge hidden');
+    stockBadge.id = 'stockAlertBadge';
+    stockButton.appendChild(stockBadge);
+    [
+      stockButton,
+      Object.assign(textEl('button', 'History / Daily Report'), {type:'button', id:'btnHistory'}),
+      Object.assign(textEl('button', 'Receipt'), {type:'button', id:'btnReceipt'}),
+      Object.assign(textEl('button', 'Electricity top-up'), {type:'button', id:'btnElectricityTopup'}),
+      Object.assign(textEl('button', 'Clear Storage'), {type:'button', id:'btnClearStorage'}),
+      Object.assign(textEl('a', 'Shift Tools'), {href:'shift.html'}),
+      Object.assign(textEl('a', 'Admin'), {href:'admin.html'}),
+      Object.assign(textEl('button', 'Switch staff / Sign out'), {type:'button', id:'btnStaffSwitch'})
+    ].forEach(item=>dropdown.appendChild(item));
+    dropdown.querySelector('#btnClearStorage').dataset.permission = 'maintenance';
+    dropdown.querySelector('a[href="admin.html"]').dataset.permission = 'admin';
+    details.append(summary, dropdown);
+    const sales = document.createElement('span');
+    sales.className = `sales-status ${status.state}`;
+    sales.append(textEl('b', status.label), textEl('small', status.detail));
+    const electricityNode = document.createElement('span');
+    electricityNode.className = `sales-status ${electricity.state}`;
+    electricityNode.append(textEl('b', electricityLabel), textEl('small', 'Prepaid meter'));
+    host.replaceChildren(details, sales, electricityNode);
     const signOutButton = document.getElementById('btnStaffSwitch');
     if(signOutButton) signOutButton.onclick = signOut;
     const topupButton = document.getElementById('btnElectricityTopup');
@@ -442,9 +514,6 @@
       }
     ).then(result=>{ if(result) updateHeader(); });
   }
-  function escapeHtml(value){
-    return String(value || '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-  }
   function shell(){
     let host = document.getElementById('accessGate');
     if(host) return host;
@@ -458,20 +527,81 @@
   }
   function showSetup(){
     const host = shell();
-    host.innerHTML = `<div class="access-card"><div class="brand-mark">BK</div><p class="access-kicker">First-time secure setup</p><h1>Create staff PINs</h1><p class="access-copy">Mr Asamoah should complete this once on the POS device. PINs are stored as salted hashes, never as plain text.</p><form id="accessSetupForm" class="access-form">${STAFF.map(person=>`<label><span>${escapeHtml(person.name)} · ${escapeHtml(person.roleLabel)}</span><input name="${person.id}" type="password" inputmode="numeric" pattern="[0-9]{4,6}" minlength="4" maxlength="6" autocomplete="new-password" required placeholder="4–6 digit PIN"></label>`).join('')}<div class="access-error" id="accessError"></div><button class="access-primary" type="submit">Save PINs securely</button></form></div>`;
-    document.getElementById('accessSetupForm').onsubmit = async event=>{
+    const card = accessCard('First-time secure setup', 'Create staff PINs', 'Mr Asamoah should complete this once on the POS device. PINs are stored as salted hashes, never as plain text.');
+    const form = document.createElement('form');
+    form.id = 'accessSetupForm';
+    form.className = 'access-form';
+    STAFF.forEach(person=>form.appendChild(fieldLabel({
+      name:person.id, label:`${person.name} · ${person.roleLabel}`, type:'password',
+      inputmode:'numeric', pattern:'[0-9]{4,6}', minlength:'4', maxlength:'6',
+      autocomplete:'new-password', required:true, placeholder:'4–6 digit PIN'
+    })));
+    const error = textEl('div', '', 'access-error');
+    error.id = 'accessError';
+    const submit = textEl('button', 'Save PINs securely', 'access-primary');
+    submit.type = 'submit';
+    form.append(error, submit);
+    card.appendChild(form);
+    host.replaceChildren(card);
+    form.onsubmit = async event=>{
       event.preventDefault();
       const button = event.submitter;
       button.disabled = true;
       const values = Object.fromEntries(new FormData(event.currentTarget).entries());
       try{ await saveInitialPins(values); showLogin(); }
-      catch(error){ document.getElementById('accessError').textContent = error.message; button.disabled = false; }
+      catch(setupError){ error.textContent = setupError.message; button.disabled = false; }
     };
   }
   function showLogin(message){
     const host = shell();
     const selectedShift = suggestedShift(new Date());
-    host.innerHTML = `<div class="access-card"><div class="brand-mark">BK</div><p class="access-kicker">BurgerKiss POS</p><h1>Who is signing in?</h1><p class="access-copy">Staff working in the truck choose a shift. Mr Asamoah and Vera may choose Remote Support without joining a shift.</p><form id="accessLoginForm" class="access-form"><div class="staff-picker">${STAFF.map((person,index)=>`<label class="staff-choice"><input type="radio" name="staffId" value="${person.id}" data-role="${person.role}" ${index===0?'checked':''}><span><b>${escapeHtml(person.name)}</b><small>${escapeHtml(person.roleLabel)}</small></span></label>`).join('')}</div><label><span>Access mode</span><select name="shiftId" id="accessMode"><option value="remote">Remote Support · no shift</option>${Object.values(SHIFTS).map(shift=>`<option value="${shift.id}" >${escapeHtml(shift.label)} · ${escapeHtml(shift.hours)}</option>`).join('')}</select></label><label id="electricityStartField"><span>Prepaid electricity credit at shift start (GHS)</span><input name="electricityStartCreditGhs" type="number" inputmode="decimal" min="0" step="0.01" placeholder="e.g. 128.50"></label><label id="electricityStartNoteField"><span>Electricity note optional</span><input name="electricityStartNote" type="text" maxlength="120" placeholder="Meter/token note"></label><label><span>Personal PIN</span><input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="current-password" required autofocus></label><div class="access-error" id="accessError">${escapeHtml(message || '')}</div><button class="access-primary" type="submit">Sign in</button></form></div>`;
+    const card = accessCard('BurgerKiss POS', 'Who is signing in?', 'Staff working in the truck choose a shift. Mr Asamoah and Vera may choose Remote Support without joining a shift.');
+    const form = document.createElement('form');
+    form.id = 'accessLoginForm';
+    form.className = 'access-form';
+    const picker = document.createElement('div');
+    picker.className = 'staff-picker';
+    STAFF.forEach((person,index)=>{
+      const choice = document.createElement('label');
+      choice.className = 'staff-choice';
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'staffId';
+      input.value = person.id;
+      input.dataset.role = person.role;
+      input.checked = index === 0;
+      const labelText = document.createElement('span');
+      labelText.append(textEl('b', person.name), textEl('small', person.roleLabel));
+      choice.append(input, labelText);
+      picker.appendChild(choice);
+    });
+    const modeLabel = document.createElement('label');
+    modeLabel.appendChild(textEl('span', 'Access mode'));
+    const mode = document.createElement('select');
+    mode.name = 'shiftId';
+    mode.id = 'accessMode';
+    const remote = textEl('option', 'Remote Support · no shift');
+    remote.value = 'remote';
+    mode.appendChild(remote);
+    Object.values(SHIFTS).forEach(shift=>{
+      const option = textEl('option', `${shift.label} · ${shift.hours}`);
+      option.value = shift.id;
+      mode.appendChild(option);
+    });
+    modeLabel.appendChild(mode);
+    const electricityStart = fieldLabel({ name:'electricityStartCreditGhs', label:'Prepaid electricity credit at shift start (GHS)', type:'number', inputmode:'decimal', min:'0', step:'0.01', placeholder:'e.g. 128.50' });
+    electricityStart.id = 'electricityStartField';
+    const electricityNote = fieldLabel({ name:'electricityStartNote', label:'Electricity note optional', type:'text', maxlength:'120', placeholder:'Meter/token note' });
+    electricityNote.id = 'electricityStartNoteField';
+    const pin = fieldLabel({ name:'pin', label:'Personal PIN', type:'password', inputmode:'numeric', pattern:'[0-9]{4,6}', maxlength:'6', autocomplete:'current-password', required:true });
+    pin.querySelector('input').autofocus = true;
+    const error = textEl('div', message || '', 'access-error');
+    error.id = 'accessError';
+    const submit = textEl('button', 'Sign in', 'access-primary');
+    submit.type = 'submit';
+    form.append(picker, modeLabel, electricityStart, electricityNote, pin, error, submit);
+    card.appendChild(form);
+    host.replaceChildren(card);
     const updateElectricityFields = ()=>{
       const operational = document.getElementById('accessMode').value !== 'remote';
       const electricityInput = document.querySelector('input[name="electricityStartCreditGhs"]');
@@ -504,7 +634,7 @@
         updateHeader();
         applyPermissions();
         document.dispatchEvent(new CustomEvent('bk-access-ready', {detail:session}));
-      }catch(error){ document.getElementById('accessError').textContent = error.message; button.disabled = false; }
+      }catch(loginError){ error.textContent = loginError.message; button.disabled = false; }
     };
   }
   function init(){
@@ -518,7 +648,7 @@
     }
     if(configured()){ showLogin(); return; }
     const host = shell();
-    host.innerHTML = '<div class="access-card"><div class="brand-mark">BK</div><h1>Loading staff access…</h1><p class="access-copy">Checking the shared BurgerKiss staff configuration.</p></div>';
+    host.replaceChildren(accessCard('', 'Loading staff access…', 'Checking the shared BurgerKiss staff configuration.'));
     loadRemoteConfig().then(found=>{ if(found || configured()) showLogin(); else showSetup(); });
   }
   function guardNewSale(slot){
