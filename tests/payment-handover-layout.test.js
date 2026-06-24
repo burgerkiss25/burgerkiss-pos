@@ -192,3 +192,13 @@ test('order history list renders rows with DOM text nodes', () => {
   assert.match(renderHistory, /button\.dataset\.historyId = h\.id \|\| ''/);
   assert.match(renderHistory, /button\.onclick = \(\)=> openHistoryOrder/);
 });
+
+test('order history detail modal renders with DOM text nodes', () => {
+  const detail = ui.slice(ui.indexOf('function openHistoryOrder'), ui.indexOf('function closeHistoryOrder'));
+  assert.doesNotMatch(detail, /historyDetailBody'\)\.innerHTML/);
+  assert.match(ui, /function historyItemsNode\(entry\)/);
+  assert.match(ui, /function historyDetailMeta\(label, value\)/);
+  assert.match(detail, /historyDetailBody'\)\.replaceChildren\(\.\.\.content\)/);
+  assert.match(detail, /notice\.append\(/);
+  assert.match(detail, /totals\.className = 'history-totals'/);
+});

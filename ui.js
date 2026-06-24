@@ -2907,6 +2907,30 @@
       </div>`;
     }).join('')}</div>`;
   }
+  function historyItemsNode(entry){
+    const items = Array.isArray(entry.items) ? entry.items : [];
+    if(!items.length) return textEl('div', 'No saved item details.', 'empty-state');
+    const list = document.createElement('div');
+    list.className = 'history-item-list';
+    items.forEach(item=>{
+      const row = document.createElement('div');
+      row.className = 'history-item';
+      const main = document.createElement('div');
+      main.className = 'history-item-main';
+      main.append(textEl('strong', `${Number(item.qty)||1}x ${item.name}`), textEl('b', `${Number(item.total)||0} GHS`));
+      row.appendChild(main);
+      splitEntryNoteLines(item.note).forEach(note=>{
+        row.appendChild(textEl('div', `+ ${String(note).replace(/^\+\s*/, '')}`, 'history-item-extra'));
+      });
+      list.appendChild(row);
+    });
+    return list;
+  }
+  function historyDetailMeta(label, value){
+    const item = document.createElement('div');
+    item.append(textEl('small', label), textEl('strong', value));
+    return item;
+  }
   function isOwnerSession(){
     const current = window.BK_ACCESS && BK_ACCESS.current ? BK_ACCESS.current() : null;
     return !!(current && current.role === 'owner');
@@ -3107,25 +3131,52 @@
     const voided = entry.status === 'voided';
     document.getElementById('hdVoid').disabled = voided;
     document.getElementById('hdVoid').textContent = voided ? 'Order Voided' : 'Void Order';
-    document.getElementById('historyDetailBody').innerHTML = `
-      <div class="history-detail-meta">
-        <div><small>Order number</small><strong>${escapeHtml(entry.orderNo)}</strong></div>
-        <div><small>Slot</small><strong>${escapeHtml(entry.slotName)}</strong></div>
-        <div><small>Payment</small><strong>${escapeHtml(paymentLabel(entry.pay))}</strong></div>
-        <div><small>Order source</small><strong>${escapeHtml(platformLabel(entry.orderSource))}</strong></div>
-        ${entry.externalOrderNo ? `<div><small>Platform reference</small><strong>${escapeHtml(entry.externalOrderNo)}</strong></div>` : ''}
-        ${entry.finalChannel === 'direct' ? `<div><small>Converted delivery</small><strong>${escapeHtml(entry.fulfilment === 'customer-rider' ? 'Customer-arranged rider' : 'BurgerKiss delivery')}</strong></div><div><small>Platform refund</small><strong>Expected / Pending</strong></div>` : ''}
-        <div><small>Packaging</small><strong>${entry.packMode === 'split' ? 'Packed separately' : 'Packed together'}</strong></div>
-        <div><small>Created</small><strong>${new Date(entry.createdAt).toLocaleString()}</strong></div>
-        <div><small>Issued</small><strong>${new Date(entry.closedAt).toLocaleString()}</strong></div>
-      </div>
-      ${voided ? `<div class="void-notice"><strong>VOIDED ORDER</strong><span>${escapeHtml(entry.voidReason)}</span><small>${new Date(entry.voidedAt).toLocaleString()} · ${escapeHtml(entry.voidedBy || 'POS terminal')}</small></div>` : ''}
-      ${historyItemsHtml(entry)}
-      <div class="history-totals">
-        <div><span>Subtotal</span><b>${entry.subtotal} GHS</b></div>
-        <div><span>Discount (${Math.round((entry.discountRate||0)*100)}%)</span><b>-${entry.discount||0} GHS</b></div>
-        <div class="total"><span>${voided ? 'Original total' : 'Total'}</span><b>${entry.total} GHS</b></div>
-      </div>`;
+    const meta = document.createElement('div');
+    meta.className = 'history-detail-meta';
+    meta.append(
+      historyDetailMeta('Order number', entry.orderNo),
+      historyDetailMeta('Slot', entry.slotName),
+      historyDetailMeta('Payment', paymentLabel(entry.pay)),
+      historyDetailMeta('Order source', platformLabel(entry.orderSource))
+    );
+    if(entry.externalOrderNo) meta.appendChild(historyDetailMeta('Platform reference', entry.externalOrderNo));
+    if(entry.finalChannel === 'direct'){
+      meta.append(
+        historyDetailMeta('Converted delivery', entry.fulfilment === 'customer-rider' ? 'Customer-arranged rider' : 'BurgerKiss delivery'),
+        historyDetailMeta('Platform refund', 'Expected / Pending')
+      );
+    }
+    meta.append(
+      historyDetailMeta('Packaging', entry.packMode === 'split' ? 'Packed separately' : 'Packed together'),
+      historyDetailMeta('Created', new Date(entry.createdAt).toLocaleString()),
+      historyDetailMeta('Issued', new Date(entry.closedAt).toLocaleString())
+    );
+    const content = [meta];
+    if(voided){
+      const notice = document.createElement('div');
+      notice.className = 'void-notice';
+      notice.append(
+        textEl('strong', 'VOIDED ORDER'),
+        textEl('span', entry.voidReason),
+        textEl('small', `${new Date(entry.voidedAt).toLocaleString()} · ${entry.voidedBy || 'POS terminal'}`)
+      );
+      content.push(notice);
+    }
+    content.push(historyItemsNode(entry));
+    const totals = document.createElement('div');
+    totals.className = 'history-totals';
+    [
+      ['Subtotal', `${entry.subtotal} GHS`, ''],
+      [`Discount (${Math.round((entry.discountRate||0)*100)}%)`, `-${entry.discount||0} GHS`, ''],
+      [voided ? 'Original total' : 'Total', `${entry.total} GHS`, 'total']
+    ].forEach(([label,value,className])=>{
+      const row = document.createElement('div');
+      if(className) row.className = className;
+      row.append(textEl('span', label), textEl('b', value));
+      totals.appendChild(row);
+    });
+    content.push(totals);
+    document.getElementById('historyDetailBody').replaceChildren(...content);
     document.getElementById('modalHistoryDetail').classList.add('open');
   }
   function closeHistoryOrder(){
