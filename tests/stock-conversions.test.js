@@ -12,9 +12,11 @@ function loadStock(){
   global.BK_SYNC_ENABLED = false;
   delete require.cache[require.resolve('../stock_data.js')];
   delete require.cache[require.resolve('../stock_utils.js')];
+  delete require.cache[require.resolve('../stock_remote.js')];
   delete require.cache[require.resolve('../stock.js')];
   require('../stock_data.js');
   require('../stock_utils.js');
+  require('../stock_remote.js');
   require('../stock.js');
   BK_STOCK.reset();
   BK_STOCK.load();
@@ -28,6 +30,7 @@ function cleanup(){
   delete global.BK_STOCK;
   delete global.BK_STOCK_DATA;
   delete global.BK_STOCK_UTILS;
+  delete global.BK_STOCK_REMOTE;
 }
 
 test('default recipes use practical supplier pack and gram-based conversion units', () => {

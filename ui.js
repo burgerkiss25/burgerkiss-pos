@@ -98,52 +98,16 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   }
 
-  function ensureDialogHost(){
-    let host = document.getElementById('appDialog');
-    if(host) return host;
-    host = document.createElement('div');
-    host.id = 'appDialog';
-    host.className = 'modal';
-    host.innerHTML = '<div class="sheet"><header><b id="appDialogTitle"></b></header><div class="body" id="appDialogBody"></div></div>';
-    document.body.appendChild(host);
-    return host;
-  }
-
+  const DIALOGS = window.BK_DIALOGS || {};
+  function ensureDialogHost(){ return DIALOGS.ensureHost ? DIALOGS.ensureHost() : null; }
   function closeDialog(){
+    if(DIALOGS.close){ DIALOGS.close(); return; }
     const host = document.getElementById('appDialog');
     if(host) host.classList.remove('open', 'modifier-dialog');
   }
-
-  function infoDialog(message){
-    const host = ensureDialogHost();
-    document.getElementById('appDialogTitle').textContent = 'Info';
-    document.getElementById('appDialogBody').innerHTML = `
-      <div style="margin-bottom:10px">${message}</div>
-      <div style="display:flex;justify-content:flex-end"><button class="x" id="dlgOk">OK</button></div>
-    `;
-    host.classList.add('open');
-    document.getElementById('dlgOk').onclick = closeDialog;
-  }
-
-  function confirmDialog(title, message, opts){
-    return new Promise(resolve=>{
-      const options = opts || {};
-      const cancelLabel = options.cancelLabel || 'Cancel';
-      const confirmLabel = options.confirmLabel || 'Confirm';
-      const host = ensureDialogHost();
-      document.getElementById('appDialogTitle').textContent = title;
-      document.getElementById('appDialogBody').innerHTML = `
-        <div style="margin-bottom:10px">${message}</div>
-        <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="x" id="dlgCancel">${cancelLabel}</button>
-          <button class="x" id="dlgConfirm">${confirmLabel}</button>
-        </div>
-      `;
-      host.classList.add('open');
-      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(false); };
-      document.getElementById('dlgConfirm').onclick = ()=>{ closeDialog(); resolve(true); };
-    });
-  }
+  function infoDialog(message){ if(DIALOGS.info) DIALOGS.info(message); }
+  function confirmDialog(title, message, opts){ return DIALOGS.confirm ? DIALOGS.confirm(title, message, opts) : Promise.resolve(false); }
+  function handoverChecklistDialog(title, message){ return DIALOGS.handoverChecklist ? DIALOGS.handoverChecklist(title, message) : Promise.resolve(false); }
 
   function requestDiscountApproval(rate){
     const st = BK_STATE.getState();
@@ -186,42 +150,6 @@
       renderPay();
       refreshTotals();
     };
-  }
-
-  function handoverChecklistDialog(title, message){
-    return new Promise(resolve=>{
-      const host = ensureDialogHost();
-      document.getElementById('appDialogTitle').textContent = title;
-      document.getElementById('appDialogBody').innerHTML = `
-        <div class="handover-checklist-dialog">
-          ${message}
-          <div class="handover-check-progress" id="handoverCheckProgress" role="status" aria-live="polite"></div>
-          <div class="handover-check-actions">
-            <button class="x" id="dlgCancel" type="button">Cancel</button>
-            <button class="x modifier-primary" id="dlgConfirm" type="button" disabled>Confirm handover</button>
-          </div>
-        </div>
-      `;
-      host.classList.add('open');
-      const checks = Array.from(host.querySelectorAll('[data-handover-check]'));
-      const confirm = document.getElementById('dlgConfirm');
-      const progress = document.getElementById('handoverCheckProgress');
-      const update = ()=>{
-        const complete = checks.filter(input=>input.checked).length;
-        const total = checks.length;
-        progress.textContent = `${complete} of ${total} required checks confirmed`;
-        progress.classList.toggle('complete', total > 0 && complete === total);
-        confirm.disabled = total === 0 || complete !== total;
-      };
-      checks.forEach(input=>input.addEventListener('change', update));
-      update();
-      document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(false); };
-      confirm.onclick = ()=>{
-        if(confirm.disabled) return;
-        closeDialog();
-        resolve(true);
-      };
-    });
   }
 
   function promptDialog(title, initial){
@@ -291,7 +219,11 @@
     if(!items.length){
       const empty = document.createElement('div');
       empty.className = 'empty-state product-empty';
-      empty.innerHTML = `<strong>No products found</strong><span>Try another category or clear the search.</span>`;
+      const emptyTitle = document.createElement('strong');
+      emptyTitle.textContent = 'No products found';
+      const emptyHint = document.createElement('span');
+      emptyHint.textContent = 'Try another category or clear the search.';
+      empty.append(emptyTitle, emptyHint);
       empty.style.gridColumn = '1 / -1';
       grid.appendChild(empty);
       return;
@@ -309,13 +241,29 @@
         b.style.backgroundImage = '';
       }
       const catLabel = CATEGORY_LABELS[it.cat] || it.cat || 'Item';
-      b.innerHTML = `<span class="cat-badge">${catLabel}</span>
-                     <div class="name">${it.name}</div>
-                     ${it.subtitle ? `<small class="item-subtitle">${it.subtitle}</small>` : ''}
-                     <div class="item-meta">
-                       <div class="price">${itemDisplayPrice(it)} GHS</div>
-                       <span class="badge">+1</span>
-                     </div>`;
+      const catBadge = document.createElement('span');
+      catBadge.className = 'cat-badge';
+      catBadge.textContent = catLabel;
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = it.name;
+      const meta = document.createElement('div');
+      meta.className = 'item-meta';
+      const price = document.createElement('div');
+      price.className = 'price';
+      price.textContent = `${itemDisplayPrice(it)} GHS`;
+      const addBadge = document.createElement('span');
+      addBadge.className = 'badge';
+      addBadge.textContent = '+1';
+      meta.append(price, addBadge);
+      b.append(catBadge, name);
+      if(it.subtitle){
+        const subtitle = document.createElement('small');
+        subtitle.className = 'item-subtitle';
+        subtitle.textContent = it.subtitle;
+        b.appendChild(subtitle);
+      }
+      b.appendChild(meta);
       b.onclick = ()=> addProductWithFlow(it);
       grid.appendChild(b);
     });
@@ -1478,9 +1426,11 @@
 
   function workflowNextState(stage, slot){
     const hasItems = !!(slot && Array.isArray(slot.items) && slot.items.length);
-    if(stage === 'order') return hasItems
-      ? {state:'ready', title:'Order ready for kitchen', detail:'Products and packaging can now be sent to preparation.', label:'Continue to Kitchen', target:'make', disabled:false}
-      : {state:'blocked', title:'Order not ready', detail:'Add at least one product to continue.', label:'Continue to Kitchen', target:'make', disabled:true};
+    if(stage === 'order'){
+      if(!hasItems) return {state:'blocked', title:'Add products first', detail:'Choose at least one product from the product grid before sending this order to Kitchen.', label:'Continue to Kitchen', target:'make', disabled:true};
+      if(slot && isOnlineOrder(slot)) return {state:'ready', title:`${platformLabel(slot.orderSource)} order ready`, detail:'Reference is saved. Check products, then send the order to Kitchen.', label:'Continue to Kitchen', target:'make', disabled:false};
+      return {state:'ready', title:'Order ready for kitchen', detail:'Check the cart, then send the order to preparation.', label:'Continue to Kitchen', target:'make', disabled:false};
+    }
     if(stage === 'make'){
       const done = hasItems && slot.items.every(item=>!!item.done);
       return done
@@ -2007,16 +1957,30 @@
     const host = ensureDialogHost();
     document.getElementById('appDialogTitle').textContent = 'New online order';
     document.getElementById('appDialogBody').innerHTML = `
-      <p>Choose the order channel. Bolt, Chowdeck and Hubtel are already paid online. WhatsApp orders remain unpaid until pickup or delivery.</p>
-      <label class="dialog-label">Channel<select id="onlinePlatform" class="dialog-field"><option value="whatsapp">WhatsApp</option><option value="bolt">Bolt</option><option value="chowdeck">Chowdeck</option><option value="hubtel">Hubtel</option></select></label>
-      <label class="dialog-label">Order reference / customer name<input id="onlineReference" class="dialog-field" maxlength="80" placeholder="e.g. Ama or BOLT-847263" autocomplete="off"></label>
-      <label class="dialog-label hidden" id="onlinePhoneRow">Customer phone<input id="onlinePhone" class="dialog-field" maxlength="30" inputmode="tel" placeholder="Optional for pickup; needed for delivery"></label>
+      <div class="online-order-guide">
+        <strong>Start with the platform details.</strong>
+        <span>After creating the slot, add products exactly like a walk-in order.</span>
+      </div>
+      <label class="dialog-label">Platform<select id="onlinePlatform" class="dialog-field"><option value="whatsapp">WhatsApp</option><option value="bolt">Bolt</option><option value="chowdeck">Chowdeck</option><option value="hubtel">Hubtel</option></select></label>
+      <div class="online-platform-hint" id="onlinePaymentHint" role="status" aria-live="polite"></div>
+      <label class="dialog-label">Order reference<input id="onlineReference" class="dialog-field" maxlength="80" placeholder="Customer name or platform order number" autocomplete="off"></label>
+      <label class="dialog-label" id="onlineNameRow">Customer name optional<input id="onlineCustomerName" class="dialog-field" maxlength="80" placeholder="Shown on receipts and handover notes" autocomplete="off"></label>
+      <label class="dialog-label hidden" id="onlinePhoneRow">Customer phone optional<input id="onlinePhone" class="dialog-field" maxlength="30" inputmode="tel" placeholder="Useful for WhatsApp delivery or rider calls"></label>
       <div id="onlineOrderError" class="field-error"></div>
       <div class="dialog-actions"><button class="x" id="dlgCancel">Cancel</button><button class="x modifier-primary" id="dlgConfirm">Create Online Order</button></div>`;
     host.classList.add('open');
     const reference = document.getElementById('onlineReference');
     const platformInput = document.getElementById('onlinePlatform');
-    const syncOnlineFields = ()=> document.getElementById('onlinePhoneRow').classList.toggle('hidden', platformInput.value !== 'whatsapp');
+    const syncOnlineFields = ()=>{
+      const platform = platformInput.value;
+      const whatsapp = platform === 'whatsapp';
+      document.getElementById('onlinePhoneRow').classList.toggle('hidden', !whatsapp);
+      document.getElementById('onlineNameRow').classList.toggle('hidden', whatsapp);
+      document.getElementById('onlinePaymentHint').textContent = whatsapp
+        ? 'WhatsApp stays unpaid until pickup/delivery is confirmed before Kitchen.'
+        : `${platformLabel(platform)} is treated as paid online; only enter the platform order number and products.`;
+      reference.placeholder = whatsapp ? 'e.g. Ama pickup or Ama delivery' : `e.g. ${platformLabel(platform).toUpperCase()}-847263`;
+    };
     platformInput.onchange = syncOnlineFields; syncOnlineFields();
     reference.focus();
     document.getElementById('dlgCancel').onclick = ()=>{
@@ -2026,9 +1990,10 @@
     document.getElementById('dlgConfirm').onclick = ()=>{
       const platform = document.getElementById('onlinePlatform').value;
       const externalOrderNo = reference.value.trim();
+      const customerName = document.getElementById('onlineCustomerName').value.trim();
       const customerPhone = document.getElementById('onlinePhone').value.trim();
       const error = document.getElementById('onlineOrderError');
-      if(!externalOrderNo){ error.textContent = 'The platform order number is required.'; return; }
+      if(!externalOrderNo){ error.textContent = platform === 'whatsapp' ? 'Enter the customer name or WhatsApp reference.' : 'Enter the platform order number.'; return; }
       if(onlineOrderExists(platform, externalOrderNo)){ error.textContent = `This ${platformLabel(platform)} order already exists.`; return; }
       const state = BK_STATE.getState();
       const current = state.slots[state.active];
@@ -2037,13 +2002,13 @@
         closeDialog();
         renderAll();
         goTab('order');
-        infoDialog(platform === 'whatsapp' ? `WhatsApp order for ${externalOrderNo} created. Enter the products; fulfilment and payment rules are confirmed before Kitchen.` : `${platformLabel(platform)} order ${externalOrderNo} created. Payment is already recorded; enter the products and continue to Kitchen.`);
+        infoDialog(platform === 'whatsapp' ? `WhatsApp order for ${externalOrderNo} created. Add products next; fulfilment and payment are confirmed before Kitchen.` : `${platformLabel(platform)} order ${externalOrderNo} created as paid online. Add products next, then send to Kitchen.`);
       };
       if(current && !current.items.length && current.pay === 'unpaid'){
-        BK_STATE.updateSlot(state.active, {orderSource:platform, externalOrderNo, customerName:platform === 'whatsapp' ? externalOrderNo : '', customerPhone, pay:platform === 'whatsapp' ? 'unpaid' : platform});
+        BK_STATE.updateSlot(state.active, {orderSource:platform, externalOrderNo, customerName:platform === 'whatsapp' ? externalOrderNo : customerName, customerPhone, pay:platform === 'whatsapp' ? 'unpaid' : platform});
         finish(state.active);
       }else{
-        BK_STATE.addSlot(undefined, {orderSource:platform, externalOrderNo, customerName:platform === 'whatsapp' ? externalOrderNo : '', customerPhone, pay:platform === 'whatsapp' ? 'unpaid' : platform}).then(finish).catch(showOrderNumberError);
+        BK_STATE.addSlot(undefined, {orderSource:platform, externalOrderNo, customerName:platform === 'whatsapp' ? externalOrderNo : customerName, customerPhone, pay:platform === 'whatsapp' ? 'unpaid' : platform}).then(finish).catch(showOrderNumberError);
       }
     };
   }

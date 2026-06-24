@@ -114,6 +114,20 @@
     list.forEach(p=> opts.push(`<option value="${esc(p.id)}" ${p.id===selected?'selected':''}>${esc(p.name)} (${esc(p.id)})</option>`));
     return opts.join('');
   }
+  function notifyValidation(message){
+    const body = document.getElementById('menusBody');
+    if(!body) return false;
+    let notice = body.querySelector('.admin-validation-message');
+    if(!notice){
+      notice = document.createElement('div');
+      notice.className = 'admin-validation-message';
+      notice.setAttribute('role', 'alert');
+      body.prepend(notice);
+    }
+    notice.textContent = message;
+    notice.scrollIntoView({block:'nearest'});
+    return false;
+  }
   function rowHtml(m){
     return `
       <article class="admin-menu-card" data-menu-row>
@@ -183,19 +197,20 @@
     return rows;
   }
   function save(){
-    const rows = sanitizeRows(collectRows().filter(r=>r.id || r.name || r.baseId));
+    const rawRows = collectRows().filter(r=>r.id || r.name || r.baseId);
     const used = new Set();
-    for(const r of rows){
-      if(!r.id){ alert('Each menu needs an id.'); return; }
-      if(!r.name){ alert(`Menu ${r.id} needs a name.`); return; }
-      if(!r.baseId || !productExists(r.baseId)){ alert(`Menu ${r.id} needs a valid base product.`); return; }
-      if(!Number.isFinite(Number(r.menuPrice)) || Number(r.menuPrice) <= 0){ alert(`Menu ${r.id} needs a menu price.`); return; }
-      if(r.defaultFries && !productExists(r.defaultFries)){ alert(`Invalid fries for ${r.id}.`); return; }
-      if(r.defaultDrink && !productExists(r.defaultDrink)){ alert(`Invalid drink for ${r.id}.`); return; }
-      if(r.defaultWingsSauce && !productExists(r.defaultWingsSauce)){ alert(`Invalid sauce for ${r.id}.`); return; }
-      if(used.has(r.id)){ alert(`Duplicate menu id: ${r.id}`); return; }
+    for(const r of rawRows){
+      if(!r.id) return notifyValidation('Each menu needs an id.');
+      if(!r.name) return notifyValidation(`Menu ${r.id} needs a name.`);
+      if(!r.baseId || !productExists(r.baseId)) return notifyValidation(`Menu ${r.id} needs a valid base product.`);
+      if(!Number.isFinite(Number(r.menuPrice)) || Number(r.menuPrice) <= 0) return notifyValidation(`Menu ${r.id} needs a menu price.`);
+      if(r.defaultFries && !productExists(r.defaultFries)) return notifyValidation(`Invalid fries for ${r.id}.`);
+      if(r.defaultDrink && !productExists(r.defaultDrink)) return notifyValidation(`Invalid drink for ${r.id}.`);
+      if(r.defaultWingsSauce && !productExists(r.defaultWingsSauce)) return notifyValidation(`Invalid sauce for ${r.id}.`);
+      if(used.has(r.id)) return notifyValidation(`Duplicate menu id: ${r.id}.`);
       used.add(r.id);
     }
+    const rows = sanitizeRows(rawRows);
     applyRows(rows);
     saveRemoteSoon();
     closeEditor();
