@@ -8,6 +8,7 @@ const landing = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const order = fs.readFileSync(path.join(root, 'order.html'), 'utf8');
 const shift = fs.readFileSync(path.join(root, 'shift.html'), 'utf8');
 const purchases = fs.readFileSync(path.join(root, 'purchases.html'), 'utf8');
+const purchasesJs = fs.readFileSync(path.join(root, 'purchases.js'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
 
@@ -54,7 +55,7 @@ test('shift tools are isolated on a dedicated page without the order UI bundle',
 });
 
 test('finishing the final open order returns to the landing page', () => {
-  const markIssued = ui.slice(ui.indexOf('function markIssued('), ui.indexOf('function historyStatusLabel'));
+  const markIssued = ui.slice(ui.indexOf('function markIssued('), ui.indexOf('function isOwnerSession'));
   assert.match(markIssued, /if\(!nextState\.slots\.length\)\{[\s\S]*BK_STATE\.flushRemote[\s\S]*window\.location\.replace\('index\.html'\)/);
   assert.doesNotMatch(markIssued, /if\(!nextState\.slots\.length\) goTab\('order'\)/);
 });
@@ -72,4 +73,7 @@ test('purchase entry is isolated and requires purchaser PIN confirmation', () =>
   assert.match(purchases, /Receipt is in purse/);
   assert.match(purchases, /purchaseExport/);
   assert.doesNotMatch(purchases, /ui\.js|main\.js|id="buttons"|id="orderCart"/);
+  assert.doesNotMatch(purchasesJs, /\.innerHTML\s*=/);
+  assert.match(purchasesJs, /select\.replaceChildren/);
+  assert.match(purchasesJs, /host\.replaceChildren\(title, \.\.\.rows\)/);
 });
