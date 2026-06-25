@@ -37,6 +37,31 @@
   function ingredientOptions(){
     return Object.entries(BK_STOCK.getIngredients()).map(([id, ingredient])=>`<option value="${esc(id)}">${esc(ingredient.name || id)} (${esc(id)})</option>`).join('');
   }
+  function textEl(tag, text, className){
+    const el = document.createElement(tag);
+    if(className) el.className = className;
+    el.textContent = text == null ? '' : String(text);
+    return el;
+  }
+  function optionEl(value, label, selected){
+    const option = document.createElement('option');
+    option.value = value == null ? '' : String(value);
+    option.textContent = label == null ? option.value : String(label);
+    option.selected = !!selected;
+    return option;
+  }
+  function categorySelect(selected){
+    const select = document.createElement('select');
+    select.dataset.field = 'cat';
+    select.replaceChildren(...CATEGORIES.map(([id, label])=>optionEl(id, label, id === selected)));
+    return select;
+  }
+  function ingredientSelect(){
+    const select = document.createElement('select');
+    select.dataset.recipeIngredient = '';
+    select.replaceChildren(...Object.entries(BK_STOCK.getIngredients()).map(([id, ingredient])=>optionEl(id, `${ingredient.name || id} (${id})`)));
+    return select;
+  }
   function catalogChoices(kind, currentId){
     const predicate = kind === 'addons' ? BK_ADDONS.isAddonProduct : (kind === 'sides' ? BK_SIDES.isSideProduct : BK_DRINKS.isDrinkProduct);
     return DRAFT.filter(product=>product.id !== currentId && predicate(product))
@@ -46,18 +71,49 @@
   function choiceEditor(item, kind, title, emptyText){
     const selected = new Set(Array.isArray(item[kind]) ? item[kind] : []);
     const choices = catalogChoices(kind, item.id);
-    if(!choices.length) return `<p class="muted">${emptyText}</p>`;
-    return `<div class="catalog-addon-editor" data-choice-editor="${kind}">${choices.map(choice=>`<label class="catalog-addon-choice"><input type="checkbox" data-choice-kind="${kind}" data-addon-choice="${esc(choice.id)}" ${selected.has(choice.id) ? 'checked' : ''}><span>${esc(choice.name)}</span><small>${esc(title)} · ${choice.price} GHS · ${esc(choice.id)}</small></label>`).join('')}</div>`;
+    if(!choices.length) return textEl('p', emptyText, 'muted');
+    const editor = document.createElement('div');
+    editor.className = 'catalog-addon-editor';
+    editor.dataset.choiceEditor = kind;
+    choices.forEach(choice=>{
+      const label = document.createElement('label');
+      label.className = 'catalog-addon-choice';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.dataset.choiceKind = kind;
+      input.dataset.addonChoice = choice.id;
+      input.checked = selected.has(choice.id);
+      label.append(input, textEl('span', choice.name), textEl('small', `${title} · ${choice.price} GHS · ${choice.id}`));
+      editor.appendChild(label);
+    });
+    return editor;
   }
   function modifierEditor(item, kind, heading, description, title, emptyText){
-    if(!BK_ADDONS.isConfigurableProduct(item)) return '<p class="muted">Modifiers are configured on main products like burgers, fries, wings, and salads.</p>';
-    return `<h5>${heading}</h5><p class="muted">${description}</p>${choiceEditor(item,kind,title,emptyText)}`;
+    const fragment = document.createDocumentFragment();
+    if(!BK_ADDONS.isConfigurableProduct(item)){
+      fragment.appendChild(textEl('p', 'Modifiers are configured on main products like burgers, fries, wings, and salads.', 'muted'));
+      return fragment;
+    }
+    fragment.append(textEl('h5', heading), textEl('p', description, 'muted'), choiceEditor(item,kind,title,emptyText));
+    return fragment;
   }
   function detailTab(id, label, meta, active){
-    return `<button class="catalog-detail-tab ${active ? 'active' : ''}" type="button" data-detail-tab="${id}" aria-selected="${active ? 'true' : 'false'}"><span>${label}</span>${meta ? `<small>${meta}</small>` : ''}</button>`;
+    const button = document.createElement('button');
+    button.className = `catalog-detail-tab ${active ? 'active' : ''}`.trim();
+    button.type = 'button';
+    button.dataset.detailTab = id;
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+    button.appendChild(textEl('span', label));
+    if(meta) button.appendChild(textEl('small', meta));
+    return button;
   }
   function detailPanel(id, active, content){
-    return `<section class="catalog-detail-panel" data-detail-panel="${id}" ${active ? '' : 'hidden'}>${content}</section>`;
+    const section = document.createElement('section');
+    section.className = 'catalog-detail-panel';
+    section.dataset.detailPanel = id;
+    section.hidden = !active;
+    if(content) section.append(content);
+    return section;
   }
   function loadDraft(){
     DRAFT = (BK_DATA.BASE || []).map(product=>({
@@ -166,14 +222,22 @@
       .map(change=>({event,change})))
       .sort((a,b)=>b.event.ts-a.event.ts)
       .slice(0,5);
-    if(!entries.length) return '<p class="muted">No product changes recorded yet.</p>';
-    return `<div class="catalog-history-list">${entries.map(({event,change})=>{
+    if(!entries.length) return textEl('p', 'No product changes recorded yet.', 'muted');
+    const list = document.createElement('div');
+    list.className = 'catalog-history-list';
+    entries.forEach(({event,change})=>{
       const actor = event.actor && event.actor.name ? event.actor.name : 'Unknown user';
       const detail = Array.isArray(change.fields) && change.fields.length
         ? change.fields.map(field=>typeof field === 'string' ? field : `${field.field}: ${field.before} → ${field.after}`).join(' · ')
         : change.action;
-      return `<article><b>${esc(actor)} · ${esc(change.action)}</b><time datetime="${new Date(event.ts).toISOString()}">${new Date(event.ts).toLocaleString()}</time><small>${esc(detail)}</small></article>`;
-    }).join('')}</div>`;
+      const article = document.createElement('article');
+      article.append(textEl('b', `${actor} · ${change.action}`));
+      const time = textEl('time', new Date(event.ts).toLocaleString());
+      time.dateTime = new Date(event.ts).toISOString();
+      article.append(time, textEl('small', detail));
+      list.appendChild(article);
+    });
+    return list;
   }
   function matchesFilter(item){
     if(filter === 'active') return item.active !== false;
@@ -197,14 +261,43 @@
       });
     });
   }
-  function recipeChips(item, index){
+  function renderRecipeChips(list, item, index){
     const ingredients = BK_STOCK.getIngredients();
     const entries = Object.entries(item.recipe || {});
-    if(!entries.length) return '<span class="admin-empty-inline">No recipe configured</span>';
-    return entries.map(([id, quantity])=>{
+    if(!entries.length){
+      list.replaceChildren(textEl('span', 'No recipe configured', 'admin-empty-inline'));
+      return;
+    }
+    list.replaceChildren(...entries.map(([id, quantity])=>{
       const ingredient = ingredients[id] || {};
-      return `<span class="recipe-ingredient-chip"><b>${esc(ingredient.name || id)}</b><span>${quantity} ${esc(ingredient.unit || '')}</span><button type="button" data-recipe-remove="${esc(id)}" data-index="${index}" aria-label="Remove ${esc(ingredient.name || id)}">×</button></span>`;
-    }).join('');
+      const chip = document.createElement('span');
+      chip.className = 'recipe-ingredient-chip';
+      const remove = textEl('button', '×');
+      remove.type = 'button';
+      remove.dataset.recipeRemove = id;
+      remove.dataset.index = String(index);
+      remove.setAttribute('aria-label', `Remove ${ingredient.name || id}`);
+      chip.append(textEl('b', ingredient.name || id), textEl('span', `${quantity} ${ingredient.unit || ''}`), remove);
+      return chip;
+    }));
+  }
+  function imageNode(item, className){
+    const wrap = document.createElement('div');
+    wrap.className = className;
+    if(item.image){
+      const img = document.createElement('img');
+      img.src = item.image;
+      img.alt = item.name;
+      wrap.appendChild(img);
+    }else{
+      wrap.appendChild(textEl('span', 'No image'));
+    }
+    return wrap;
+  }
+  function labeledControl(labelText, control){
+    const label = document.createElement('label');
+    label.append(textEl('span', labelText), control);
+    return label;
   }
   function productCard(item, index){
     const recipeCount = Object.keys(item.recipe || {}).length;
@@ -212,59 +305,170 @@
     const sideCount = Array.isArray(item.sides) ? item.sides.length : 0;
     const drinkCount = Array.isArray(item.drinks) ? item.drinks.length : 0;
     const state = changeState(item);
-    const image = item.image
-      ? `<img src="${esc(item.image)}" alt="${esc(item.name)}">`
-      : '<span>No image</span>';
-    return `<article class="catalog-product-card ${state ? 'catalog-product-changed' : ''} ${item.active === false ? 'catalog-product-archived' : ''}" data-catalog-product data-index="${index}">
-      <div class="catalog-product-summary">
-        <div class="catalog-order-controls"><button type="button" data-move="-1" aria-label="Move ${esc(item.name)} up">↑</button><button type="button" data-move="1" aria-label="Move ${esc(item.name)} down">↓</button></div>
-        <div class="catalog-product-image">${image}</div>
-        <div class="catalog-product-main"><input data-field="name" aria-label="Product name" value="${esc(item.name)}"><small>${esc(item.id)}</small></div>
-        <label><span>Price</span><span class="currency-field"><input data-field="price" type="number" min="0" step="1" value="${item.price}"><b>GHS</b></span></label>
-        <label><span>Category</span><select data-field="cat">${categoryOptions(item.cat)}</select></label>
-        <div class="catalog-product-status">${item.active === false ? '<span class="catalog-archive-badge">Archived</span>' : ''}${state ? `<span class="catalog-change-badge">${state}</span>` : ''}<span class="admin-count-badge">${recipeCount} ingredient${recipeCount === 1 ? '' : 's'}</span><small>${item.image ? 'Image ready' : 'Image missing'}</small></div>
-        <details class="catalog-product-details"><summary>Edit details</summary>
-          <div class="catalog-detail-workspace">
-            <nav class="catalog-detail-tabs" aria-label="Product detail sections">
-              ${detailTab('image','Image',item.image ? 'Ready' : 'Missing',false)}
-              ${detailTab('recipe','Recipe',`${recipeCount} item${recipeCount === 1 ? '' : 's'}`,true)}
-              ${detailTab('addons','Add-ons',`${addonCount} selected`,false)}
-              ${detailTab('sides','Sides',`${sideCount} selected`,false)}
-              ${detailTab('drinks','Drinks',`${drinkCount} selected`,false)}
-              ${detailTab('technical','Technical','ID & history',false)}
-            </nav>
-            <div class="catalog-detail-panels">
-              ${detailPanel('image',false,`<h5>Image</h5><div class="catalog-detail-image">${image}</div><label class="x admin-upload-button">Replace image<input class="sr-only" type="file" accept="image/*" data-image-file></label><button class="mini" type="button" data-image-remove>Remove image</button>`)}
-              ${detailPanel('recipe',true,`<h5>Recipe</h5><div class="recipe-ingredient-list" data-recipe-list>${recipeChips(item,index)}</div><div class="recipe-add-row"><select data-recipe-ingredient>${ingredientOptions()}</select><input data-recipe-quantity type="number" min="0.25" step="0.25" value="1"><button class="x" type="button" data-recipe-add>Add ingredient</button></div>`)}
-              ${detailPanel('addons',false,modifierEditor(item,'addons','Product add-ons','Choose only upgrades that customize the main product.','Add-on','Create active add-on products first, then attach them here.'))}
-              ${detailPanel('sides',false,modifierEditor(item,'sides','Suggested sides','Choose paid side suggestions shown separately from add-ons.','Side','Create active side products first, then attach them here.'))}
-              ${detailPanel('drinks',false,modifierEditor(item,'drinks','Suggested drinks','Choose paid drink suggestions shown separately from add-ons.','Drink','Create active drink products first, then attach them here.'))}
-              ${detailPanel('technical',false,`<h5>Technical details</h5><label><span>Product ID</span><input data-field="id" value="${esc(item.id)}"><small class="catalog-field-error" data-error-for="id"></small></label><h5>History</h5>${productHistory(item)}<button class="mini ${item.active === false ? '' : 'admin-row-danger'}" type="button" data-archive-product>${item.active === false ? 'Restore product' : 'Archive product'}</button>`)}
-            </div>
-          </div>
-        </details>
-        <div class="catalog-row-error" role="alert"></div>
-      </div>
-    </article>`;
+    const article = document.createElement('article');
+    article.className = `catalog-product-card ${state ? 'catalog-product-changed' : ''} ${item.active === false ? 'catalog-product-archived' : ''}`.trim();
+    article.dataset.catalogProduct = '';
+    article.dataset.index = String(index);
+    const summary = document.createElement('div');
+    summary.className = 'catalog-product-summary';
+    const controls = document.createElement('div');
+    controls.className = 'catalog-order-controls';
+    [-1, 1].forEach(move=>{
+      const button = textEl('button', move < 0 ? '↑' : '↓');
+      button.type = 'button';
+      button.dataset.move = String(move);
+      button.setAttribute('aria-label', `Move ${item.name} ${move < 0 ? 'up' : 'down'}`);
+      controls.appendChild(button);
+    });
+    const main = document.createElement('div');
+    main.className = 'catalog-product-main';
+    const nameInput = document.createElement('input');
+    nameInput.dataset.field = 'name';
+    nameInput.setAttribute('aria-label', 'Product name');
+    nameInput.value = item.name;
+    main.append(nameInput, textEl('small', item.id));
+    const priceInput = document.createElement('input');
+    priceInput.dataset.field = 'price';
+    priceInput.type = 'number';
+    priceInput.min = '0';
+    priceInput.step = '1';
+    priceInput.value = String(item.price);
+    const currency = document.createElement('span');
+    currency.className = 'currency-field';
+    currency.append(priceInput, textEl('b', 'GHS'));
+    const status = document.createElement('div');
+    status.className = 'catalog-product-status';
+    if(item.active === false) status.appendChild(textEl('span', 'Archived', 'catalog-archive-badge'));
+    if(state) status.appendChild(textEl('span', state, 'catalog-change-badge'));
+    status.append(textEl('span', `${recipeCount} ingredient${recipeCount === 1 ? '' : 's'}`, 'admin-count-badge'), textEl('small', item.image ? 'Image ready' : 'Image missing'));
+    const details = document.createElement('details');
+    details.className = 'catalog-product-details';
+    details.appendChild(textEl('summary', 'Edit details'));
+    const workspace = document.createElement('div');
+    workspace.className = 'catalog-detail-workspace';
+    const tabs = document.createElement('nav');
+    tabs.className = 'catalog-detail-tabs';
+    tabs.setAttribute('aria-label', 'Product detail sections');
+    tabs.append(
+      detailTab('image','Image',item.image ? 'Ready' : 'Missing',false),
+      detailTab('recipe','Recipe',`${recipeCount} item${recipeCount === 1 ? '' : 's'}`,true),
+      detailTab('addons','Add-ons',`${addonCount} selected`,false),
+      detailTab('sides','Sides',`${sideCount} selected`,false),
+      detailTab('drinks','Drinks',`${drinkCount} selected`,false),
+      detailTab('technical','Technical','ID & history',false)
+    );
+    const panels = document.createElement('div');
+    panels.className = 'catalog-detail-panels';
+    const imagePanel = document.createDocumentFragment();
+    const upload = textEl('label', 'Replace image', 'x admin-upload-button');
+    const imageInput = document.createElement('input');
+    imageInput.className = 'sr-only';
+    imageInput.type = 'file';
+    imageInput.accept = 'image/*';
+    imageInput.dataset.imageFile = '';
+    upload.appendChild(imageInput);
+    const removeImage = textEl('button', 'Remove image', 'mini');
+    removeImage.type = 'button';
+    removeImage.dataset.imageRemove = '';
+    imagePanel.append(textEl('h5', 'Image'), imageNode(item, 'catalog-detail-image'), upload, removeImage);
+    const recipePanel = document.createDocumentFragment();
+    const recipeList = document.createElement('div');
+    recipeList.className = 'recipe-ingredient-list';
+    recipeList.dataset.recipeList = '';
+    renderRecipeChips(recipeList, item, index);
+    const addRow = document.createElement('div');
+    addRow.className = 'recipe-add-row';
+    const recipeQty = document.createElement('input');
+    recipeQty.dataset.recipeQuantity = '';
+    recipeQty.type = 'number';
+    recipeQty.min = '0.25';
+    recipeQty.step = '0.25';
+    recipeQty.value = '1';
+    const addIngredient = textEl('button', 'Add ingredient', 'x');
+    addIngredient.type = 'button';
+    addIngredient.dataset.recipeAdd = '';
+    addRow.append(ingredientSelect(), recipeQty, addIngredient);
+    recipePanel.append(textEl('h5', 'Recipe'), recipeList, addRow);
+    const techPanel = document.createDocumentFragment();
+    const idInput = document.createElement('input');
+    idInput.dataset.field = 'id';
+    idInput.value = item.id;
+    const idError = document.createElement('small');
+    idError.className = 'catalog-field-error';
+    idError.dataset.errorFor = 'id';
+    const idLabel = labeledControl('Product ID', idInput);
+    idLabel.appendChild(idError);
+    const archive = textEl('button', item.active === false ? 'Restore product' : 'Archive product', `mini ${item.active === false ? '' : 'admin-row-danger'}`.trim());
+    archive.type = 'button';
+    archive.dataset.archiveProduct = '';
+    techPanel.append(textEl('h5', 'Technical details'), idLabel, textEl('h5', 'History'), productHistory(item), archive);
+    panels.append(
+      detailPanel('image', false, imagePanel),
+      detailPanel('recipe', true, recipePanel),
+      detailPanel('addons', false, modifierEditor(item,'addons','Product add-ons','Choose only upgrades that customize the main product.','Add-on','Create active add-on products first, then attach them here.')),
+      detailPanel('sides', false, modifierEditor(item,'sides','Suggested sides','Choose paid side suggestions shown separately from add-ons.','Side','Create active side products first, then attach them here.')),
+      detailPanel('drinks', false, modifierEditor(item,'drinks','Suggested drinks','Choose paid drink suggestions shown separately from add-ons.','Drink','Create active drink products first, then attach them here.')),
+      detailPanel('technical', false, techPanel)
+    );
+    workspace.append(tabs, panels);
+    details.appendChild(workspace);
+    const rowError = document.createElement('div');
+    rowError.className = 'catalog-row-error';
+    rowError.setAttribute('role', 'alert');
+    summary.append(controls, imageNode(item, 'catalog-product-image'), main, labeledControl('Price', currency), labeledControl('Category', categorySelect(item.cat)), status, details, rowError);
+    article.appendChild(summary);
+    return article;
   }
   function render(){
     const body = document.getElementById('catalogBody');
     const query = search.trim().toLowerCase();
+    const toolbar = document.createElement('div');
+    toolbar.className = 'catalog-toolbar';
+    const searchLabel = document.createElement('label');
+    searchLabel.appendChild(textEl('span', 'Search products', 'sr-only'));
+    const searchInput = document.createElement('input');
+    searchInput.id = 'catalogSearch';
+    searchInput.type = 'search';
+    searchInput.placeholder = 'Search products...';
+    searchInput.value = search;
+    searchLabel.appendChild(searchInput);
+    const filterSelect = document.createElement('select');
+    filterSelect.id = 'catalogFilter';
+    filterSelect.setAttribute('aria-label', 'Filter products');
+    [
+      ['active', 'Active products'],
+      ['archived', 'Archived products'],
+      ['all', 'All products'],
+      ['modified', 'Modified'],
+      ['missing-image', 'Missing image'],
+      ['missing-recipe', 'Missing recipe']
+    ].forEach(([value,label])=>filterSelect.appendChild(optionEl(value, label, value === filter)));
+    const modified = changedCount();
+    toolbar.append(searchLabel, filterSelect, textEl('span', modified ? `${modified} changed` : `${DRAFT.length} products`, 'admin-count-badge'));
     const groups = CATEGORIES.map(([category,label])=>{
       const items = DRAFT.map((item,index)=>({item,index}))
         .filter(entry=>entry.item.cat === category && matchesFilter(entry.item) && (!query || `${entry.item.name} ${entry.item.id}`.toLowerCase().includes(query)))
         .sort((a,b)=>Number(a.item.categoryOrder)-Number(b.item.categoryOrder));
-      if(!items.length) return '';
-      return `<details class="admin-category-group catalog-category" open><summary><span><b>${label}</b><small>${items.length} product${items.length === 1 ? '' : 's'}</small></span></summary><div class="catalog-category-products">${items.map(({item,index})=>productCard(item,index)).join('')}</div></details>`;
-    }).join('');
-    const modified = changedCount();
-    body.innerHTML = `<div class="catalog-toolbar"><label><span class="sr-only">Search products</span><input id="catalogSearch" type="search" placeholder="Search products..." value="${esc(search)}"></label><select id="catalogFilter" aria-label="Filter products"><option value="active">Active products</option><option value="archived">Archived products</option><option value="all">All products</option><option value="modified">Modified</option><option value="missing-image">Missing image</option><option value="missing-recipe">Missing recipe</option></select><span class="admin-count-badge">${modified ? `${modified} changed` : `${DRAFT.length} products`}</span></div>${groups || '<div class="empty-state">No matching products.</div>'}`;
-    body.querySelector('#catalogFilter').value = filter;
+      if(!items.length) return null;
+      const section = document.createElement('details');
+      section.className = 'admin-category-group catalog-category';
+      section.open = true;
+      const summary = document.createElement('summary');
+      const summaryText = document.createElement('span');
+      summaryText.append(textEl('b', label), textEl('small', `${items.length} product${items.length === 1 ? '' : 's'}`));
+      summary.appendChild(summaryText);
+      const products = document.createElement('div');
+      products.className = 'catalog-category-products';
+      items.forEach(({item,index})=>products.appendChild(productCard(item,index)));
+      section.append(summary, products);
+      return section;
+    }).filter(Boolean);
+    body.replaceChildren(toolbar, ...(groups.length ? groups : [textEl('div', 'No matching products.', 'empty-state')]));
     bind();
     updateSaveButton();
   }
   function updateRecipeDisplay(card, item, index){
-    card.querySelector('[data-recipe-list]').innerHTML = recipeChips(item,index);
+    renderRecipeChips(card.querySelector('[data-recipe-list]'), item, index);
     bindRecipeRemove(card);
     const badge = card.querySelector('.catalog-product-status .admin-count-badge');
     const count = Object.keys(item.recipe || {}).length;
