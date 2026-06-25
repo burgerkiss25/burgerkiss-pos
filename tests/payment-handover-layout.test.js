@@ -12,6 +12,7 @@ const htmlRenderers = fs.readFileSync(path.join(root, 'html_renderers.js'), 'utf
 const receiptRenderers = fs.readFileSync(path.join(root, 'receipt_renderers.js'), 'utf8');
 const historyRenderers = fs.readFileSync(path.join(root, 'history_renderers.js'), 'utf8');
 const stockOverviewRenderers = fs.readFileSync(path.join(root, 'stock_overview_renderers.js'), 'utf8');
+const orderSummaryRenderers = fs.readFileSync(path.join(root, 'order_summary_renderers.js'), 'utf8');
 
 test('payment and handover have compact local headers', () => {
   assert.match(html, /id="btnPayBack"[^>]*>← Kitchen<\/button>/);
@@ -136,6 +137,19 @@ test('stock overview DOM builders and filtering are isolated from the main UI bu
   assert.ok(admin.indexOf('stock_overview_renderers.js') > -1 && admin.indexOf('stock_overview_renderers.js') < admin.indexOf('ui.js'));
 });
 
+test('active summary and group order DOM builders are isolated from the main UI bundle', () => {
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.match(orderSummaryRenderers, /function groupedRowsNode/);
+  assert.match(orderSummaryRenderers, /function summaryContent/);
+  assert.match(orderSummaryRenderers, /function groupRows/);
+  assert.match(ui, /const ORDER_SUMMARY_RENDERERS = window\.BK_ORDER_SUMMARY_RENDERERS \|\| \{\}/);
+  assert.match(ui, /ORDER_SUMMARY_RENDERERS\.summaryContent/);
+  assert.match(ui, /ORDER_SUMMARY_RENDERERS\.groupRows/);
+  assert.doesNotMatch(ui, /function groupedRowsNode/);
+  assert.ok(html.indexOf('order_summary_renderers.js') > -1 && html.indexOf('order_summary_renderers.js') < html.indexOf('ui.js'));
+  assert.ok(admin.indexOf('order_summary_renderers.js') > -1 && admin.indexOf('order_summary_renderers.js') < admin.indexOf('ui.js'));
+});
+
 
 test('daily sales date picker is restricted for non-owner staff', () => {
   const shiftJs = fs.readFileSync(path.join(root, 'shift.js'), 'utf8');
@@ -217,19 +231,7 @@ test('stock overview, void reason and group order dialogs avoid inline HTML temp
   assert.doesNotMatch(groupDialog, /body\.innerHTML|row\.innerHTML/);
   assert.match(stockOverview, /STOCK_OVERVIEW_RENDERERS\.renderStockOverview/);
   assert.match(voidReason, /presetSelect\.appendChild\(optionNode/);
-  assert.match(groupDialog, /input\.onchange = event=> toggleGroup/);
-});
-
-test('stock overview, void reason and group order dialogs avoid inline HTML templates', () => {
-  const stockOverview = ui.slice(ui.indexOf('function renderStock'), ui.indexOf('function openReceipt'));
-  const voidReason = ui.slice(ui.indexOf('function requestVoidReason'), ui.indexOf('function voidHistoryOrder'));
-  const groupDialog = ui.slice(ui.indexOf('function openGroup'), ui.indexOf('function closeGroup'));
-  assert.doesNotMatch(stockOverview, /host\.innerHTML\s*=|row\.innerHTML\s*=/);
-  assert.doesNotMatch(voidReason, /appDialogBody'\)\.innerHTML/);
-  assert.doesNotMatch(groupDialog, /body\.innerHTML|row\.innerHTML/);
-  assert.match(stockOverview, /host\.replaceChildren\(summary, filters, list\)/);
-  assert.match(voidReason, /presetSelect\.appendChild\(optionNode/);
-  assert.match(groupDialog, /input\.onchange = event=> toggleGroup/);
+  assert.match(groupDialog, /ORDER_SUMMARY_RENDERERS\.groupRows/);
 });
 
 
@@ -286,8 +288,8 @@ test('order history detail modal renders with DOM text nodes', () => {
 test('active order summary modal renders grouped rows with DOM nodes', () => {
   const summary = ui.slice(ui.indexOf('function openSummary'), ui.indexOf('function closeSummary'));
   assert.doesNotMatch(summary, /body\.innerHTML\s*=/);
-  assert.match(ui, /function groupedRowsNode\(items\)/);
-  assert.match(summary, /body\.replaceChildren\(groupedRowsNode\(s\.items\), subtotal, meta\)/);
-  assert.match(summary, /meta\.className = 'summary-meta'/);
+  assert.match(orderSummaryRenderers, /function groupedRowsNode\(items, logic\)/);
+  assert.match(summary, /ORDER_SUMMARY_RENDERERS\.summaryContent/);
+  assert.match(orderSummaryRenderers, /meta\.className = 'summary-meta'/);
   assert.match(css, /\.summary-meta\{/);
 });

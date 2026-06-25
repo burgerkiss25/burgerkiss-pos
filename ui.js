@@ -83,21 +83,6 @@
     return (window.BK_DATA && BK_DATA.STOCK) || STOCK_DEFAULT;
   }
 
-  function groupedRowsNode(items){
-    const fragment = document.createDocumentFragment();
-    BK_LOGIC.groupedLines(items).forEach(({name, qty, note, total})=>{
-      const row = document.createElement('div');
-      row.className = 'row';
-      row.style.borderTop = '1px dashed #2a2f39';
-      row.style.padding = '6px 0';
-      const left = document.createElement('span');
-      left.append(textEl('b', name), textEl('small', `× ${qty}${note ? ` · ${note}` : ''}`));
-      row.append(left, textEl('span', `${total} GHS`));
-      fragment.appendChild(row);
-    });
-    return fragment;
-  }
-
   function escapeHtml(value){
     return String(value == null ? '' : value)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -109,6 +94,7 @@
   const RECEIPT_RENDERERS = window.BK_RECEIPT_RENDERERS || {};
   const HISTORY_RENDERERS = window.BK_HISTORY_RENDERERS || {};
   const STOCK_OVERVIEW_RENDERERS = window.BK_STOCK_OVERVIEW_RENDERERS || {};
+  const ORDER_SUMMARY_RENDERERS = window.BK_ORDER_SUMMARY_RENDERERS || {};
   const REPORTS = window.BK_REPORTS || {};
   function ensureDialogHost(){ return DIALOGS.ensureHost ? DIALOGS.ensureHost() : null; }
   function appDialogBody(){ return document.getElementById('appDialogBody'); }
@@ -3313,16 +3299,11 @@
     const st = BK_STATE.getState();
     if(!st.slots.length){ infoDialog('No active order. Create a new order first.'); return; }
     const {slots, active} = BK_STATE.getState();
-    const s = slots[active]; const c = BK_LOGIC.computeSlot(s);
+    const s = slots[active];
     document.getElementById('sumTitle').textContent = `Summary – ${s.name}`;
     const body = document.getElementById('sumBody');
-    const subtotal = document.createElement('div');
-    subtotal.className = 'sumline';
-    subtotal.append(textEl('span', 'Slot Subtotal'), textEl('b', `${c.subtotal} GHS`));
-    const meta = document.createElement('div');
-    meta.className = 'summary-meta';
-    meta.append(textEl('span', `Combos in slot: ${c.combos}`), textEl('span', `Order Discount: ${Math.round((s.discountRate||0)*100)}%`));
-    body.replaceChildren(groupedRowsNode(s.items), subtotal, meta);
+    const content = ORDER_SUMMARY_RENDERERS.summaryContent ? ORDER_SUMMARY_RENDERERS.summaryContent(s, BK_LOGIC) : [];
+    body.replaceChildren(...content);
     document.getElementById('modalSummary').classList.add('open');
   }
   function closeSummary(){ document.getElementById('modalSummary').classList.remove('open'); }
@@ -3376,20 +3357,9 @@
   function openGroup(){
     groupSel = new Set();
     const {slots} = BK_STATE.getState();
-    const body = document.getElementById('groupBody'); body.replaceChildren();
-    slots.forEach((s,i)=>{
-      const c = BK_LOGIC.computeSlot(s);
-      const row = document.createElement('div');
-      row.className = 'row';
-      const left = document.createElement('span');
-      left.className = 'left';
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.onchange = event=> toggleGroup(i, event.target.checked);
-      left.append(input, textEl('b', s.name), textEl('small', `· ${c.subtotal} GHS · ${s.pay.toUpperCase()}`));
-      row.appendChild(left);
-      body.appendChild(row);
-    });
+    const body = document.getElementById('groupBody');
+    const rows = ORDER_SUMMARY_RENDERERS.groupRows ? ORDER_SUMMARY_RENDERERS.groupRows(slots, BK_LOGIC, toggleGroup) : [];
+    body.replaceChildren(...rows);
     document.getElementById('modalGroup').classList.add('open');
   }
   function closeGroup(){ document.getElementById('modalGroup').classList.remove('open'); }
