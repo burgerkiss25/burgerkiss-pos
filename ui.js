@@ -113,8 +113,14 @@
   }
 
   const DIALOGS = window.BK_DIALOGS || {};
+  const HTML_RENDERERS = window.BK_HTML_RENDERERS || {};
   function ensureDialogHost(){ return DIALOGS.ensureHost ? DIALOGS.ensureHost() : null; }
   function appDialogBody(){ return document.getElementById('appDialogBody'); }
+  function setTrustedHtml(id, html){
+    if(HTML_RENDERERS.setTrustedHtmlById){
+      HTML_RENDERERS.setTrustedHtmlById(id, html);
+    }
+  }
   function textEl(tag, text, className){
     const el = document.createElement(tag);
     if(className) el.className = className;
@@ -3215,8 +3221,8 @@
     const entry = selectedHistoryOrder();
     if(!entry) return;
     const html = historyReceiptHtml(entry);
-    document.getElementById('receiptBody').innerHTML = html;
-    document.getElementById('printArea').innerHTML = html;
+    setTrustedHtml('receiptBody', html);
+    setTrustedHtml('printArea', html);
     document.getElementById('modalReceipt').classList.add('open');
   }
   function requestVoidReason(){
@@ -3350,7 +3356,7 @@
   }
   function renderDailyReport(){
     const input = document.getElementById('reportDate');
-    document.getElementById('dailyReportBody').innerHTML = dailyReportHtml(dailyReportData(input && input.value));
+    setTrustedHtml('dailyReportBody', dailyReportHtml(dailyReportData(input && input.value)));
   }
   function closeDailyReport(){ document.getElementById('modalDailyReport').classList.remove('open'); }
   function exportDailyReportCsv(){
@@ -3363,7 +3369,7 @@
   }
   function printDailyReport(){
     const report = dailyReportData(document.getElementById('reportDate').value);
-    document.getElementById('printArea').innerHTML = `<h2>BurgerKiss – Daily Sales Report</h2>${dailyReportHtml(report)}`;
+    setTrustedHtml('printArea', `<h2>BurgerKiss – Daily Sales Report</h2>${dailyReportHtml(report)}`);
     window.print();
   }
   function downloadFile(name, content, type){
@@ -3596,8 +3602,8 @@
         <div class="sumline"><span>Discount</span><b>-${discount} GHS</b></div>
         <div class="sumline"><span>Total</span><b>${total} GHS</b></div>
       </div>`;
-    document.getElementById('receiptBody').innerHTML = html;
-    document.getElementById('printArea').innerHTML = html;
+    setTrustedHtml('receiptBody', html);
+    setTrustedHtml('printArea', html);
     document.getElementById('modalReceipt').classList.add('open');
   }
   function closeReceipt(){ document.getElementById('modalReceipt').classList.remove('open'); }

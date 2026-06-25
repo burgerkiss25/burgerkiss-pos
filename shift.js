@@ -14,6 +14,11 @@
     const yesterday = BK_REPORTS.dateInputValue(y);
     return value === today || value === yesterday;
   }
+  function setTrustedHtml(id, html){
+    if(window.BK_HTML_RENDERERS && BK_HTML_RENDERERS.setTrustedHtmlById){
+      BK_HTML_RENDERERS.setTrustedHtmlById(id, html);
+    }
+  }
   function restrictDateInput(){
     const dateInput = document.getElementById('shiftReportDate');
     const current = window.BK_ACCESS && BK_ACCESS.current ? BK_ACCESS.current() : null;
@@ -44,7 +49,7 @@
     const date = document.getElementById('shiftReportDate').value;
     const report = BK_REPORTS.dailyReportData(date);
     const host = document.getElementById('shiftReportBody');
-    host.innerHTML = BK_REPORTS.dailyReportHtml(report);
+    setTrustedHtml(host, BK_REPORTS.dailyReportHtml(report));
     host.querySelectorAll('[data-history-id]').forEach(button=>{
       button.onclick = ()=>openOrderDetail(button.dataset.historyId, report.orders);
     });
@@ -52,7 +57,7 @@
   function openOrderDetail(id, scopedOrders){
     const entry = (scopedOrders || []).find(item=>item.id === id);
     document.getElementById('shiftOrderDetailTitle').textContent = entry ? `Order ${entry.orderNo}` : 'Order detail';
-    document.getElementById('shiftOrderDetailBody').innerHTML = BK_REPORTS.historyDetailHtml(entry);
+    setTrustedHtml('shiftOrderDetailBody', BK_REPORTS.historyDetailHtml(entry));
     document.getElementById('shiftOrderDetailModal').classList.add('open');
   }
   function closeOrderDetail(){ document.getElementById('shiftOrderDetailModal').classList.remove('open'); }

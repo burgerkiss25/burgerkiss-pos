@@ -8,6 +8,7 @@ const html = fs.readFileSync(path.join(root, 'order.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
+const htmlRenderers = fs.readFileSync(path.join(root, 'html_renderers.js'), 'utf8');
 
 test('payment and handover have compact local headers', () => {
   assert.match(html, /id="btnPayBack"[^>]*>← Kitchen<\/button>/);
@@ -65,6 +66,20 @@ test('shift order audit rows can open order detail modal', () => {
   assert.match(shiftReports, /data-history-id/);
   assert.match(shiftReports, /function historyDetailHtml/);
   assert.match(shiftJs, /openOrderDetail/);
+});
+
+test('receipt and report HTML sinks are isolated in trusted renderer module', () => {
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  const shift = fs.readFileSync(path.join(root, 'shift.html'), 'utf8');
+  const shiftJs = fs.readFileSync(path.join(root, 'shift.js'), 'utf8');
+  assert.match(htmlRenderers, /function setTrustedHtml/);
+  assert.match(htmlRenderers, /\.innerHTML\s*=/);
+  assert.match(ui, /const HTML_RENDERERS = window\.BK_HTML_RENDERERS \|\| \{\}/);
+  assert.doesNotMatch(ui, /receiptBody'\)\.innerHTML|printArea'\)\.innerHTML|dailyReportBody'\)\.innerHTML/);
+  assert.doesNotMatch(shiftJs, /shiftReportBody[\s\S]{0,160}\.innerHTML|shiftOrderDetailBody'\)\.innerHTML/);
+  assert.ok(html.indexOf('html_renderers.js') > -1 && html.indexOf('html_renderers.js') < html.indexOf('ui.js'));
+  assert.ok(admin.indexOf('html_renderers.js') > -1 && admin.indexOf('html_renderers.js') < admin.indexOf('ui.js'));
+  assert.ok(shift.indexOf('html_renderers.js') > -1 && shift.indexOf('html_renderers.js') < shift.indexOf('shift.js'));
 });
 
 
