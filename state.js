@@ -4,6 +4,7 @@
   const ORDER_COUNTER_KEY = 'bk_order_counter_v1';
   const NORMALIZERS = window.BK_STATE_NORMALIZERS || {};
   const ORDER_NUMBERS = window.BK_ORDER_NUMBER_SERVICE || {};
+  const PERSISTENCE = window.BK_STATE_PERSISTENCE || {};
   let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo', momoProvider:'telecel'|'mtn'|'', issued:false}]
   let active = 0;
   let discountRate = 0;
@@ -49,11 +50,15 @@
     }
   }
   function knownSequenceFloor(){
-    const historyEntries = [];
-    try{
-      const raw = JSON.parse(localStorage.getItem('bk_order_history_v1') || '[]');
-      if(Array.isArray(raw)) historyEntries.push(...raw);
-    }catch(e){}
+    const historyEntries = PERSISTENCE.readHistory
+      ? PERSISTENCE.readHistory(localStorage, 'bk_order_history_v1')
+      : [];
+    if(!PERSISTENCE.readHistory){
+      try{
+        const raw = JSON.parse(localStorage.getItem('bk_order_history_v1') || '[]');
+        if(Array.isArray(raw)) historyEntries.push(...raw);
+      }catch(e){}
+    }
     if(ORDER_NUMBERS.knownSequenceFloor) return ORDER_NUMBERS.knownSequenceFloor(orderSeq, localCounter(), slots, historyEntries);
     let floor = Math.max(orderSeq, localCounter());
     slots.forEach(slot=>{ floor = Math.max(floor, parseOrderSequence(slot && slot.orderNo)); });
@@ -190,27 +195,43 @@
       const n = normalizeState(raw);
       slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq; updatedAt = n.updatedAt;
       rememberCounter(knownSequenceFloor());
-      try{ localStorage.setItem(SAVE_KEY, JSON.stringify(remotePayload())); }catch(e){}
+      if(PERSISTENCE.writeState) PERSISTENCE.writeState(localStorage, SAVE_KEY, remotePayload());
+      else try{ localStorage.setItem(SAVE_KEY, JSON.stringify(remotePayload())); }catch(e){}
       return true;
     }).catch(()=>false);
   }
   function save(){
     updatedAt = Date.now();
-    try{ localStorage.setItem(SAVE_KEY, JSON.stringify(remotePayload())); }catch(e){}
+    if(PERSISTENCE.writeState) PERSISTENCE.writeState(localStorage, SAVE_KEY, remotePayload());
+    else try{ localStorage.setItem(SAVE_KEY, JSON.stringify(remotePayload())); }catch(e){}
     saveRemoteSoon();
   }
   function load(){
     let hadLocal = false;
-    try{
-      const raw = localStorage.getItem(SAVE_KEY);
-      hadLocal = !!raw;
-      if(raw){
-        const n = normalizeState(JSON.parse(raw));
+    const local = PERSISTENCE.readState
+      ? PERSISTENCE.readState(localStorage, SAVE_KEY)
+      : null;
+    if(local){
+      hadLocal = !!local.exists;
+      if(local.value){
+        const n = normalizeState(local.value);
         slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq; updatedAt = n.updatedAt;
         rememberCounter(knownSequenceFloor());
+      }else if(local.error){
+        console.warn('local state load failed:', local.error && local.error.message);
       }
-    }catch(e){
-      console.warn('local state load failed:', e && e.message);
+    }else{
+      try{
+        const raw = localStorage.getItem(SAVE_KEY);
+        hadLocal = !!raw;
+        if(raw){
+          const n = normalizeState(JSON.parse(raw));
+          slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq; updatedAt = n.updatedAt;
+          rememberCounter(knownSequenceFloor());
+        }
+      }catch(e){
+        console.warn('local state load failed:', e && e.message);
+      }
     }
     readyPromise = loadRemoteOnce().then(function(hasRemote){
       return repairOrderNumbers().then(function(changed){
@@ -230,12 +251,16 @@
     slots=[]; active=0; discountRate=0; history.length=0; save(); return true;
   }
   function clearStorage(){
-    localStorage.removeItem(SAVE_KEY);
-    if(window.BK_PRICES && window.BK_PRICES.KEY) localStorage.removeItem(window.BK_PRICES.KEY);
-    if(window.BK_PRODUCTS && window.BK_PRODUCTS.KEY) localStorage.removeItem(window.BK_PRODUCTS.KEY);
-    if(window.BK_MENUS && window.BK_MENUS.KEY) localStorage.removeItem(window.BK_MENUS.KEY);
-    if(window.BK_IMAGES && window.BK_IMAGES.KEY) localStorage.removeItem(window.BK_IMAGES.KEY);
-    if(window.BK_STOCK && window.BK_STOCK.KEY) localStorage.removeItem(window.BK_STOCK.KEY);
+    const keys = [
+      SAVE_KEY,
+      window.BK_PRICES && window.BK_PRICES.KEY,
+      window.BK_PRODUCTS && window.BK_PRODUCTS.KEY,
+      window.BK_MENUS && window.BK_MENUS.KEY,
+      window.BK_IMAGES && window.BK_IMAGES.KEY,
+      window.BK_STOCK && window.BK_STOCK.KEY
+    ];
+    if(PERSISTENCE.clearAppStorage) PERSISTENCE.clearAppStorage(localStorage, keys);
+    else keys.forEach(function(key){ if(key) localStorage.removeItem(key); });
   }
 
   function ensureSlot(){

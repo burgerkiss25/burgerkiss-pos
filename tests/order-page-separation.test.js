@@ -92,6 +92,19 @@ test('order number helpers are split from state orchestration', () => {
   assert.ok(admin.indexOf('order_number_service.js') > -1 && admin.indexOf('order_number_service.js') < admin.indexOf('state.js'));
 });
 
+test('state persistence helpers are split from state orchestration', () => {
+  const state = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
+  const persistence = fs.readFileSync(path.join(root, 'state_persistence.js'), 'utf8');
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.match(persistence, /root\.BK_STATE_PERSISTENCE = \{/);
+  assert.match(persistence, /function readState\(storage, key\)/);
+  assert.match(persistence, /function writeState\(storage, key, payload\)/);
+  assert.match(persistence, /function clearAppStorage\(storage, keys\)/);
+  assert.match(state, /const PERSISTENCE = window\.BK_STATE_PERSISTENCE \|\| \{\}/);
+  assert.ok(order.indexOf('state_persistence.js') > -1 && order.indexOf('state_persistence.js') < order.indexOf('state.js'));
+  assert.ok(admin.indexOf('state_persistence.js') > -1 && admin.indexOf('state_persistence.js') < admin.indexOf('state.js'));
+});
+
 
 test('purchase entry is isolated and requires purchaser PIN confirmation', () => {
   assert.match(purchases, /purchaseAuthForm/);
