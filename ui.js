@@ -97,6 +97,20 @@
     });
     return fragment;
   }
+  function groupedRowsNode(items){
+    const fragment = document.createDocumentFragment();
+    BK_LOGIC.groupedLines(items).forEach(({name, qty, note, total})=>{
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.style.borderTop = '1px dashed #2a2f39';
+      row.style.padding = '6px 0';
+      const left = document.createElement('span');
+      left.append(textEl('b', name), textEl('small', `× ${qty}${note ? ` · ${note}` : ''}`));
+      row.append(left, textEl('span', `${total} GHS`));
+      fragment.appendChild(row);
+    });
+    return fragment;
+  }
 
   function escapeHtml(value){
     return String(value == null ? '' : value)
@@ -2908,6 +2922,30 @@
 
   function historyStatusLabel(entry){
     return entry.status === 'voided' ? 'VOIDED' : 'COMPLETED';
+  }
+  function historyItemsNode(entry){
+    const items = Array.isArray(entry.items) ? entry.items : [];
+    if(!items.length) return textEl('div', 'No saved item details.', 'empty-state');
+    const list = document.createElement('div');
+    list.className = 'history-item-list';
+    items.forEach(item=>{
+      const row = document.createElement('div');
+      row.className = 'history-item';
+      const main = document.createElement('div');
+      main.className = 'history-item-main';
+      main.append(textEl('strong', `${Number(item.qty)||1}x ${item.name}`), textEl('b', `${Number(item.total)||0} GHS`));
+      row.appendChild(main);
+      splitEntryNoteLines(item.note).forEach(note=>{
+        row.appendChild(textEl('div', `+ ${String(note).replace(/^\+\s*/, '')}`, 'history-item-extra'));
+      });
+      list.appendChild(row);
+    });
+    return list;
+  }
+  function historyDetailMeta(label, value){
+    const item = document.createElement('div');
+    item.append(textEl('small', label), textEl('strong', value));
+    return item;
   }
   function historyItemsNode(entry){
     const items = Array.isArray(entry.items) ? entry.items : [];
