@@ -6,11 +6,21 @@
 
   function fillStaffOptions(){
     const select = document.getElementById('purchaseStaff');
-    select.innerHTML = BK_ACCESS.STAFF.map(person=>`<option value="${BK_REPORTS.escapeHtml(person.id)}">${BK_REPORTS.escapeHtml(person.name)} · ${BK_REPORTS.escapeHtml(person.roleLabel)}</option>`).join('');
+    select.replaceChildren(...BK_ACCESS.STAFF.map(person=>{
+      const option = document.createElement('option');
+      option.value = person.id;
+      option.textContent = `${person.name} · ${person.roleLabel}`;
+      return option;
+    }));
   }
   function fillItems(){
     const ingredients = BK_STOCK.getIngredients();
-    document.getElementById('purchaseItems').innerHTML = Object.entries(ingredients).map(([id, item])=>`<option value="${BK_REPORTS.escapeHtml(item.name || id)}" data-id="${BK_REPORTS.escapeHtml(id)}"></option>`).join('');
+    document.getElementById('purchaseItems').replaceChildren(...Object.entries(ingredients).map(([id, item])=>{
+      const option = document.createElement('option');
+      option.value = item.name || id;
+      option.dataset.id = id;
+      return option;
+    }));
   }
   function selectedIngredientByName(name){
     const ingredients = BK_STOCK.getIngredients();
@@ -33,7 +43,35 @@
     return BK_STOCK.getPurchases().filter(entry=>BK_REPORTS.dateInputValue(entry.ts) === selected);
   }
   function renderPurchaseHistory(){
-    document.getElementById('purchaseHistory').innerHTML = BK_REPORTS.purchaseListHtml(visiblePurchases());
+    const host = document.getElementById('purchaseHistory');
+    const purchases = visiblePurchases();
+    const title = document.createElement('h3');
+    title.textContent = 'Purchase audit';
+    if(!purchases.length){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No emergency purchases recorded for this date.';
+      host.replaceChildren(title, empty);
+      return;
+    }
+    const rows = purchases.map(entry=>{
+      const row = document.createElement('div');
+      row.className = 'report-order purchase-audit-row';
+      const copy = document.createElement('span');
+      const name = document.createElement('b');
+      name.textContent = entry.ingredient_name || entry.ingredientId || 'Purchase';
+      const purchasedAt = document.createElement('small');
+      purchasedAt.textContent = `${new Date(entry.ts).toLocaleString()} · ${(entry.staff && entry.staff.name) || 'Staff'}`;
+      const receipt = entry.receiptInPurse ? 'Receipt in purse' : 'Receipt missing';
+      const detail = document.createElement('small');
+      detail.textContent = `${entry.qty} ${entry.unit} · ${entry.paymentSource} · ${receipt}${entry.note ? ` · ${entry.note}` : ''}`;
+      copy.append(name, purchasedAt, detail);
+      const amount = document.createElement('strong');
+      amount.textContent = `${entry.amount} GHS`;
+      row.append(copy, amount);
+      return row;
+    });
+    host.replaceChildren(title, ...rows);
   }
   function exportPurchasesCsv(){
     const rows = [['date','staff','item','qty','unit','amount','paymentSource','receiptInPurse','note']];
