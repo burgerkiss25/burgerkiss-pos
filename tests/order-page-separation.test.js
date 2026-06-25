@@ -55,7 +55,7 @@ test('shift tools are isolated on a dedicated page without the order UI bundle',
 });
 
 test('finishing the final open order returns to the landing page', () => {
-  const markIssued = ui.slice(ui.indexOf('function markIssued('), ui.indexOf('function historyStatusLabel'));
+  const markIssued = ui.slice(ui.indexOf('function markIssued('), ui.indexOf('function isOwnerSession'));
   assert.match(markIssued, /if\(!nextState\.slots\.length\)\{[\s\S]*BK_STATE\.flushRemote[\s\S]*window\.location\.replace\('index\.html'\)/);
   assert.doesNotMatch(markIssued, /if\(!nextState\.slots\.length\) goTab\('order'\)/);
 });

@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '..');
 const stateCode = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
 const logicCode = fs.readFileSync(path.join(root, 'logic.js'), 'utf8');
 const shiftReportsCode = fs.readFileSync(path.join(root, 'shift_reports.js'), 'utf8');
+const historyRenderersCode = fs.readFileSync(path.join(root, 'history_renderers.js'), 'utf8');
 const uiCode = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
 
 function createStorage(seed = {}) {
@@ -161,6 +162,7 @@ function testIssuedOrderHistoryRecovery() {
   };
   context.window = context;
   vm.createContext(context);
+  vm.runInContext(historyRenderersCode, context);
   vm.runInContext(shiftReportsCode, context);
   vm.runInContext(uiCode, context);
   context.BK_UI.openHistory();

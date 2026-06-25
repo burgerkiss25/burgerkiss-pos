@@ -107,6 +107,7 @@
   const DIALOGS = window.BK_DIALOGS || {};
   const HTML_RENDERERS = window.BK_HTML_RENDERERS || {};
   const RECEIPT_RENDERERS = window.BK_RECEIPT_RENDERERS || {};
+  const HISTORY_RENDERERS = window.BK_HISTORY_RENDERERS || {};
   const REPORTS = window.BK_REPORTS || {};
   function ensureDialogHost(){ return DIALOGS.ensureHost ? DIALOGS.ensureHost() : null; }
   function appDialogBody(){ return document.getElementById('appDialogBody'); }
@@ -2907,33 +2908,6 @@
     });
   }
 
-  function historyStatusLabel(entry){
-    return entry.status === 'voided' ? 'VOIDED' : 'COMPLETED';
-  }
-  function historyItemsNode(entry){
-    const items = Array.isArray(entry.items) ? entry.items : [];
-    if(!items.length) return textEl('div', 'No saved item details.', 'empty-state');
-    const list = document.createElement('div');
-    list.className = 'history-item-list';
-    items.forEach(item=>{
-      const row = document.createElement('div');
-      row.className = 'history-item';
-      const main = document.createElement('div');
-      main.className = 'history-item-main';
-      main.append(textEl('strong', `${Number(item.qty)||1}x ${item.name}`), textEl('b', `${Number(item.total)||0} GHS`));
-      row.appendChild(main);
-      splitEntryNoteLines(item.note).forEach(note=>{
-        row.appendChild(textEl('div', `+ ${String(note).replace(/^\+\s*/, '')}`, 'history-item-extra'));
-      });
-      list.appendChild(row);
-    });
-    return list;
-  }
-  function historyDetailMeta(label, value){
-    const item = document.createElement('div');
-    item.append(textEl('small', label), textEl('strong', value));
-    return item;
-  }
   function isOwnerSession(){
     const current = window.BK_ACCESS && BK_ACCESS.current ? BK_ACCESS.current() : null;
     return !!(current && current.role === 'owner');
@@ -3026,52 +3000,10 @@
     if(purgeButton) purgeButton.classList.toggle('access-hidden', !isOwnerSession());
     const body = document.getElementById('historyBody');
     const hist = getFilteredHistory();
-    if(hist.length===0){
-      body.replaceChildren(textEl('div', 'No completed orders in history yet.', 'empty-state'));
-      return;
-    }
-    const completed = hist.filter(h=>h.status !== 'voided');
-    const totalSales = completed.reduce((a,h)=> a + Number(h.total||h.subtotal||0), 0);
-    const cashCount = completed.filter(h=>h.pay==='cash').length;
-    const momoCount = completed.filter(h=>h.pay==='momo').length;
-    const onlineCount = completed.filter(h=>ONLINE_PLATFORMS.has(h.orderSource)).length;
-    const convertedCount = completed.filter(h=>h.finalChannel === 'direct').length;
-    const voidCount = hist.length - completed.length;
-    const summary = document.createElement('div');
-    summary.className = 'history-summary';
-    [
-      ['Orders:', completed.length, ''],
-      ['Cash:', cashCount, ''],
-      ['MoMo:', momoCount, ''],
-      ['Online:', onlineCount, ''],
-      ['Converted:', convertedCount, ''],
-      ['Voided:', voidCount, ''],
-      ['Net sales:', `${totalSales} GHS`, 'history-summary-total']
-    ].forEach(([label,value,className])=>{
-      const item = document.createElement('span');
-      if(className) item.className = className;
-      item.append(textEl('b', label), document.createTextNode(` ${value}`));
-      summary.appendChild(item);
-    });
-    const list = document.createElement('div');
-    list.className = 'history-order-list';
-    hist.slice(0,200).forEach(h=>{
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = `history-order-row ${h.status === 'voided' ? 'voided' : ''}`.trim();
-      button.dataset.historyId = h.id || '';
-      const main = document.createElement('span');
-      main.append(
-        textEl('strong', h.orderNo),
-        textEl('small', `${h.externalOrderNo ? `${platformLabel(h.orderSource)} · ${h.externalOrderNo}` : h.slotName} · ${paymentLabel(h.pay)} · ${new Date(h.closedAt).toLocaleString()}`)
-      );
-      const totals = document.createElement('span');
-      totals.append(textEl('b', `${Number(h.total||h.subtotal||0)} GHS`), textEl('small', historyStatusLabel(h), 'history-status'));
-      button.append(main, totals);
-      button.onclick = ()=> openHistoryOrder(button.dataset.historyId);
-      list.appendChild(button);
-    });
-    body.replaceChildren(summary, list);
+    const nodes = HISTORY_RENDERERS.historyBodyNodes
+      ? HISTORY_RENDERERS.historyBodyNodes(hist, id=>openHistoryOrder(id))
+      : [textEl('div', 'No completed orders in history yet.', 'empty-state')];
+    body.replaceChildren(...nodes);
   }
   function openHistory(){
     recoverIssuedSlotsToHistory();
@@ -3134,51 +3066,7 @@
     const voided = entry.status === 'voided';
     document.getElementById('hdVoid').disabled = voided;
     document.getElementById('hdVoid').textContent = voided ? 'Order Voided' : 'Void Order';
-    const meta = document.createElement('div');
-    meta.className = 'history-detail-meta';
-    meta.append(
-      historyDetailMeta('Order number', entry.orderNo),
-      historyDetailMeta('Slot', entry.slotName),
-      historyDetailMeta('Payment', paymentLabel(entry.pay)),
-      historyDetailMeta('Order source', platformLabel(entry.orderSource))
-    );
-    if(entry.externalOrderNo) meta.appendChild(historyDetailMeta('Platform reference', entry.externalOrderNo));
-    if(entry.finalChannel === 'direct'){
-      meta.append(
-        historyDetailMeta('Converted delivery', entry.fulfilment === 'customer-rider' ? 'Customer-arranged rider' : 'BurgerKiss delivery'),
-        historyDetailMeta('Platform refund', 'Expected / Pending')
-      );
-    }
-    meta.append(
-      historyDetailMeta('Packaging', entry.packMode === 'split' ? 'Packed separately' : 'Packed together'),
-      historyDetailMeta('Created', new Date(entry.createdAt).toLocaleString()),
-      historyDetailMeta('Issued', new Date(entry.closedAt).toLocaleString())
-    );
-    const content = [meta];
-    if(voided){
-      const notice = document.createElement('div');
-      notice.className = 'void-notice';
-      notice.append(
-        textEl('strong', 'VOIDED ORDER'),
-        textEl('span', entry.voidReason),
-        textEl('small', `${new Date(entry.voidedAt).toLocaleString()} · ${entry.voidedBy || 'POS terminal'}`)
-      );
-      content.push(notice);
-    }
-    content.push(historyItemsNode(entry));
-    const totals = document.createElement('div');
-    totals.className = 'history-totals';
-    [
-      ['Subtotal', `${entry.subtotal} GHS`, ''],
-      [`Discount (${Math.round((entry.discountRate||0)*100)}%)`, `-${entry.discount||0} GHS`, ''],
-      [voided ? 'Original total' : 'Total', `${entry.total} GHS`, 'total']
-    ].forEach(([label,value,className])=>{
-      const row = document.createElement('div');
-      if(className) row.className = className;
-      row.append(textEl('span', label), textEl('b', value));
-      totals.appendChild(row);
-    });
-    content.push(totals);
+    const content = HISTORY_RENDERERS.historyDetailContent ? HISTORY_RENDERERS.historyDetailContent(entry) : [];
     document.getElementById('historyDetailBody').replaceChildren(...content);
     document.getElementById('modalHistoryDetail').classList.add('open');
   }

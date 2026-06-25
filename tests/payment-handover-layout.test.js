@@ -10,6 +10,7 @@ const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
 const htmlRenderers = fs.readFileSync(path.join(root, 'html_renderers.js'), 'utf8');
 const receiptRenderers = fs.readFileSync(path.join(root, 'receipt_renderers.js'), 'utf8');
+const historyRenderers = fs.readFileSync(path.join(root, 'history_renderers.js'), 'utf8');
 
 test('payment and handover have compact local headers', () => {
   assert.match(html, /id="btnPayBack"[^>]*>← Kitchen<\/button>/);
@@ -107,6 +108,18 @@ test('daily report calculations and markup use shared report helpers', () => {
   assert.match(shiftReports, /function reportOrderHtml/);
   assert.ok(html.indexOf('shift_reports.js') > -1 && html.indexOf('shift_reports.js') < html.indexOf('ui.js'));
   assert.ok(admin.indexOf('shift_reports.js') > -1 && admin.indexOf('shift_reports.js') < admin.indexOf('ui.js'));
+});
+
+test('history list and detail DOM builders are isolated from the main UI bundle', () => {
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.match(historyRenderers, /function historyBodyNodes/);
+  assert.match(historyRenderers, /function historyDetailContent/);
+  assert.match(ui, /const HISTORY_RENDERERS = window\.BK_HISTORY_RENDERERS \|\| \{\}/);
+  assert.match(ui, /HISTORY_RENDERERS\.historyBodyNodes/);
+  assert.match(ui, /HISTORY_RENDERERS\.historyDetailContent/);
+  assert.doesNotMatch(ui, /function historyItemsNode|function historyDetailMeta|function historyStatusLabel/);
+  assert.ok(html.indexOf('history_renderers.js') > -1 && html.indexOf('history_renderers.js') < html.indexOf('ui.js'));
+  assert.ok(admin.indexOf('history_renderers.js') > -1 && admin.indexOf('history_renderers.js') < admin.indexOf('ui.js'));
 });
 
 
@@ -230,19 +243,18 @@ test('order history list renders rows with DOM text nodes', () => {
   const renderStart = ui.indexOf('function renderHistoryBody');
   const renderHistory = ui.slice(renderStart, ui.indexOf('function openHistory', renderStart));
   assert.doesNotMatch(renderHistory, /body\.innerHTML\s*=/);
-  assert.match(renderHistory, /body\.replaceChildren\(summary, list\)/);
-  assert.match(renderHistory, /button\.dataset\.historyId = h\.id \|\| ''/);
-  assert.match(renderHistory, /button\.onclick = \(\)=> openHistoryOrder/);
+  assert.match(renderHistory, /HISTORY_RENDERERS\.historyBodyNodes/);
+  assert.match(renderHistory, /body\.replaceChildren\(\.\.\.nodes\)/);
 });
 
 test('order history detail modal renders with DOM text nodes', () => {
   const detail = ui.slice(ui.indexOf('function openHistoryOrder'), ui.indexOf('function closeHistoryOrder'));
   assert.doesNotMatch(detail, /historyDetailBody'\)\.innerHTML/);
-  assert.match(ui, /function historyItemsNode\(entry\)/);
-  assert.match(ui, /function historyDetailMeta\(label, value\)/);
+  assert.match(historyRenderers, /function historyItemsNode\(entry\)/);
+  assert.match(historyRenderers, /function historyDetailMeta\(label, value\)/);
   assert.match(detail, /historyDetailBody'\)\.replaceChildren\(\.\.\.content\)/);
-  assert.match(detail, /notice\.append\(/);
-  assert.match(detail, /totals\.className = 'history-totals'/);
+  assert.match(historyRenderers, /notice\.append\(/);
+  assert.match(historyRenderers, /totals\.className = 'history-totals'/);
 });
 
 test('active order summary modal renders grouped rows with DOM nodes', () => {
