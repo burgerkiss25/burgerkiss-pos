@@ -4,6 +4,7 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.resolve(__dirname, '..');
+const stateNormalizersCode = fs.readFileSync(path.join(root, 'state_normalizers.js'), 'utf8');
 const stateCode = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
 const logicCode = fs.readFileSync(path.join(root, 'logic.js'), 'utf8');
 const shiftReportsCode = fs.readFileSync(path.join(root, 'shift_reports.js'), 'utf8');
@@ -27,6 +28,7 @@ function runState(storage, extra = {}) {
   };
   context.window = context;
   vm.createContext(context);
+  vm.runInContext(stateNormalizersCode, context);
   vm.runInContext(stateCode, context);
   return context;
 }

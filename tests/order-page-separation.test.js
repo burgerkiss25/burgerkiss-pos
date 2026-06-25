@@ -66,6 +66,19 @@ test('a completed order cannot be restored by an older remote snapshot', () => {
   assert.match(state, /flushRemote:saveRemoteNow/);
 });
 
+test('state normalization helpers are split from state orchestration', () => {
+  const state = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
+  const normalizers = fs.readFileSync(path.join(root, 'state_normalizers.js'), 'utf8');
+  assert.match(normalizers, /root\.BK_STATE_NORMALIZERS = \{/);
+  assert.match(normalizers, /function normalizeSlot\(slot, idx\)/);
+  assert.match(normalizers, /function normalizeState\(st\)/);
+  assert.match(state, /const NORMALIZERS = window\.BK_STATE_NORMALIZERS \|\| \{\}/);
+  assert.doesNotMatch(state, /function normalizeItem\(it\)/);
+  assert.ok(order.indexOf('state_normalizers.js') > -1 && order.indexOf('state_normalizers.js') < order.indexOf('state.js'));
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.ok(admin.indexOf('state_normalizers.js') > -1 && admin.indexOf('state_normalizers.js') < admin.indexOf('state.js'));
+});
+
 
 test('purchase entry is isolated and requires purchaser PIN confirmation', () => {
   assert.match(purchases, /purchaseAuthForm/);
