@@ -83,13 +83,19 @@
     return (window.BK_DATA && BK_DATA.STOCK) || STOCK_DEFAULT;
   }
 
-  function htmlGroupedRows(items){
-    return BK_LOGIC.groupedLines(items).map(({name, qty, note, total}) => `
-      <div class="row" style="border-top:1px dashed #2a2f39;padding:6px 0">
-        <span><b>${name}</b> <small>× ${qty}${note?` · ${note}`:''}</small></span>
-        <span>${total} GHS</span>
-      </div>
-    `).join('');
+  function groupedRowsNode(items){
+    const fragment = document.createDocumentFragment();
+    BK_LOGIC.groupedLines(items).forEach(({name, qty, note, total})=>{
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.style.borderTop = '1px dashed #2a2f39';
+      row.style.padding = '6px 0';
+      const left = document.createElement('span');
+      left.append(textEl('b', name), textEl('small', `× ${qty}${note ? ` · ${note}` : ''}`));
+      row.append(left, textEl('span', `${total} GHS`));
+      fragment.appendChild(row);
+    });
+    return fragment;
   }
   function groupedRowsNode(items){
     const fragment = document.createDocumentFragment();
@@ -114,6 +120,7 @@
 
   const DIALOGS = window.BK_DIALOGS || {};
   const HTML_RENDERERS = window.BK_HTML_RENDERERS || {};
+  const RECEIPT_RENDERERS = window.BK_RECEIPT_RENDERERS || {};
   function ensureDialogHost(){ return DIALOGS.ensureHost ? DIALOGS.ensureHost() : null; }
   function appDialogBody(){ return document.getElementById('appDialogBody'); }
   function setTrustedHtml(id, html){
@@ -2916,16 +2923,29 @@
   function historyStatusLabel(entry){
     return entry.status === 'voided' ? 'VOIDED' : 'COMPLETED';
   }
-  function historyItemsHtml(entry){
+  function historyItemsNode(entry){
     const items = Array.isArray(entry.items) ? entry.items : [];
-    if(!items.length) return '<div class="empty-state">No saved item details.</div>';
-    return `<div class="history-item-list">${items.map(item=>{
-      const notes = splitEntryNoteLines(item.note);
-      return `<div class="history-item">
-        <div class="history-item-main"><strong>${Number(item.qty)||1}x ${escapeHtml(item.name)}</strong><b>${Number(item.total)||0} GHS</b></div>
-        ${notes.map(note=>`<div class="history-item-extra">+ ${escapeHtml(String(note).replace(/^\+\s*/, ''))}</div>`).join('')}
-      </div>`;
-    }).join('')}</div>`;
+    if(!items.length) return textEl('div', 'No saved item details.', 'empty-state');
+    const list = document.createElement('div');
+    list.className = 'history-item-list';
+    items.forEach(item=>{
+      const row = document.createElement('div');
+      row.className = 'history-item';
+      const main = document.createElement('div');
+      main.className = 'history-item-main';
+      main.append(textEl('strong', `${Number(item.qty)||1}x ${item.name}`), textEl('b', `${Number(item.total)||0} GHS`));
+      row.appendChild(main);
+      splitEntryNoteLines(item.note).forEach(note=>{
+        row.appendChild(textEl('div', `+ ${String(note).replace(/^\+\s*/, '')}`, 'history-item-extra'));
+      });
+      list.appendChild(row);
+    });
+    return list;
+  }
+  function historyDetailMeta(label, value){
+    const item = document.createElement('div');
+    item.append(textEl('small', label), textEl('strong', value));
+    return item;
   }
   function historyItemsNode(entry){
     const items = Array.isArray(entry.items) ? entry.items : [];
@@ -3203,24 +3223,10 @@
     document.getElementById('modalHistoryDetail').classList.remove('open');
     selectedHistoryOrderId = null;
   }
-  function historyReceiptHtml(entry){
-    return `<div class="receipt-archive">
-      <div><b>BurgerKiss – Receipt</b></div>
-      <div>Order: <b>${escapeHtml(entry.orderNo)}</b></div>
-      <div>Date: ${new Date(entry.closedAt).toLocaleString()}</div>
-      <div>Payment: ${escapeHtml(paymentLabel(entry.pay))}</div>
-      <div>Packaging: ${entry.packMode === 'split' ? 'Packed separately' : 'Packed together'}</div>
-      <hr>${historyItemsHtml(entry)}
-      <div class="sumline"><span>Subtotal</span><b>${entry.subtotal} GHS</b></div>
-      <div class="sumline"><span>Discount</span><b>-${entry.discount||0} GHS</b></div>
-      <div class="sumline"><span>Total</span><b>${entry.total} GHS</b></div>
-      ${entry.status === 'voided' ? '<div class="receipt-void">VOIDED – NOT VALID FOR PAYMENT</div>' : ''}
-    </div>`;
-  }
   function reprintHistoryOrder(){
     const entry = selectedHistoryOrder();
     if(!entry) return;
-    const html = historyReceiptHtml(entry);
+    const html = RECEIPT_RENDERERS.historyReceiptHtml ? RECEIPT_RENDERERS.historyReceiptHtml(entry) : '';
     setTrustedHtml('receiptBody', html);
     setTrustedHtml('printArea', html);
     document.getElementById('modalReceipt').classList.add('open');
@@ -3572,36 +3578,10 @@
   }
   function closeSummary(){ document.getElementById('modalSummary').classList.remove('open'); }
 
-  function receiptSectionHtml(slot){
-    const c = BK_LOGIC.computeSlot(slot);
-    return `<div style="margin:6px 0 10px">
-      <div><b>${slot.name}</b> · <small>#${slot.orderNo || '-'}</small></div>
-      ${htmlGroupedRows(slot.items)}
-      <div class="sumline"><span>${slot.name} Subtotal</span><b>${c.subtotal} GHS</b></div>
-    </div>`;
-  }
-
   function openReceipt(indices){
     const {slots} = BK_STATE.getState();
     const idxs = Array.isArray(indices)? indices : [BK_STATE.getState().active];
-    let subtotal=0, discount=0, combos=0;
-    const sections = idxs.map(i=>{
-      const s=slots[i]; const c=BK_LOGIC.computeSlot(s);
-      subtotal += c.subtotal; combos += c.combos;
-      discount += Math.round(c.subtotal * (Number(s.discountRate) || 0));
-      return receiptSectionHtml(s);
-    }).join('');
-    const total = subtotal - discount;
-    const html = `
-      <div style="line-height:1.35">
-        <div><b>BurgerKiss – Order</b></div>
-        <div style="color:#9aa3ad">Combos: ${combos} · Approved order discounts included</div>
-        <hr style="border:0;border-top:1px solid #2a2f39;margin:8px 0">
-        ${sections}
-        <div class="sumline"><span>Subtotal</span><b>${subtotal} GHS</b></div>
-        <div class="sumline"><span>Discount</span><b>-${discount} GHS</b></div>
-        <div class="sumline"><span>Total</span><b>${total} GHS</b></div>
-      </div>`;
+    const html = RECEIPT_RENDERERS.orderReceiptHtml ? RECEIPT_RENDERERS.orderReceiptHtml(slots, idxs) : '';
     setTrustedHtml('receiptBody', html);
     setTrustedHtml('printArea', html);
     document.getElementById('modalReceipt').classList.add('open');

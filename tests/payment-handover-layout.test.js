@@ -9,6 +9,7 @@ const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
 const htmlRenderers = fs.readFileSync(path.join(root, 'html_renderers.js'), 'utf8');
+const receiptRenderers = fs.readFileSync(path.join(root, 'receipt_renderers.js'), 'utf8');
 
 test('payment and handover have compact local headers', () => {
   assert.match(html, /id="btnPayBack"[^>]*>← Kitchen<\/button>/);
@@ -80,6 +81,19 @@ test('receipt and report HTML sinks are isolated in trusted renderer module', ()
   assert.ok(html.indexOf('html_renderers.js') > -1 && html.indexOf('html_renderers.js') < html.indexOf('ui.js'));
   assert.ok(admin.indexOf('html_renderers.js') > -1 && admin.indexOf('html_renderers.js') < admin.indexOf('ui.js'));
   assert.ok(shift.indexOf('html_renderers.js') > -1 && shift.indexOf('html_renderers.js') < shift.indexOf('shift.js'));
+});
+
+test('receipt HTML builders are isolated from the main UI bundle', () => {
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.match(receiptRenderers, /function historyReceiptHtml/);
+  assert.match(receiptRenderers, /function orderReceiptHtml/);
+  assert.match(receiptRenderers, /function groupedRowsHtml/);
+  assert.match(ui, /const RECEIPT_RENDERERS = window\.BK_RECEIPT_RENDERERS \|\| \{\}/);
+  assert.doesNotMatch(ui, /function historyReceiptHtml|function receiptSectionHtml|function htmlGroupedRows/);
+  assert.match(ui, /RECEIPT_RENDERERS\.historyReceiptHtml/);
+  assert.match(ui, /RECEIPT_RENDERERS\.orderReceiptHtml/);
+  assert.ok(html.indexOf('receipt_renderers.js') > -1 && html.indexOf('receipt_renderers.js') < html.indexOf('ui.js'));
+  assert.ok(admin.indexOf('receipt_renderers.js') > -1 && admin.indexOf('receipt_renderers.js') < admin.indexOf('ui.js'));
 });
 
 
