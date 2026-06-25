@@ -27,6 +27,12 @@
     document.getElementById('adminToastRegion').appendChild(toast);
     setTimeout(()=>toast.remove(), 4000);
   }
+  function textEl(tag, text, className){
+    const el = document.createElement(tag);
+    if(className) el.className = className;
+    el.textContent = text == null ? '' : String(text);
+    return el;
+  }
   function confirmAction(title, message, acceptLabel){
     document.getElementById('adminConfirmTitle').textContent = title;
     document.getElementById('adminConfirmMessage').textContent = message;
@@ -126,26 +132,51 @@
     return true;
   }
   function packagingRuleRow(label, id, value, help, numeric){
-    return `<label class="packaging-rule-field"><span>${label}</span><input id="${id}" ${numeric ? 'type="number" min="0" step="1"' : 'type="text"'} value="${String(value == null ? '' : value)}" aria-describedby="${id}Help ${id}Error"><small id="${id}Help">${help}</small><small class="packaging-rule-error" id="${id}Error"></small></label>`;
+    const field = document.createElement('label');
+    field.className = 'packaging-rule-field';
+    const input = document.createElement('input');
+    input.id = id;
+    input.type = numeric ? 'number' : 'text';
+    if(numeric){
+      input.min = '0';
+      input.step = '1';
+    }
+    input.value = String(value == null ? '' : value);
+    input.setAttribute('aria-describedby', `${id}Help ${id}Error`);
+    const helpText = textEl('small', help);
+    helpText.id = `${id}Help`;
+    const error = textEl('small', '', 'packaging-rule-error');
+    error.id = `${id}Error`;
+    field.append(textEl('span', label), input, helpText, error);
+    return field;
   }
   function openPackagingRules(){
     const modal = document.getElementById('modalPackagingRules');
     const body = document.getElementById('packagingRulesBody');
     if(!modal || !body) return;
     const cfg = loadPackagingRules();
-    body.innerHTML = `
-      <div class="stock-editor-intro"><div><h4>Handover packaging mapping</h4><p>Adjust bag IDs and thresholds without changing code.</p></div></div>
-      <div class="packaging-rule-grid">
-      ${packagingRuleRow('Drink bag ID', 'packDrinkBagId', cfg.drinkBagId, 'Used for drinks only (e.g. white_plastic_bag).', false)}
-      ${packagingRuleRow('Food small bag ID', 'packFoodSmallBagId', cfg.foodBagSmallId, 'Used for small food orders.')}
-      ${packagingRuleRow('Food medium bag ID', 'packFoodMediumBagId', cfg.foodBagMediumId, 'Used when food count reaches medium threshold.')}
-      ${packagingRuleRow('Food large bag ID', 'packFoodLargeBagId', cfg.foodBagLargeId, 'Used when order is large or menu-heavy.')}
-      ${packagingRuleRow('Medium threshold (food items)', 'packMediumFoodMin', cfg.mediumFoodMin, 'Minimum food item count to use medium bag.', true)}
-      ${packagingRuleRow('Large threshold (food items)', 'packLargeFoodMin', cfg.largeFoodMin, 'Minimum food item count to use large bag.', true)}
-      ${packagingRuleRow('Large threshold (menu child lines)', 'packLargeMenuMin', cfg.largeMenuChildMin, 'Minimum menu-linked child count to force large bag.', true)}
-      </div>
-      <div class="packaging-preview"><h4>Packaging preview</h4><ul id="packagingPreview"></ul></div>
-    `;
+    const intro = document.createElement('div');
+    intro.className = 'stock-editor-intro';
+    const introCopy = document.createElement('div');
+    introCopy.append(textEl('h4', 'Handover packaging mapping'), textEl('p', 'Adjust bag IDs and thresholds without changing code.'));
+    intro.appendChild(introCopy);
+    const grid = document.createElement('div');
+    grid.className = 'packaging-rule-grid';
+    grid.append(
+      packagingRuleRow('Drink bag ID', 'packDrinkBagId', cfg.drinkBagId, 'Used for drinks only (e.g. white_plastic_bag).', false),
+      packagingRuleRow('Food small bag ID', 'packFoodSmallBagId', cfg.foodBagSmallId, 'Used for small food orders.'),
+      packagingRuleRow('Food medium bag ID', 'packFoodMediumBagId', cfg.foodBagMediumId, 'Used when food count reaches medium threshold.'),
+      packagingRuleRow('Food large bag ID', 'packFoodLargeBagId', cfg.foodBagLargeId, 'Used when order is large or menu-heavy.'),
+      packagingRuleRow('Medium threshold (food items)', 'packMediumFoodMin', cfg.mediumFoodMin, 'Minimum food item count to use medium bag.', true),
+      packagingRuleRow('Large threshold (food items)', 'packLargeFoodMin', cfg.largeFoodMin, 'Minimum food item count to use large bag.', true),
+      packagingRuleRow('Large threshold (menu child lines)', 'packLargeMenuMin', cfg.largeMenuChildMin, 'Minimum menu-linked child count to force large bag.', true)
+    );
+    const preview = document.createElement('div');
+    preview.className = 'packaging-preview';
+    const previewList = document.createElement('ul');
+    previewList.id = 'packagingPreview';
+    preview.append(textEl('h4', 'Packaging preview'), previewList);
+    body.replaceChildren(intro, grid, preview);
     body.oninput = updatePackagingPreview;
     updatePackagingPreview();
     modal.classList.add('open');
@@ -247,11 +278,6 @@
       { label: 'History', path: pathFor('BK_HISTORY_PATH', '/pos/history') }
     ];
   }
-  function escapeHtml(value){
-    return String(value == null ? '' : value).replace(/[&<>"']/g, char=>({
-      '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
-    }[char]));
-  }
   function formatTs(v){
     const n = Number(v);
     if(!Number.isFinite(n) || n <= 0) return '-';
@@ -281,23 +307,45 @@
     const summaryEl = document.getElementById('adminDbStatusSummary');
     if(!body) return;
     if(summaryEl) summaryEl.textContent = `${summary} · Checked ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
-    body.innerHTML = rows.map(r=>{
+    body.replaceChildren(...rows.map(r=>{
       const status = r.ok ? 'available' : String(r.status || 'error').toLowerCase();
       const tone = r.ok ? 'ok' : status === 'empty' ? 'empty' : status === 'local only' ? 'local' : 'error';
       const label = r.ok ? 'Available' : status === 'local only' ? 'Local only' : status === 'empty' ? 'Empty' : 'Error';
       const exactTime = r.ts ? new Date(Number(r.ts)).toLocaleString() : 'No activity timestamp';
-      return `
-      <tr>
-        <td><strong>${escapeHtml(r.label)}</strong></td>
-        <td><span class="admin-status-badge ${tone}"><span aria-hidden="true"></span>${label}</span></td>
-        <td><span class="admin-relative-time" title="${escapeHtml(exactTime)}">${r.ts ? formatTs(r.ts) : 'Not available'}</span></td>
-        <td><details class="admin-path-details"><summary aria-label="Show technical path for ${escapeHtml(r.label)}">Details</summary><code>${escapeHtml(r.path)}</code>${tone === 'error' ? `<small>${escapeHtml(r.status)}</small>` : ''}</details></td>
-      </tr>`;
-    }).join('');
+      const tr = document.createElement('tr');
+      const labelCell = document.createElement('td');
+      labelCell.appendChild(textEl('strong', r.label));
+      const statusCell = document.createElement('td');
+      const badge = textEl('span', label, `admin-status-badge ${tone}`);
+      const dot = document.createElement('span');
+      dot.setAttribute('aria-hidden', 'true');
+      badge.prepend(dot);
+      statusCell.appendChild(badge);
+      const timeCell = document.createElement('td');
+      const time = textEl('span', r.ts ? formatTs(r.ts) : 'Not available', 'admin-relative-time');
+      time.title = exactTime;
+      timeCell.appendChild(time);
+      const pathCell = document.createElement('td');
+      const details = document.createElement('details');
+      details.className = 'admin-path-details';
+      const summary = textEl('summary', 'Details');
+      summary.setAttribute('aria-label', `Show technical path for ${r.label}`);
+      details.append(summary, textEl('code', r.path));
+      if(tone === 'error') details.appendChild(textEl('small', r.status));
+      pathCell.appendChild(details);
+      tr.append(labelCell, statusCell, timeCell, pathCell);
+      return tr;
+    }));
   }
   function refreshDbStatus(){
     const body = document.getElementById('adminDbStatusBody');
-    if(body) body.innerHTML = '<tr><td colspan="4" class="empty-state">Checking Firebase status...</td></tr>';
+    if(body){
+      const row = document.createElement('tr');
+      const cell = textEl('td', 'Checking Firebase status...', 'empty-state');
+      cell.colSpan = 4;
+      row.appendChild(cell);
+      body.replaceChildren(row);
+    }
     const database = db();
     if(!database){
       renderStatus(statusRows().map(r=>Object.assign({}, r, {ok:false, status:'local only'})), 'not configured');
