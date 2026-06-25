@@ -105,6 +105,20 @@ test('state persistence helpers are split from state orchestration', () => {
   assert.ok(admin.indexOf('state_persistence.js') > -1 && admin.indexOf('state_persistence.js') < admin.indexOf('state.js'));
 });
 
+test('state remote helpers are split from state orchestration', () => {
+  const state = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
+  const remote = fs.readFileSync(path.join(root, 'state_remote.js'), 'utf8');
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.match(remote, /root\.BK_STATE_REMOTE = \{/);
+  assert.match(remote, /function remoteEnabled\(\)/);
+  assert.match(remote, /function saveState\(payload\)/);
+  assert.match(remote, /function loadState\(\)/);
+  assert.match(remote, /function reserveOrderSequence\(floor\)/);
+  assert.match(state, /const REMOTE = window\.BK_STATE_REMOTE \|\| \{\}/);
+  assert.ok(order.indexOf('state_remote.js') > -1 && order.indexOf('state_remote.js') < order.indexOf('state.js'));
+  assert.ok(admin.indexOf('state_remote.js') > -1 && admin.indexOf('state_remote.js') < admin.indexOf('state.js'));
+});
+
 
 test('purchase entry is isolated and requires purchaser PIN confirmation', () => {
   assert.match(purchases, /purchaseAuthForm/);

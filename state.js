@@ -5,6 +5,7 @@
   const NORMALIZERS = window.BK_STATE_NORMALIZERS || {};
   const ORDER_NUMBERS = window.BK_ORDER_NUMBER_SERVICE || {};
   const PERSISTENCE = window.BK_STATE_PERSISTENCE || {};
+  const REMOTE = window.BK_STATE_REMOTE || {};
   let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo', momoProvider:'telecel'|'mtn'|'', issued:false}]
   let active = 0;
   let discountRate = 0;
@@ -67,6 +68,7 @@
   }
   let remoteAuthPromise = null;
   function ensureRemoteAuth(){
+    if(REMOTE.ensureAuth) return REMOTE.ensureAuth();
     if(!remoteEnabled() || !window.firebase.auth) return Promise.resolve(true);
     if(remoteAuthPromise) return remoteAuthPromise;
     try{
@@ -79,6 +81,7 @@
     }catch(error){ return Promise.reject(error); }
   }
   function getOrderCounterRef(){
+    if(REMOTE.orderCounterRef) return REMOTE.orderCounterRef();
     try{
       const app = (window.firebase.apps && firebase.apps.length)
         ? firebase.app()
@@ -92,6 +95,12 @@
     const allocate = function(){
       const floor = knownSequenceFloor();
       if(remoteEnabled()){
+        if(REMOTE.reserveOrderSequence){
+          return REMOTE.reserveOrderSequence(floor).then(function(seq){
+            rememberCounter(seq);
+            return formatOrderNo(seq);
+          });
+        }
         return ensureRemoteAuth().then(function(){
           const ref = getOrderCounterRef();
           if(!ref) throw new Error('Order number service is unavailable.');
@@ -141,9 +150,11 @@
 
 
   function remoteEnabled(){
+    if(REMOTE.remoteEnabled) return REMOTE.remoteEnabled();
     return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database);
   }
   function getRemoteRef(){
+    if(REMOTE.stateRef) return REMOTE.stateRef();
     try{
       const app = (window.firebase.apps && firebase.apps.length)
         ? firebase.app()
@@ -164,6 +175,12 @@
       remoteSaveTimer = null;
     }
     if(!remoteEnabled()) return Promise.resolve(true);
+    if(REMOTE.saveState){
+      return REMOTE.saveState(remotePayload()).then(()=>true).catch(function(error){
+        console.warn('remote state save failed:', error && error.message);
+        return false;
+      });
+    }
     return ensureRemoteAuth().then(function(){
       const ref = getRemoteRef();
       if(!ref) throw new Error('Remote state reference unavailable.');
@@ -183,6 +200,18 @@
   }
   function loadRemoteOnce(){
     if(!remoteEnabled()) return Promise.resolve(false);
+    if(REMOTE.loadState){
+      return REMOTE.loadState().then(function(raw){
+        if(!raw || !raw.v) return false;
+        if(updatedAt && Number(raw.ts) <= updatedAt) return false;
+        const n = normalizeState(raw);
+        slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq; updatedAt = n.updatedAt;
+        rememberCounter(knownSequenceFloor());
+        if(PERSISTENCE.writeState) PERSISTENCE.writeState(localStorage, SAVE_KEY, remotePayload());
+        else try{ localStorage.setItem(SAVE_KEY, JSON.stringify(remotePayload())); }catch(e){}
+        return true;
+      }).catch(()=>false);
+    }
     return ensureRemoteAuth().then(function(){
       const ref = getRemoteRef();
       if(!ref) return null;

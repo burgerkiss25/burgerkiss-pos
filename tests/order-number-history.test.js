@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '..');
 const stateNormalizersCode = fs.readFileSync(path.join(root, 'state_normalizers.js'), 'utf8');
 const orderNumberServiceCode = fs.readFileSync(path.join(root, 'order_number_service.js'), 'utf8');
 const statePersistenceCode = fs.readFileSync(path.join(root, 'state_persistence.js'), 'utf8');
+const stateRemoteCode = fs.readFileSync(path.join(root, 'state_remote.js'), 'utf8');
 const stateCode = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
 const logicCode = fs.readFileSync(path.join(root, 'logic.js'), 'utf8');
 const shiftReportsCode = fs.readFileSync(path.join(root, 'shift_reports.js'), 'utf8');
@@ -33,6 +34,7 @@ function runState(storage, extra = {}) {
   vm.runInContext(stateNormalizersCode, context);
   vm.runInContext(orderNumberServiceCode, context);
   vm.runInContext(statePersistenceCode, context);
+  vm.runInContext(stateRemoteCode, context);
   vm.runInContext(stateCode, context);
   return context;
 }
