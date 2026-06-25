@@ -108,6 +108,7 @@
   const HTML_RENDERERS = window.BK_HTML_RENDERERS || {};
   const RECEIPT_RENDERERS = window.BK_RECEIPT_RENDERERS || {};
   const HISTORY_RENDERERS = window.BK_HISTORY_RENDERERS || {};
+  const STOCK_OVERVIEW_RENDERERS = window.BK_STOCK_OVERVIEW_RENDERERS || {};
   const REPORTS = window.BK_REPORTS || {};
   function ensureDialogHost(){ return DIALOGS.ensureHost ? DIALOGS.ensureHost() : null; }
   function appDialogBody(){ return document.getElementById('appDialogBody'); }
@@ -3257,90 +3258,25 @@
     }
     const {slots} = BK_STATE.getState();
     const rows = BK_STOCK.getSnapshot(slots);
-    const tracked = rows.filter(r=> r.track !== false);
-    const buyCount = tracked.filter(r=> !!r.buyNeeded).length;
-    const refillCount = tracked.filter(r=> !r.buyNeeded && !!r.refillNeeded).length;
-    const criticalCount = tracked.filter(r=> !!r.shortage || !!r.buyNeeded).length;
+    const model = STOCK_OVERVIEW_RENDERERS.stockOverviewModel
+      ? STOCK_OVERVIEW_RENDERERS.stockOverviewModel(rows, stockOverviewFilter, stockOverviewQuery)
+      : {tracked:[], buyCount:0, refillCount:0, criticalCount:0, visible:[]};
     if(badge){
-      if(criticalCount > 0){
+      if(model.criticalCount > 0){
         badge.classList.remove('hidden');
-        badge.classList.toggle('warn', buyCount === 0);
-        badge.textContent = String(criticalCount);
+        badge.classList.toggle('warn', model.buyCount === 0);
+        badge.textContent = String(model.criticalCount);
       }else{
         badge.classList.add('hidden');
         badge.classList.remove('warn');
       }
     }
-    const stockStatus = r=> (r.buyNeeded || r.shortage) ? 'buy' : (r.refillNeeded ? 'refill' : 'ok');
-    const query = stockOverviewQuery.trim().toLowerCase();
-    const visible = tracked
-      .filter(r=> stockOverviewFilter === 'all' ? true : stockStatus(r) === stockOverviewFilter)
-      .filter(r=> !query || String(r.name || '').toLowerCase().includes(query) || String(r.id || '').toLowerCase().includes(query))
-      .sort((a,b)=>String(a.name || '').localeCompare(String(b.name || '')));
-    const summary = document.createElement('div');
-    summary.className = 'stock-overview-summary';
-    [
-      ['Tracked', tracked.length, ''],
-      ['Critical', criticalCount, 'crit'],
-      ['Refill', refillCount, 'refill'],
-      ['Buy', buyCount, '']
-    ].forEach(([label,value,className])=>{
-      const kpi = document.createElement('div');
-      kpi.className = `stock-kpi${className ? ` ${className}` : ''}`;
-      kpi.append(textEl('span', label), textEl('b', value));
-      summary.appendChild(kpi);
-    });
-    const filters = document.createElement('div');
-    filters.className = 'stock-overview-filters';
-    const searchInputNode = document.createElement('input');
-    searchInputNode.id = 'stockOverviewSearch';
-    searchInputNode.className = 'dialog-field';
-    searchInputNode.placeholder = 'Search stock item';
-    searchInputNode.value = stockOverviewQuery;
-    filters.appendChild(searchInputNode);
-    [
-      ['all', 'All'],
-      ['ok', 'OK'],
-      ['refill', 'Refill'],
-      ['buy', 'Critical / Buy']
-    ].forEach(([value,label])=>{
-      const filterBtn = dialogButton('', label, `stock-filter ${stockOverviewFilter === value ? 'active' : ''}`.trim());
-      filterBtn.dataset.stockFilter = value;
-      filters.appendChild(filterBtn);
-    });
-    const list = document.createElement('div');
-    list.className = 'stock-overview-list';
-    list.id = 'stockOverviewList';
-    host.replaceChildren(summary, filters, list);
-    const searchInput = host.querySelector('#stockOverviewSearch');
-    if(searchInput){
-      searchInput.oninput = event=>{ stockOverviewQuery = event.target.value; renderStock(); };
-      searchInput.focus({preventScroll:true});
-      searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
-    }
-    if(!visible.length){
-      const empty = document.createElement('div');
-      empty.className = 'empty-state';
-      empty.textContent = 'No stock items in this filter.';
-      list.appendChild(empty);
-    }
-    visible.forEach(r=>{
-      const status = stockStatus(r);
-      const statusLabel = status === 'buy' ? 'Critical' : (status === 'refill' ? 'Refill' : 'OK');
-      const row = document.createElement('div');
-      row.className = 'stock-overview-row';
-      const item = document.createElement('div');
-      item.append(textEl('b', r.name), textEl('small', `Used ${r.used} ${r.unit || ''}`));
-      const meta = textEl('div', `Block Factory ${r.leftTruck} · Store ${r.leftStorage} ${r.unit || ''}`, 'stock-overview-meta');
-      const badgeNode = textEl('span', statusLabel, `stock-status ${status}`);
-      row.append(item, meta, badgeNode);
-      list.appendChild(row);
-    });
-    host.querySelectorAll('[data-stock-filter]').forEach(btn=>{
-      btn.onclick = ()=>{
-        stockOverviewFilter = btn.dataset.stockFilter || 'all';
-        renderStock();
-      };
+    if(!STOCK_OVERVIEW_RENDERERS.renderStockOverview) return;
+    STOCK_OVERVIEW_RENDERERS.renderStockOverview(host, model, {
+      filter:stockOverviewFilter,
+      query:stockOverviewQuery,
+      onSearch(value){ stockOverviewQuery = value; renderStock(); },
+      onFilter(value){ stockOverviewFilter = value; renderStock(); }
     });
   }
 

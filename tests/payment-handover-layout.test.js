@@ -11,6 +11,7 @@ const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
 const htmlRenderers = fs.readFileSync(path.join(root, 'html_renderers.js'), 'utf8');
 const receiptRenderers = fs.readFileSync(path.join(root, 'receipt_renderers.js'), 'utf8');
 const historyRenderers = fs.readFileSync(path.join(root, 'history_renderers.js'), 'utf8');
+const stockOverviewRenderers = fs.readFileSync(path.join(root, 'stock_overview_renderers.js'), 'utf8');
 
 test('payment and handover have compact local headers', () => {
   assert.match(html, /id="btnPayBack"[^>]*>← Kitchen<\/button>/);
@@ -122,6 +123,19 @@ test('history list and detail DOM builders are isolated from the main UI bundle'
   assert.ok(admin.indexOf('history_renderers.js') > -1 && admin.indexOf('history_renderers.js') < admin.indexOf('ui.js'));
 });
 
+test('stock overview DOM builders and filtering are isolated from the main UI bundle', () => {
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.match(stockOverviewRenderers, /function stockOverviewModel/);
+  assert.match(stockOverviewRenderers, /function renderStockOverview/);
+  assert.match(stockOverviewRenderers, /localeCompare/);
+  assert.match(ui, /const STOCK_OVERVIEW_RENDERERS = window\.BK_STOCK_OVERVIEW_RENDERERS \|\| \{\}/);
+  assert.match(ui, /STOCK_OVERVIEW_RENDERERS\.stockOverviewModel/);
+  assert.match(ui, /STOCK_OVERVIEW_RENDERERS\.renderStockOverview/);
+  assert.doesNotMatch(ui, /stockOverviewSearch|stock-overview-row|localeCompare/);
+  assert.ok(html.indexOf('stock_overview_renderers.js') > -1 && html.indexOf('stock_overview_renderers.js') < html.indexOf('ui.js'));
+  assert.ok(admin.indexOf('stock_overview_renderers.js') > -1 && admin.indexOf('stock_overview_renderers.js') < admin.indexOf('ui.js'));
+});
+
 
 test('daily sales date picker is restricted for non-owner staff', () => {
   const shiftJs = fs.readFileSync(path.join(root, 'shift.js'), 'utf8');
@@ -189,9 +203,21 @@ test('daily sales shows and exports purchase audit with date and purchaser', () 
 });
 
 test('stock overview has search and sorted results', () => {
-  assert.match(ui, /stockOverviewSearch/);
+  assert.match(stockOverviewRenderers, /stockOverviewSearch/);
   assert.match(ui, /stockOverviewQuery/);
-  assert.match(ui, /localeCompare/);
+  assert.match(stockOverviewRenderers, /localeCompare/);
+});
+
+test('stock overview, void reason and group order dialogs avoid inline HTML templates', () => {
+  const stockOverview = ui.slice(ui.indexOf('function renderStock'), ui.indexOf('function openReceipt'));
+  const voidReason = ui.slice(ui.indexOf('function requestVoidReason'), ui.indexOf('function voidHistoryOrder'));
+  const groupDialog = ui.slice(ui.indexOf('function openGroup'), ui.indexOf('function closeGroup'));
+  assert.doesNotMatch(stockOverview, /host\.innerHTML\s*=|row\.innerHTML\s*=/);
+  assert.doesNotMatch(voidReason, /appDialogBody'\)\.innerHTML/);
+  assert.doesNotMatch(groupDialog, /body\.innerHTML|row\.innerHTML/);
+  assert.match(stockOverview, /STOCK_OVERVIEW_RENDERERS\.renderStockOverview/);
+  assert.match(voidReason, /presetSelect\.appendChild\(optionNode/);
+  assert.match(groupDialog, /input\.onchange = event=> toggleGroup/);
 });
 
 test('stock overview, void reason and group order dialogs avoid inline HTML templates', () => {
