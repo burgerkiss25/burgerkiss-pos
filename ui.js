@@ -83,13 +83,19 @@
     return (window.BK_DATA && BK_DATA.STOCK) || STOCK_DEFAULT;
   }
 
-  function htmlGroupedRows(items){
-    return BK_LOGIC.groupedLines(items).map(({name, qty, note, total}) => `
-      <div class="row" style="border-top:1px dashed #2a2f39;padding:6px 0">
-        <span><b>${name}</b> <small>× ${qty}${note?` · ${note}`:''}</small></span>
-        <span>${total} GHS</span>
-      </div>
-    `).join('');
+  function groupedRowsNode(items){
+    const fragment = document.createDocumentFragment();
+    BK_LOGIC.groupedLines(items).forEach(({name, qty, note, total})=>{
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.style.borderTop = '1px dashed #2a2f39';
+      row.style.padding = '6px 0';
+      const left = document.createElement('span');
+      left.append(textEl('b', name), textEl('small', `× ${qty}${note ? ` · ${note}` : ''}`));
+      row.append(left, textEl('span', `${total} GHS`));
+      fragment.appendChild(row);
+    });
+    return fragment;
   }
 
   function escapeHtml(value){
@@ -99,7 +105,42 @@
   }
 
   const DIALOGS = window.BK_DIALOGS || {};
+  const HTML_RENDERERS = window.BK_HTML_RENDERERS || {};
+  const RECEIPT_RENDERERS = window.BK_RECEIPT_RENDERERS || {};
+  const REPORTS = window.BK_REPORTS || {};
   function ensureDialogHost(){ return DIALOGS.ensureHost ? DIALOGS.ensureHost() : null; }
+  function appDialogBody(){ return document.getElementById('appDialogBody'); }
+  function setTrustedHtml(id, html){
+    if(HTML_RENDERERS.setTrustedHtmlById){
+      HTML_RENDERERS.setTrustedHtmlById(id, html);
+    }
+  }
+  function textEl(tag, text, className){
+    const el = document.createElement(tag);
+    if(className) el.className = className;
+    el.textContent = text == null ? '' : String(text);
+    return el;
+  }
+  function dialogButton(id, label, className, type){
+    const btn = document.createElement('button');
+    if(id) btn.id = id;
+    btn.type = type || 'button';
+    btn.className = className || 'x';
+    btn.textContent = label;
+    return btn;
+  }
+  function dialogActions(){
+    const actions = document.createElement('div');
+    actions.className = 'dialog-actions';
+    actions.append(...Array.from(arguments));
+    return actions;
+  }
+  function optionNode(value, label){
+    const option = document.createElement('option');
+    option.value = value == null ? '' : String(value);
+    option.textContent = label == null ? option.value : String(label);
+    return option;
+  }
   function closeDialog(){
     if(DIALOGS.close){ DIALOGS.close(); return; }
     const host = document.getElementById('appDialog');
@@ -235,7 +276,7 @@
     if(next) next.disabled = productPage >= pageCount - 1;
     if(controls) controls.classList.toggle('single-page', pageCount <= 1);
     if(dots){
-      dots.innerHTML = '';
+      dots.replaceChildren();
       for(let index = 0; index < pageCount; index += 1){
         const dot = document.createElement('span');
         dot.className = index === productPage ? 'active' : '';
@@ -247,7 +288,7 @@
   function buildProducts(){
     const grid = document.getElementById('buttons');
     if(!grid) return;
-    grid.innerHTML = '';
+    grid.replaceChildren();
     const base = (Array.isArray(BK_DATA.BASE) && BK_DATA.BASE.length) ? BK_DATA.BASE : (BK_DATA.DEFAULT_BASE || []);
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
     const query = productQuery.trim().toLowerCase();
@@ -323,24 +364,39 @@
     const confirmLabel = settings.confirmLabel || 'Add selected';
     const initialValues = settings.initialValues || {};
     document.getElementById('appDialogTitle').textContent = title;
-    document.getElementById('appDialogBody').innerHTML = `
-      <form class="modifier-sheet" id="modifierForm">
-        ${showNote ? `
-          <label class="modifier-note">
-            <span>Note for this item</span>
-            <textarea id="modifierItemNote" rows="2" placeholder="e.g. no onion, no lettuce, no sesame"></textarea>
-          </label>
-          <div class="modifier-quick" aria-label="Quick note shortcuts">
-            ${QUICK_NOTES.map(note=>`<button class="chip modifier-quick-note" type="button" data-note="${note}">${note}</button>`).join('')}
-          </div>
-        ` : ''}
-        <div class="modifier-grid" id="modifierSections"></div>
-        <div class="modifier-actions">
-          <button class="x" id="dlgCancel" type="button">${cancelLabel}</button>
-          <button class="x modifier-primary" id="dlgConfirm" type="submit">${confirmLabel}</button>
-        </div>
-      </form>
-    `;
+    const form = document.createElement('form');
+    form.className = 'modifier-sheet';
+    form.id = 'modifierForm';
+    if(showNote){
+      const noteLabel = document.createElement('label');
+      noteLabel.className = 'modifier-note';
+      noteLabel.appendChild(textEl('span', 'Note for this item'));
+      const note = document.createElement('textarea');
+      note.id = 'modifierItemNote';
+      note.rows = 2;
+      note.placeholder = 'e.g. no onion, no lettuce, no sesame';
+      noteLabel.appendChild(note);
+      form.appendChild(noteLabel);
+      const quick = document.createElement('div');
+      quick.className = 'modifier-quick';
+      quick.setAttribute('aria-label', 'Quick note shortcuts');
+      QUICK_NOTES.forEach(noteText=>{
+        const quickBtn = dialogButton('', noteText, 'chip modifier-quick-note');
+        quickBtn.dataset.note = noteText;
+        quick.appendChild(quickBtn);
+      });
+      form.appendChild(quick);
+    }
+    const sectionsWrap = document.createElement('div');
+    sectionsWrap.className = 'modifier-grid';
+    sectionsWrap.id = 'modifierSections';
+    form.appendChild(sectionsWrap);
+    const actions = document.createElement('div');
+    actions.className = 'modifier-actions';
+    actions.appendChild(dialogButton('dlgCancel', cancelLabel, 'x'));
+    actions.appendChild(dialogButton('dlgConfirm', confirmLabel, 'x modifier-primary', 'submit'));
+    form.appendChild(actions);
+    appDialogBody().replaceChildren(form);
     const wrap = document.getElementById('modifierSections');
     (sections || []).forEach(section=>{
       const fieldset = document.createElement('fieldset');
@@ -628,21 +684,17 @@
       const singlePrice = BK_PRICES.getPrice(product.id);
       const menuPrice = mealBasePrice(product);
       document.getElementById('appDialogTitle').textContent = `${product.name}: single or menu?`;
-      document.getElementById('appDialogBody').innerHTML = `
-        <div class="meal-choice">
-          <button class="meal-choice-card" id="mealSingle" type="button">
-            <span class="meal-choice-kicker">Single item</span>
-            <strong>${product.name}</strong>
-            <span>${singlePrice} GHS</span>
-          </button>
-          <button class="meal-choice-card recommended" id="mealMenu" type="button">
-            <span class="meal-choice-kicker">Guided menu</span>
-            <strong>${product.name} Menu</strong>
-            <span>${menuPrice} GHS base · choose fries + drink</span>
-          </button>
-        </div>
-        <div class="modifier-actions"><button class="x" id="dlgCancel" type="button">Cancel</button></div>
-      `;
+      const choices = document.createElement('div');
+      choices.className = 'meal-choice';
+      const single = dialogButton('mealSingle', '', 'meal-choice-card');
+      single.append(textEl('span', 'Single item', 'meal-choice-kicker'), textEl('strong', product.name), textEl('span', `${singlePrice} GHS`));
+      const menu = dialogButton('mealMenu', '', 'meal-choice-card recommended');
+      menu.append(textEl('span', 'Guided menu', 'meal-choice-kicker'), textEl('strong', `${product.name} Menu`), textEl('span', `${menuPrice} GHS base · choose fries + drink`));
+      choices.append(single, menu);
+      const actions = document.createElement('div');
+      actions.className = 'modifier-actions';
+      actions.appendChild(dialogButton('dlgCancel', 'Cancel', 'x'));
+      appDialogBody().replaceChildren(choices, actions);
       host.classList.add('open');
       document.getElementById('mealSingle').onclick = ()=>{ closeDialog(); resolve('single'); };
       document.getElementById('mealMenu').onclick = ()=>{ closeDialog(); resolve('menu'); };
@@ -1216,7 +1268,7 @@
 
   function renderOrder(){
     const {slots, active, discountRate} = BK_STATE.getState();
-    const lines = document.getElementById('lines'); lines.innerHTML='';
+    const lines = document.getElementById('lines'); lines.replaceChildren();
     const orderMeta = document.getElementById('currentOrderMeta');
     if(!slots.length){
       setSlotTotals(0,0,0);
@@ -1371,13 +1423,40 @@
     return new Promise(resolve=>{
       const host = ensureDialogHost();
       document.getElementById('appDialogTitle').textContent = 'WhatsApp fulfilment';
-      document.getElementById('appDialogBody').innerHTML = `
-        <p>Confirm how the customer will receive and pay for this WhatsApp order.</p>
-        <label class="dialog-label">Receive order<select id="waFulfilment" class="dialog-field"><option value="pickup">Customer pickup</option><option value="delivery">Delivery</option></select></label>
-        <label class="dialog-label" id="waPickupPaymentRow">Pickup payment<select id="waPickupPayment" class="dialog-field"><option value="cash">Cash</option><option value="momo">MoMo</option></select></label>
-        <label class="dialog-label hidden" id="waRiderRow">Rider arrangement<select id="waRiderType" class="dialog-field"><option value="customer-rider">Customer sends a rider — pay before handover</option><option value="burgerkiss-rider">BurgerKiss rider — MoMo on delivery</option></select></label>
-        <div class="packing-summary-note" id="waPaymentRule">Payment is collected when the customer picks up the order.</div>
-        <div class="dialog-actions"><button class="x" id="dlgCancel">Back to Order</button><button class="x modifier-primary" id="dlgConfirm">Continue</button></div>`;
+      const intro = textEl('p', 'Confirm how the customer will receive and pay for this WhatsApp order.');
+      const fulfilmentLabel = textEl('label', 'Receive order', 'dialog-label');
+      const fulfilmentSelect = document.createElement('select');
+      fulfilmentSelect.id = 'waFulfilment';
+      fulfilmentSelect.className = 'dialog-field';
+      fulfilmentSelect.append(optionNode('pickup', 'Customer pickup'), optionNode('delivery', 'Delivery'));
+      fulfilmentLabel.appendChild(fulfilmentSelect);
+      const pickupLabel = textEl('label', 'Pickup payment', 'dialog-label');
+      pickupLabel.id = 'waPickupPaymentRow';
+      const pickupSelect = document.createElement('select');
+      pickupSelect.id = 'waPickupPayment';
+      pickupSelect.className = 'dialog-field';
+      pickupSelect.append(optionNode('cash', 'Cash'), optionNode('momo', 'MoMo'));
+      pickupLabel.appendChild(pickupSelect);
+      const riderLabel = textEl('label', 'Rider arrangement', 'dialog-label hidden');
+      riderLabel.id = 'waRiderRow';
+      const riderSelect = document.createElement('select');
+      riderSelect.id = 'waRiderType';
+      riderSelect.className = 'dialog-field';
+      riderSelect.append(
+        optionNode('customer-rider', 'Customer sends a rider — pay before handover'),
+        optionNode('burgerkiss-rider', 'BurgerKiss rider — MoMo on delivery')
+      );
+      riderLabel.appendChild(riderSelect);
+      const paymentRule = textEl('div', 'Payment is collected when the customer picks up the order.', 'packing-summary-note');
+      paymentRule.id = 'waPaymentRule';
+      appDialogBody().replaceChildren(
+        intro,
+        fulfilmentLabel,
+        pickupLabel,
+        riderLabel,
+        paymentRule,
+        dialogActions(dialogButton('dlgCancel', 'Back to Order'), dialogButton('dlgConfirm', 'Continue', 'x modifier-primary'))
+      );
       host.classList.add('open');
       const fulfilment = document.getElementById('waFulfilment');
       const sync = ()=>{
@@ -1435,22 +1514,67 @@
       const groups = BK_PACKING.menuGroups(slot);
       const assignable = BK_PACKING.assignableItems(slot, BK_DATA.BASE);
       const host = ensureDialogHost();
-      const groupOptions = groups.length
-        ? '<option value="shared-single">Together with other single items</option>' + groups.map((group,index)=>`<option value="${escapeHtml(group.id)}">Bag ${index+1} — ${escapeHtml(group.label)}</option>`).join('')
-        : '<option value="shared-single">Together in one single-items bag</option>';
-      const rows = assignable.map((entry,index)=>{
-        const current = entry.item.customerGroupId || entry.item.packGroupId || 'shared-single';
-        return `<label class="packing-assignment-row"><span><b>${escapeHtml(entry.product.name || entry.item.itemId)}</b><small>${BK_PACKING.isDrink(entry.item, BK_DATA.BASE) ? 'Drink' : 'Single item'}</small></span><select class="dialog-field packing-assignment" data-item-index="${entry.index}" data-current="${escapeHtml(current)}">${groupOptions}<option value="separate-${index}">Separate bag / customer</option></select></label>`;
-      }).join('');
       const drinkCount = (slot.items || []).filter(item=>BK_PACKING.isDrink(item, BK_DATA.BASE)).length;
-      const drinkChoice = drinkCount > 1 ? `<fieldset class="modifier-section"><legend>Drink packaging</legend><p>Ask whether the customers are leaving together.</p><label class="staff-choice"><input type="radio" name="drinkPackMode" value="shared" checked><span><b>Together — fewer bags</b><small>Combine drinks from different customers where capacity allows.</small></span></label><label class="staff-choice"><input type="radio" name="drinkPackMode" value="by-customer"><span><b>By customer</b><small>Keep drink bags separated by customer group.</small></span></label></fieldset>` : '';
       document.getElementById('appDialogTitle').textContent = 'Assign items to bags';
-      document.getElementById('appDialogBody').innerHTML = `
-        <p>Every menu stays in its own food bag. Single items are packed together by default; only change an item here when it needs its own separate bag.</p>
-        <div class="packing-assignment-list">${rows}</div>
-        ${drinkChoice}
-        <div id="packingError" class="field-error"></div>
-        <div class="dialog-actions"><button class="x" id="dlgCancel">Back to Order</button><button class="x modifier-primary" id="dlgConfirm">Confirm & Send to Kitchen</button></div>`;
+      const intro = textEl('p', 'Every menu stays in its own food bag. Single items are packed together by default; only change an item here when it needs its own separate bag.');
+      const list = document.createElement('div');
+      list.className = 'packing-assignment-list';
+      assignable.forEach((entry,index)=>{
+        const current = entry.item.customerGroupId || entry.item.packGroupId || 'shared-single';
+        const row = document.createElement('label');
+        row.className = 'packing-assignment-row';
+        const labelText = document.createElement('span');
+        labelText.append(
+          textEl('b', entry.product.name || entry.item.itemId),
+          textEl('small', BK_PACKING.isDrink(entry.item, BK_DATA.BASE) ? 'Drink' : 'Single item')
+        );
+        const select = document.createElement('select');
+        select.className = 'dialog-field packing-assignment';
+        select.dataset.itemIndex = String(entry.index);
+        select.dataset.current = current;
+        if(groups.length){
+          select.appendChild(optionNode('shared-single', 'Together with other single items'));
+          groups.forEach((group,groupIndex)=>{
+            select.appendChild(optionNode(group.id, `Bag ${groupIndex + 1} — ${group.label}`));
+          });
+        }else{
+          select.appendChild(optionNode('shared-single', 'Together in one single-items bag'));
+        }
+        select.appendChild(optionNode(`separate-${index}`, 'Separate bag / customer'));
+        row.append(labelText, select);
+        list.appendChild(row);
+      });
+      const content = [
+        intro,
+        list
+      ];
+      if(drinkCount > 1){
+        const drinkChoice = document.createElement('fieldset');
+        drinkChoice.className = 'modifier-section';
+        drinkChoice.append(textEl('legend', 'Drink packaging'), textEl('p', 'Ask whether the customers are leaving together.'));
+        [
+          ['shared', 'Together — fewer bags', 'Combine drinks from different customers where capacity allows.', true],
+          ['by-customer', 'By customer', 'Keep drink bags separated by customer group.', false]
+        ].forEach(([value,title,detail,checked])=>{
+          const choice = document.createElement('label');
+          choice.className = 'staff-choice';
+          const input = document.createElement('input');
+          input.type = 'radio';
+          input.name = 'drinkPackMode';
+          input.value = value;
+          input.checked = checked;
+          const copy = document.createElement('span');
+          copy.append(textEl('b', title), textEl('small', detail));
+          choice.append(input, copy);
+          drinkChoice.appendChild(choice);
+        });
+        content.push(drinkChoice);
+      }
+      const error = document.createElement('div');
+      error.id = 'packingError';
+      error.className = 'field-error';
+      content.push(error, dialogActions(dialogButton('dlgCancel', 'Back to Order'), dialogButton('dlgConfirm', 'Confirm & Send to Kitchen', 'x modifier-primary')));
+      appDialogBody().replaceChildren(...content);
       host.classList.add('open');
       document.querySelectorAll('.packing-assignment').forEach(select=>{ if(select.dataset.current) select.value = select.dataset.current; });
       document.getElementById('dlgCancel').onclick = ()=>{ closeDialog(); resolve(false); };
@@ -2035,7 +2159,7 @@
       row.style.marginTop = '10px';
       host.appendChild(row);
     }
-    row.innerHTML = '';
+    row.replaceChildren();
     (actions || []).forEach(action=>{
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -2697,31 +2821,38 @@
   function handoverCardLine(name, detail, qty){
     return `<span class="handover-card-line"><b>${Number(qty)||1}x ${escapeHtml(name)}</b>${detail ? `<small>${escapeHtml(detail)}</small>` : ''}</span>`;
   }
-  function handoverPlanHtml(plan){
-    const menuHtml = plan.menus.map((menu,index)=>{
-      const lines = menu.items.map(item=>{
-        const detail = item.cat === 'drink' || item.role === 'drink'
-          ? 'Drinks plastic bag'
-          : staffFacingNote(item.note).join(' · ');
-        return handoverCardLine(staffFacingItemName(item), detail, item.qty);
-      });
-      if(menu.noSauce) lines.push(handoverCardLine('No sauce requested', '', 1));
-      lines.push(handoverCardLine('Napkins', '', 2));
-      if(menu.wings) lines.push(handoverCardLine('Wings Box', '', 1));
-      lines.push(handoverCardLine('Large Paper Bag', 'Food only · this menu stays separate', 1));
-      return handoverCard(`MENU ${index+1} — ${menu.name}`, `BAG ${index+1}`, lines);
-    }).join('');
-    const standaloneHtml = plan.standalone.map((entry,index)=>{
-      const lines = [handoverCardLine(entry.name, staffFacingNote(entry.note).join(' · '), entry.qty)];
-      (entry.children || []).forEach(child=>lines.push(handoverCardLine(staffFacingItemName(child), '', child.qty)));
-      const groupLabel = entry.customerGroupId ? `CUSTOMER ${entry.customerGroupId}` : '';
-      return handoverCard(`SINGLE ITEM ${index+1} — ${entry.name}`, groupLabel, lines);
-    }).join('');
+  function handoverPlanChecklist(plan){
+    const cards = [];
+    plan.menus.forEach((menu,index)=>{
+      const lines = menu.items.map(item=>({
+        name: staffFacingItemName(item),
+        detail: item.cat === 'drink' || item.role === 'drink' ? 'Drinks plastic bag' : staffFacingNote(item.note).join(' · '),
+        qty: item.qty
+      }));
+      if(menu.noSauce) lines.push({name:'No sauce requested', detail:'', qty:1});
+      lines.push({name:'Napkins', detail:'', qty:2});
+      if(menu.wings) lines.push({name:'Wings Box', detail:'', qty:1});
+      lines.push({name:'Large Paper Bag', detail:'Food only · this menu stays separate', qty:1});
+      cards.push({title:`MENU ${index+1} — ${menu.name}`, badge:`BAG ${index+1}`, lines});
+    });
+    plan.standalone.forEach((entry,index)=>{
+      const lines = [{name:entry.name, detail:staffFacingNote(entry.note).join(' · '), qty:entry.qty}];
+      (entry.children || []).forEach(child=>lines.push({name:staffFacingItemName(child), detail:'', qty:child.qty}));
+      cards.push({title:`SINGLE ITEM ${index+1} — ${entry.name}`, badge:entry.customerGroupId ? `CUSTOMER ${entry.customerGroupId}` : '', lines});
+    });
     const essentials = [];
-    if(plan.standaloneNapkins) essentials.push(handoverCardLine('Napkins', 'For single food items', plan.standaloneNapkins));
-    (plan.packaging || []).forEach(row=>essentials.push(handoverCardLine(row.name, row.kind === 'drink' ? 'Cold drinks only' : '', row.qty)));
-    const essentialsHtml = essentials.length ? handoverCard('PACKAGING & ESSENTIALS', '', essentials) : '';
-    return `${menuHtml}${standaloneHtml}${essentialsHtml}` || '<div>No items in this order.</div>';
+    if(plan.standaloneNapkins) essentials.push({name:'Napkins', detail:'For single food items', qty:plan.standaloneNapkins});
+    (plan.packaging || []).forEach(row=>essentials.push({name:row.name, detail:row.kind === 'drink' ? 'Cold drinks only' : '', qty:row.qty}));
+    if(essentials.length) cards.push({title:'PACKAGING & ESSENTIALS', badge:'', lines:essentials});
+    return cards;
+  }
+  function handoverPlanHtml(plan){
+    const cards = handoverPlanChecklist(plan).map(card=>handoverCard(
+      card.title,
+      card.badge,
+      card.lines.map(line=>handoverCardLine(line.name, line.detail, line.qty))
+    )).join('');
+    return cards || '<div>No items in this order.</div>';
   }
 
   function markIssued(i){
@@ -2733,10 +2864,14 @@
     renderIssue();
     refreshTotals();
     const handoverPlan = buildHandoverPlan(slot);
-    const checklistHtml = handoverPlanHtml(handoverPlan);
     handoverChecklistDialog(
       `${isOnlineOrder(slot) ? (slot.finalChannel === 'direct' ? 'Direct delivery check' : `${platformLabel(slot.orderSource)} rider pickup check`) : 'Final handover check'} – ${slot.externalOrderNo || slot.orderNo || slot.name}`,
-      `<div style="margin-bottom:8px">Read from top to bottom. Every menu has its own food bag; cold drinks always use plastic bags.</div><div class="final-packaging-mode"><b>Customer preference:</b> ${packagingLabel(slot)} · <b>Menu rule:</b> every menu stays separate</div>${checklistHtml}`
+      {
+        intro: 'Read from top to bottom. Every menu has its own food bag; cold drinks always use plastic bags.',
+        preferenceLabel: packagingLabel(slot),
+        menuRule: 'every menu stays separate',
+        cards: handoverPlanChecklist(handoverPlan)
+      }
     ).then(ok=>{
       if(!ok) return;
       const latestSlot = BK_STATE.getState().slots[i];
@@ -2775,16 +2910,29 @@
   function historyStatusLabel(entry){
     return entry.status === 'voided' ? 'VOIDED' : 'COMPLETED';
   }
-  function historyItemsHtml(entry){
+  function historyItemsNode(entry){
     const items = Array.isArray(entry.items) ? entry.items : [];
-    if(!items.length) return '<div class="empty-state">No saved item details.</div>';
-    return `<div class="history-item-list">${items.map(item=>{
-      const notes = splitEntryNoteLines(item.note);
-      return `<div class="history-item">
-        <div class="history-item-main"><strong>${Number(item.qty)||1}x ${escapeHtml(item.name)}</strong><b>${Number(item.total)||0} GHS</b></div>
-        ${notes.map(note=>`<div class="history-item-extra">+ ${escapeHtml(String(note).replace(/^\+\s*/, ''))}</div>`).join('')}
-      </div>`;
-    }).join('')}</div>`;
+    if(!items.length) return textEl('div', 'No saved item details.', 'empty-state');
+    const list = document.createElement('div');
+    list.className = 'history-item-list';
+    items.forEach(item=>{
+      const row = document.createElement('div');
+      row.className = 'history-item';
+      const main = document.createElement('div');
+      main.className = 'history-item-main';
+      main.append(textEl('strong', `${Number(item.qty)||1}x ${item.name}`), textEl('b', `${Number(item.total)||0} GHS`));
+      row.appendChild(main);
+      splitEntryNoteLines(item.note).forEach(note=>{
+        row.appendChild(textEl('div', `+ ${String(note).replace(/^\+\s*/, '')}`, 'history-item-extra'));
+      });
+      list.appendChild(row);
+    });
+    return list;
+  }
+  function historyDetailMeta(label, value){
+    const item = document.createElement('div');
+    item.append(textEl('small', label), textEl('strong', value));
+    return item;
   }
   function isOwnerSession(){
     const current = window.BK_ACCESS && BK_ACCESS.current ? BK_ACCESS.current() : null;
@@ -2879,7 +3027,7 @@
     const body = document.getElementById('historyBody');
     const hist = getFilteredHistory();
     if(hist.length===0){
-      body.innerHTML = '<div class="empty-state">No completed orders in history yet.</div>';
+      body.replaceChildren(textEl('div', 'No completed orders in history yet.', 'empty-state'));
       return;
     }
     const completed = hist.filter(h=>h.status !== 'voided');
@@ -2889,22 +3037,41 @@
     const onlineCount = completed.filter(h=>ONLINE_PLATFORMS.has(h.orderSource)).length;
     const convertedCount = completed.filter(h=>h.finalChannel === 'direct').length;
     const voidCount = hist.length - completed.length;
-    body.innerHTML = `
-      <div class="history-summary">
-        <span><b>Orders:</b> ${completed.length}</span><span><b>Cash:</b> ${cashCount}</span>
-        <span><b>MoMo:</b> ${momoCount}</span><span><b>Online:</b> ${onlineCount}</span><span><b>Converted:</b> ${convertedCount}</span><span><b>Voided:</b> ${voidCount}</span>
-        <span class="history-summary-total"><b>Net sales:</b> ${totalSales} GHS</span>
-      </div>
-      <div class="history-order-list">
-      ${hist.slice(0,200).map(h=>`
-        <button type="button" class="history-order-row ${h.status === 'voided' ? 'voided' : ''}" data-history-id="${escapeHtml(h.id)}">
-          <span><strong>${escapeHtml(h.orderNo)}</strong><small>${escapeHtml(h.externalOrderNo ? `${platformLabel(h.orderSource)} · ${h.externalOrderNo}` : h.slotName)} · ${escapeHtml(paymentLabel(h.pay))} · ${new Date(h.closedAt).toLocaleString()}</small></span>
-          <span><b>${Number(h.total||h.subtotal||0)} GHS</b><small class="history-status">${historyStatusLabel(h)}</small></span>
-        </button>`).join('')}
-      </div>`;
-    body.querySelectorAll('[data-history-id]').forEach(button=>{
-      button.onclick = ()=> openHistoryOrder(button.dataset.historyId);
+    const summary = document.createElement('div');
+    summary.className = 'history-summary';
+    [
+      ['Orders:', completed.length, ''],
+      ['Cash:', cashCount, ''],
+      ['MoMo:', momoCount, ''],
+      ['Online:', onlineCount, ''],
+      ['Converted:', convertedCount, ''],
+      ['Voided:', voidCount, ''],
+      ['Net sales:', `${totalSales} GHS`, 'history-summary-total']
+    ].forEach(([label,value,className])=>{
+      const item = document.createElement('span');
+      if(className) item.className = className;
+      item.append(textEl('b', label), document.createTextNode(` ${value}`));
+      summary.appendChild(item);
     });
+    const list = document.createElement('div');
+    list.className = 'history-order-list';
+    hist.slice(0,200).forEach(h=>{
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `history-order-row ${h.status === 'voided' ? 'voided' : ''}`.trim();
+      button.dataset.historyId = h.id || '';
+      const main = document.createElement('span');
+      main.append(
+        textEl('strong', h.orderNo),
+        textEl('small', `${h.externalOrderNo ? `${platformLabel(h.orderSource)} · ${h.externalOrderNo}` : h.slotName} · ${paymentLabel(h.pay)} · ${new Date(h.closedAt).toLocaleString()}`)
+      );
+      const totals = document.createElement('span');
+      totals.append(textEl('b', `${Number(h.total||h.subtotal||0)} GHS`), textEl('small', historyStatusLabel(h), 'history-status'));
+      button.append(main, totals);
+      button.onclick = ()=> openHistoryOrder(button.dataset.historyId);
+      list.appendChild(button);
+    });
+    body.replaceChildren(summary, list);
   }
   function openHistory(){
     recoverIssuedSlotsToHistory();
@@ -2967,66 +3134,98 @@
     const voided = entry.status === 'voided';
     document.getElementById('hdVoid').disabled = voided;
     document.getElementById('hdVoid').textContent = voided ? 'Order Voided' : 'Void Order';
-    document.getElementById('historyDetailBody').innerHTML = `
-      <div class="history-detail-meta">
-        <div><small>Order number</small><strong>${escapeHtml(entry.orderNo)}</strong></div>
-        <div><small>Slot</small><strong>${escapeHtml(entry.slotName)}</strong></div>
-        <div><small>Payment</small><strong>${escapeHtml(paymentLabel(entry.pay))}</strong></div>
-        <div><small>Order source</small><strong>${escapeHtml(platformLabel(entry.orderSource))}</strong></div>
-        ${entry.externalOrderNo ? `<div><small>Platform reference</small><strong>${escapeHtml(entry.externalOrderNo)}</strong></div>` : ''}
-        ${entry.finalChannel === 'direct' ? `<div><small>Converted delivery</small><strong>${escapeHtml(entry.fulfilment === 'customer-rider' ? 'Customer-arranged rider' : 'BurgerKiss delivery')}</strong></div><div><small>Platform refund</small><strong>Expected / Pending</strong></div>` : ''}
-        <div><small>Packaging</small><strong>${entry.packMode === 'split' ? 'Packed separately' : 'Packed together'}</strong></div>
-        <div><small>Created</small><strong>${new Date(entry.createdAt).toLocaleString()}</strong></div>
-        <div><small>Issued</small><strong>${new Date(entry.closedAt).toLocaleString()}</strong></div>
-      </div>
-      ${voided ? `<div class="void-notice"><strong>VOIDED ORDER</strong><span>${escapeHtml(entry.voidReason)}</span><small>${new Date(entry.voidedAt).toLocaleString()} · ${escapeHtml(entry.voidedBy || 'POS terminal')}</small></div>` : ''}
-      ${historyItemsHtml(entry)}
-      <div class="history-totals">
-        <div><span>Subtotal</span><b>${entry.subtotal} GHS</b></div>
-        <div><span>Discount (${Math.round((entry.discountRate||0)*100)}%)</span><b>-${entry.discount||0} GHS</b></div>
-        <div class="total"><span>${voided ? 'Original total' : 'Total'}</span><b>${entry.total} GHS</b></div>
-      </div>`;
+    const meta = document.createElement('div');
+    meta.className = 'history-detail-meta';
+    meta.append(
+      historyDetailMeta('Order number', entry.orderNo),
+      historyDetailMeta('Slot', entry.slotName),
+      historyDetailMeta('Payment', paymentLabel(entry.pay)),
+      historyDetailMeta('Order source', platformLabel(entry.orderSource))
+    );
+    if(entry.externalOrderNo) meta.appendChild(historyDetailMeta('Platform reference', entry.externalOrderNo));
+    if(entry.finalChannel === 'direct'){
+      meta.append(
+        historyDetailMeta('Converted delivery', entry.fulfilment === 'customer-rider' ? 'Customer-arranged rider' : 'BurgerKiss delivery'),
+        historyDetailMeta('Platform refund', 'Expected / Pending')
+      );
+    }
+    meta.append(
+      historyDetailMeta('Packaging', entry.packMode === 'split' ? 'Packed separately' : 'Packed together'),
+      historyDetailMeta('Created', new Date(entry.createdAt).toLocaleString()),
+      historyDetailMeta('Issued', new Date(entry.closedAt).toLocaleString())
+    );
+    const content = [meta];
+    if(voided){
+      const notice = document.createElement('div');
+      notice.className = 'void-notice';
+      notice.append(
+        textEl('strong', 'VOIDED ORDER'),
+        textEl('span', entry.voidReason),
+        textEl('small', `${new Date(entry.voidedAt).toLocaleString()} · ${entry.voidedBy || 'POS terminal'}`)
+      );
+      content.push(notice);
+    }
+    content.push(historyItemsNode(entry));
+    const totals = document.createElement('div');
+    totals.className = 'history-totals';
+    [
+      ['Subtotal', `${entry.subtotal} GHS`, ''],
+      [`Discount (${Math.round((entry.discountRate||0)*100)}%)`, `-${entry.discount||0} GHS`, ''],
+      [voided ? 'Original total' : 'Total', `${entry.total} GHS`, 'total']
+    ].forEach(([label,value,className])=>{
+      const row = document.createElement('div');
+      if(className) row.className = className;
+      row.append(textEl('span', label), textEl('b', value));
+      totals.appendChild(row);
+    });
+    content.push(totals);
+    document.getElementById('historyDetailBody').replaceChildren(...content);
     document.getElementById('modalHistoryDetail').classList.add('open');
   }
   function closeHistoryOrder(){
     document.getElementById('modalHistoryDetail').classList.remove('open');
     selectedHistoryOrderId = null;
   }
-  function historyReceiptHtml(entry){
-    return `<div class="receipt-archive">
-      <div><b>BurgerKiss – Receipt</b></div>
-      <div>Order: <b>${escapeHtml(entry.orderNo)}</b></div>
-      <div>Date: ${new Date(entry.closedAt).toLocaleString()}</div>
-      <div>Payment: ${escapeHtml(paymentLabel(entry.pay))}</div>
-      <div>Packaging: ${entry.packMode === 'split' ? 'Packed separately' : 'Packed together'}</div>
-      <hr>${historyItemsHtml(entry)}
-      <div class="sumline"><span>Subtotal</span><b>${entry.subtotal} GHS</b></div>
-      <div class="sumline"><span>Discount</span><b>-${entry.discount||0} GHS</b></div>
-      <div class="sumline"><span>Total</span><b>${entry.total} GHS</b></div>
-      ${entry.status === 'voided' ? '<div class="receipt-void">VOIDED – NOT VALID FOR PAYMENT</div>' : ''}
-    </div>`;
-  }
   function reprintHistoryOrder(){
     const entry = selectedHistoryOrder();
     if(!entry) return;
-    const html = historyReceiptHtml(entry);
-    document.getElementById('receiptBody').innerHTML = html;
-    document.getElementById('printArea').innerHTML = html;
+    const html = RECEIPT_RENDERERS.historyReceiptHtml ? RECEIPT_RENDERERS.historyReceiptHtml(entry) : '';
+    setTrustedHtml('receiptBody', html);
+    setTrustedHtml('printArea', html);
     document.getElementById('modalReceipt').classList.add('open');
   }
   function requestVoidReason(){
     return new Promise(resolve=>{
       const host = ensureDialogHost();
       document.getElementById('appDialogTitle').textContent = 'Void order';
-      document.getElementById('appDialogBody').innerHTML = `
-        <p class="dialog-warning">The order remains permanently visible in history. Enter a mandatory reason.</p>
-        <select id="voidReasonPreset" class="dialog-field">
-          <option value="">Select reason…</option><option>Customer cancelled</option><option>Wrong item entered</option>
-          <option>Duplicate order</option><option>Payment failed</option><option>Manager correction</option><option value="custom">Other reason</option>
-        </select>
-        <input id="voidReasonCustom" class="dialog-field hidden" placeholder="Enter reason" maxlength="160">
-        <div id="voidReasonError" class="field-error"></div>
-        <div class="dialog-actions"><button class="x" id="dlgCancel">Cancel</button><button class="x danger-link" id="dlgConfirm">Void Order</button></div>`;
+      const warning = textEl('p', 'The order remains permanently visible in history. Enter a mandatory reason.', 'dialog-warning');
+      const presetSelect = document.createElement('select');
+      presetSelect.id = 'voidReasonPreset';
+      presetSelect.className = 'dialog-field';
+      [
+        ['', 'Select reason…'],
+        ['Customer cancelled', 'Customer cancelled'],
+        ['Wrong item entered', 'Wrong item entered'],
+        ['Duplicate order', 'Duplicate order'],
+        ['Payment failed', 'Payment failed'],
+        ['Manager correction', 'Manager correction'],
+        ['custom', 'Other reason']
+      ].forEach(([value,label])=> presetSelect.appendChild(optionNode(value, label)));
+      const customInput = document.createElement('input');
+      customInput.id = 'voidReasonCustom';
+      customInput.className = 'dialog-field hidden';
+      customInput.placeholder = 'Enter reason';
+      customInput.maxLength = 160;
+      const error = document.createElement('div');
+      error.id = 'voidReasonError';
+      error.className = 'field-error';
+      appDialogBody().replaceChildren(
+        warning,
+        presetSelect,
+        customInput,
+        error,
+        dialogActions(dialogButton('dlgCancel', 'Cancel'), dialogButton('dlgConfirm', 'Void Order', 'x danger-link'))
+      );
       host.classList.add('open');
       const preset = document.getElementById('voidReasonPreset');
       const custom = document.getElementById('voidReasonCustom');
@@ -3067,66 +3266,28 @@
       renderHistoryBody();
     });
   }
-  function dateInputValue(date){
-    const d = date instanceof Date ? date : new Date(date || Date.now());
-    const pad = n=>String(n).padStart(2,'0');
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-  }
   function dailyReportData(dateValue){
-    const selected = String(dateValue || dateInputValue(new Date()));
-    const orders = getHistory().filter(entry=>dateInputValue(entry.closedAt) === selected);
-    const completed = orders.filter(entry=>entry.status !== 'voided');
-    const voided = orders.filter(entry=>entry.status === 'voided');
-    const sum = (list, field)=>list.reduce((total, entry)=>total + Number(entry[field] || 0), 0);
-    const netSales = sum(completed, 'total');
+    if(REPORTS.dailyReportData) return REPORTS.dailyReportData(dateValue);
     return {
-      date:selected, orders, completed, voided, netSales,
-      cashTotal:sum(completed.filter(entry=>entry.pay === 'cash'), 'total'),
-      momoTelecelTotal:sum(completed.filter(entry=>entry.pay === 'momo' && entry.momoProvider === 'telecel'), 'total'),
-      momoMtnTotal:sum(completed.filter(entry=>entry.pay === 'momo' && entry.momoProvider === 'mtn'), 'total'),
-      momoUnspecifiedTotal:sum(completed.filter(entry=>entry.pay === 'momo' && !entry.momoProvider), 'total'),
-      boltTotal:sum(completed.filter(entry=>entry.pay === 'bolt'), 'total'),
-      hubtelTotal:sum(completed.filter(entry=>entry.pay === 'hubtel'), 'total'),
-      chowdeckTotal:sum(completed.filter(entry=>entry.pay === 'chowdeck'), 'total'),
-      convertedOrders:completed.filter(entry=>entry.finalChannel === 'direct').length,
-      discounts:sum(completed, 'discount'),
-      voidValue:sum(voided, 'total'),
-      average:completed.length ? Math.round(netSales / completed.length) : 0
+      date:String(dateValue || ''), orders:[], completed:[], voided:[], purchases:[],
+      netSales:0, cashTotal:0, momoTelecelTotal:0, momoMtnTotal:0, momoUnspecifiedTotal:0,
+      boltTotal:0, hubtelTotal:0, chowdeckTotal:0, convertedOrders:0, discounts:0,
+      voidValue:0, average:0, cashFloat:0, cashPurchases:0, expectedWallet:0, topUpNeeded:0
     };
   }
   function dailyReportHtml(report){
-    return `<div class="daily-report">
-      <div class="report-heading"><span>Business date</span><strong>${escapeHtml(report.date)}</strong></div>
-      <div class="report-metrics">
-        <div><small>Net sales</small><strong>${report.netSales} GHS</strong></div>
-        <div><small>Cash</small><strong>${report.cashTotal} GHS</strong></div>
-        <div><small>Telecel MoMo</small><strong>${report.momoTelecelTotal} GHS</strong></div>
-        <div><small>MTN MoMo</small><strong>${report.momoMtnTotal} GHS</strong></div>
-        <div><small>MoMo unspecified</small><strong>${report.momoUnspecifiedTotal} GHS</strong></div>
-        <div><small>Bolt</small><strong>${report.boltTotal} GHS</strong></div>
-        <div><small>Hubtel</small><strong>${report.hubtelTotal} GHS</strong></div>
-        <div><small>Chowdeck</small><strong>${report.chowdeckTotal} GHS</strong></div>
-        <div><small>Converted online orders</small><strong>${report.convertedOrders}</strong></div>
-        <div><small>Completed orders</small><strong>${report.completed.length}</strong></div>
-        <div><small>Discounts</small><strong>${report.discounts} GHS</strong></div>
-        <div><small>Average order</small><strong>${report.average} GHS</strong></div>
-        <div class="void-metric"><small>Voided orders</small><strong>${report.voided.length}</strong></div>
-        <div class="void-metric"><small>Voided value</small><strong>${report.voidValue} GHS</strong></div>
-      </div>
-      <div class="report-orders"><h3>Order audit</h3>${report.orders.length ? report.orders.map(entry=>`
-        <div class="report-order ${entry.status === 'voided' ? 'voided' : ''}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(paymentLabel(entry.pay, entry.momoProvider))}${entry.voidReason ? ` · ${escapeHtml(entry.voidReason)}` : ''}</small></span><strong>${entry.total} GHS</strong></div>`).join('') : '<div class="empty-state">No orders for this date.</div>'}</div>
-    </div>`;
+    return REPORTS.dailyReportHtml ? REPORTS.dailyReportHtml(report, {interactive:false}) : '';
   }
   function openDailyReport(){
     const input = document.getElementById('reportDate');
-    if(!input.value) input.value = dateInputValue(new Date());
+    if(!input.value) input.value = REPORTS.dateInputValue ? REPORTS.dateInputValue(new Date()) : '';
     renderDailyReport();
     document.getElementById('modalDailyReport').classList.add('open');
     refreshHistoryFromRemote().then(()=>renderDailyReport());
   }
   function renderDailyReport(){
     const input = document.getElementById('reportDate');
-    document.getElementById('dailyReportBody').innerHTML = dailyReportHtml(dailyReportData(input && input.value));
+    setTrustedHtml('dailyReportBody', dailyReportHtml(dailyReportData(input && input.value)));
   }
   function closeDailyReport(){ document.getElementById('modalDailyReport').classList.remove('open'); }
   function exportDailyReportCsv(){
@@ -3139,7 +3300,7 @@
   }
   function printDailyReport(){
     const report = dailyReportData(document.getElementById('reportDate').value);
-    document.getElementById('printArea').innerHTML = `<h2>BurgerKiss – Daily Sales Report</h2>${dailyReportHtml(report)}`;
+    setTrustedHtml('printArea', `<h2>BurgerKiss – Daily Sales Report</h2>${dailyReportHtml(report)}`);
     window.print();
   }
   function downloadFile(name, content, type){
@@ -3228,23 +3389,41 @@
       .filter(r=> stockOverviewFilter === 'all' ? true : stockStatus(r) === stockOverviewFilter)
       .filter(r=> !query || String(r.name || '').toLowerCase().includes(query) || String(r.id || '').toLowerCase().includes(query))
       .sort((a,b)=>String(a.name || '').localeCompare(String(b.name || '')));
-    host.innerHTML = `
-      <div class="stock-overview-summary">
-        <div class="stock-kpi"><span>Tracked</span><b>${tracked.length}</b></div>
-        <div class="stock-kpi crit"><span>Critical</span><b>${criticalCount}</b></div>
-        <div class="stock-kpi refill"><span>Refill</span><b>${refillCount}</b></div>
-        <div class="stock-kpi"><span>Buy</span><b>${buyCount}</b></div>
-      </div>
-      <div class="stock-overview-filters">
-        <input id="stockOverviewSearch" class="dialog-field" placeholder="Search stock item" value="${escapeHtml(stockOverviewQuery)}" />
-        <button class="stock-filter ${stockOverviewFilter==='all'?'active':''}" data-stock-filter="all">All</button>
-        <button class="stock-filter ${stockOverviewFilter==='ok'?'active':''}" data-stock-filter="ok">OK</button>
-        <button class="stock-filter ${stockOverviewFilter==='refill'?'active':''}" data-stock-filter="refill">Refill</button>
-        <button class="stock-filter ${stockOverviewFilter==='buy'?'active':''}" data-stock-filter="buy">Critical / Buy</button>
-      </div>
-      <div class="stock-overview-list" id="stockOverviewList"></div>
-    `;
-    const list = host.querySelector('#stockOverviewList');
+    const summary = document.createElement('div');
+    summary.className = 'stock-overview-summary';
+    [
+      ['Tracked', tracked.length, ''],
+      ['Critical', criticalCount, 'crit'],
+      ['Refill', refillCount, 'refill'],
+      ['Buy', buyCount, '']
+    ].forEach(([label,value,className])=>{
+      const kpi = document.createElement('div');
+      kpi.className = `stock-kpi${className ? ` ${className}` : ''}`;
+      kpi.append(textEl('span', label), textEl('b', value));
+      summary.appendChild(kpi);
+    });
+    const filters = document.createElement('div');
+    filters.className = 'stock-overview-filters';
+    const searchInputNode = document.createElement('input');
+    searchInputNode.id = 'stockOverviewSearch';
+    searchInputNode.className = 'dialog-field';
+    searchInputNode.placeholder = 'Search stock item';
+    searchInputNode.value = stockOverviewQuery;
+    filters.appendChild(searchInputNode);
+    [
+      ['all', 'All'],
+      ['ok', 'OK'],
+      ['refill', 'Refill'],
+      ['buy', 'Critical / Buy']
+    ].forEach(([value,label])=>{
+      const filterBtn = dialogButton('', label, `stock-filter ${stockOverviewFilter === value ? 'active' : ''}`.trim());
+      filterBtn.dataset.stockFilter = value;
+      filters.appendChild(filterBtn);
+    });
+    const list = document.createElement('div');
+    list.className = 'stock-overview-list';
+    list.id = 'stockOverviewList';
+    host.replaceChildren(summary, filters, list);
     const searchInput = host.querySelector('#stockOverviewSearch');
     if(searchInput){
       searchInput.oninput = event=>{ stockOverviewQuery = event.target.value; renderStock(); };
@@ -3262,11 +3441,11 @@
       const statusLabel = status === 'buy' ? 'Critical' : (status === 'refill' ? 'Refill' : 'OK');
       const row = document.createElement('div');
       row.className = 'stock-overview-row';
-      row.innerHTML = `
-        <div><b>${r.name}</b><small>Used ${r.used} ${r.unit || ''}</small></div>
-        <div class="stock-overview-meta">Block Factory ${r.leftTruck} · Store ${r.leftStorage} ${r.unit || ''}</div>
-        <span class="stock-status ${status}">${statusLabel}</span>
-      `;
+      const item = document.createElement('div');
+      item.append(textEl('b', r.name), textEl('small', `Used ${r.used} ${r.unit || ''}`));
+      const meta = textEl('div', `Block Factory ${r.leftTruck} · Store ${r.leftStorage} ${r.unit || ''}`, 'stock-overview-meta');
+      const badgeNode = textEl('span', statusLabel, `stock-status ${status}`);
+      row.append(item, meta, badgeNode);
       list.appendChild(row);
     });
     host.querySelectorAll('[data-stock-filter]').forEach(btn=>{
@@ -3313,47 +3492,23 @@
     const s = slots[active]; const c = BK_LOGIC.computeSlot(s);
     document.getElementById('sumTitle').textContent = `Summary – ${s.name}`;
     const body = document.getElementById('sumBody');
-    body.innerHTML = htmlGroupedRows(s.items) +
-      `<div class="sumline"><span>Slot Subtotal</span><b>${c.subtotal} GHS</b></div>
-       <div style="padding:8px 0;color:#9aa3ad;font-size:12px">
-         Combos in slot: <b>${c.combos}</b> · Order Discount: ${Math.round((s.discountRate||0)*100)}%
-       </div>`;
+    const subtotal = document.createElement('div');
+    subtotal.className = 'sumline';
+    subtotal.append(textEl('span', 'Slot Subtotal'), textEl('b', `${c.subtotal} GHS`));
+    const meta = document.createElement('div');
+    meta.className = 'summary-meta';
+    meta.append(textEl('span', `Combos in slot: ${c.combos}`), textEl('span', `Order Discount: ${Math.round((s.discountRate||0)*100)}%`));
+    body.replaceChildren(groupedRowsNode(s.items), subtotal, meta);
     document.getElementById('modalSummary').classList.add('open');
   }
   function closeSummary(){ document.getElementById('modalSummary').classList.remove('open'); }
 
-  function receiptSectionHtml(slot){
-    const c = BK_LOGIC.computeSlot(slot);
-    return `<div style="margin:6px 0 10px">
-      <div><b>${slot.name}</b> · <small>#${slot.orderNo || '-'}</small></div>
-      ${htmlGroupedRows(slot.items)}
-      <div class="sumline"><span>${slot.name} Subtotal</span><b>${c.subtotal} GHS</b></div>
-    </div>`;
-  }
-
   function openReceipt(indices){
     const {slots} = BK_STATE.getState();
     const idxs = Array.isArray(indices)? indices : [BK_STATE.getState().active];
-    let subtotal=0, discount=0, combos=0;
-    const sections = idxs.map(i=>{
-      const s=slots[i]; const c=BK_LOGIC.computeSlot(s);
-      subtotal += c.subtotal; combos += c.combos;
-      discount += Math.round(c.subtotal * (Number(s.discountRate) || 0));
-      return receiptSectionHtml(s);
-    }).join('');
-    const total = subtotal - discount;
-    const html = `
-      <div style="line-height:1.35">
-        <div><b>BurgerKiss – Order</b></div>
-        <div style="color:#9aa3ad">Combos: ${combos} · Approved order discounts included</div>
-        <hr style="border:0;border-top:1px solid #2a2f39;margin:8px 0">
-        ${sections}
-        <div class="sumline"><span>Subtotal</span><b>${subtotal} GHS</b></div>
-        <div class="sumline"><span>Discount</span><b>-${discount} GHS</b></div>
-        <div class="sumline"><span>Total</span><b>${total} GHS</b></div>
-      </div>`;
-    document.getElementById('receiptBody').innerHTML = html;
-    document.getElementById('printArea').innerHTML = html;
+    const html = RECEIPT_RENDERERS.orderReceiptHtml ? RECEIPT_RENDERERS.orderReceiptHtml(slots, idxs) : '';
+    setTrustedHtml('receiptBody', html);
+    setTrustedHtml('printArea', html);
     document.getElementById('modalReceipt').classList.add('open');
   }
   function closeReceipt(){ document.getElementById('modalReceipt').classList.remove('open'); }
@@ -3397,15 +3552,18 @@
   function openGroup(){
     groupSel = new Set();
     const {slots} = BK_STATE.getState();
-    const body = document.getElementById('groupBody'); body.innerHTML='';
+    const body = document.getElementById('groupBody'); body.replaceChildren();
     slots.forEach((s,i)=>{
       const c = BK_LOGIC.computeSlot(s);
-      const row = document.createElement('div'); row.className='row';
-      row.innerHTML = `
-        <span class="left">
-          <input type="checkbox" onchange="BK_UI.toggleGroup(${i},this.checked)">
-          <b>${s.name}</b> <small>· ${c.subtotal} GHS · ${s.pay.toUpperCase()}</small>
-        </span>`;
+      const row = document.createElement('div');
+      row.className = 'row';
+      const left = document.createElement('span');
+      left.className = 'left';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.onchange = event=> toggleGroup(i, event.target.checked);
+      left.append(input, textEl('b', s.name), textEl('small', `· ${c.subtotal} GHS · ${s.pay.toUpperCase()}`));
+      row.appendChild(left);
       body.appendChild(row);
     });
     document.getElementById('modalGroup').classList.add('open');
@@ -3534,7 +3692,7 @@
     renderStock,
     openSummary, closeSummary, openHistory, closeHistory, openHistoryPurge, closeHistoryPurge, submitHistoryPurge, renderHistoryPurgeList, openHistoryOrder, closeHistoryOrder, reprintHistoryOrder, voidSelectedHistoryOrder,
     exportHistoryJson, exportHistoryCsv, filterHistoryText, filterHistoryToday, filterHistoryYesterday, clearHistoryFilters,
-    openDailyReport, closeDailyReport, renderDailyReport, exportDailyReportCsv, printDailyReport, dailyReportData, voidHistoryOrder, archiveCompletedSlots, workflowNextState, buildHandoverPlan, handoverPlanHtml,
+    openDailyReport, closeDailyReport, renderDailyReport, exportDailyReportCsv, printDailyReport, dailyReportData, voidHistoryOrder, archiveCompletedSlots, workflowNextState, buildHandoverPlan, handoverPlanHtml, handoverPlanChecklist,
     openStockOverview, closeStockOverview,
     openReceipt, closeReceipt, copyReceipt, shareWA, printReceipt,
     openPrices, closePrices, savePrices, resetPrices,
