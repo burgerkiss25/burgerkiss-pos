@@ -79,6 +79,19 @@ test('state normalization helpers are split from state orchestration', () => {
   assert.ok(admin.indexOf('state_normalizers.js') > -1 && admin.indexOf('state_normalizers.js') < admin.indexOf('state.js'));
 });
 
+test('order number helpers are split from state orchestration', () => {
+  const state = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
+  const service = fs.readFileSync(path.join(root, 'order_number_service.js'), 'utf8');
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.match(service, /root\.BK_ORDER_NUMBER_SERVICE = \{/);
+  assert.match(service, /function parseOrderSequence\(orderNo\)/);
+  assert.match(service, /function formatOrderNo\(seq/);
+  assert.match(service, /function knownSequenceFloor/);
+  assert.match(state, /const ORDER_NUMBERS = window\.BK_ORDER_NUMBER_SERVICE \|\| \{\}/);
+  assert.ok(order.indexOf('order_number_service.js') > -1 && order.indexOf('order_number_service.js') < order.indexOf('state.js'));
+  assert.ok(admin.indexOf('order_number_service.js') > -1 && admin.indexOf('order_number_service.js') < admin.indexOf('state.js'));
+});
+
 
 test('purchase entry is isolated and requires purchaser PIN confirmation', () => {
   assert.match(purchases, /purchaseAuthForm/);

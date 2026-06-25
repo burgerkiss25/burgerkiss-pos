@@ -3,6 +3,7 @@
   const SAVE_KEY = 'bk_state_v5';
   const ORDER_COUNTER_KEY = 'bk_order_counter_v1';
   const NORMALIZERS = window.BK_STATE_NORMALIZERS || {};
+  const ORDER_NUMBERS = window.BK_ORDER_NUMBER_SERVICE || {};
   let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo', momoProvider:'telecel'|'mtn'|'', issued:false}]
   let active = 0;
   let discountRate = 0;
@@ -23,30 +24,40 @@
     return NORMALIZERS.normalizeState ? NORMALIZERS.normalizeState(st) : {slots:[], active:0, discountRate:0, orderSeq:0, updatedAt:0};
   }
   function parseOrderSequence(orderNo){
+    if(ORDER_NUMBERS.parseOrderSequence) return ORDER_NUMBERS.parseOrderSequence(orderNo);
     const match = String(orderNo || '').match(/(\d+)$/);
     return match ? Math.max(0, Number(match[1]) || 0) : 0;
   }
   function formatOrderNo(seq){
+    if(ORDER_NUMBERS.formatOrderNo) return ORDER_NUMBERS.formatOrderNo(seq);
     const d = new Date();
     const pad = n => String(n).padStart(2, '0');
     const date = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
     return `BK-${date}-${String(seq).padStart(8, '0')}`;
   }
   function localCounter(){
+    if(ORDER_NUMBERS.localCounter) return ORDER_NUMBERS.localCounter(localStorage, ORDER_COUNTER_KEY);
     try{ return Math.max(0, Number(localStorage.getItem(ORDER_COUNTER_KEY)) || 0); }
     catch(e){ return 0; }
   }
   function rememberCounter(seq){
-    orderSeq = Math.max(orderSeq, Number(seq) || 0);
-    try{ localStorage.setItem(ORDER_COUNTER_KEY, String(orderSeq)); }catch(e){}
+    orderSeq = ORDER_NUMBERS.rememberCounter
+      ? ORDER_NUMBERS.rememberCounter(localStorage, ORDER_COUNTER_KEY, orderSeq, seq)
+      : Math.max(orderSeq, Number(seq) || 0);
+    if(!ORDER_NUMBERS.rememberCounter){
+      try{ localStorage.setItem(ORDER_COUNTER_KEY, String(orderSeq)); }catch(e){}
+    }
   }
   function knownSequenceFloor(){
-    let floor = Math.max(orderSeq, localCounter());
-    slots.forEach(slot=>{ floor = Math.max(floor, parseOrderSequence(slot && slot.orderNo)); });
+    const historyEntries = [];
     try{
       const raw = JSON.parse(localStorage.getItem('bk_order_history_v1') || '[]');
-      if(Array.isArray(raw)) raw.forEach(entry=>{ floor = Math.max(floor, parseOrderSequence(entry && entry.orderNo)); });
+      if(Array.isArray(raw)) historyEntries.push(...raw);
     }catch(e){}
+    if(ORDER_NUMBERS.knownSequenceFloor) return ORDER_NUMBERS.knownSequenceFloor(orderSeq, localCounter(), slots, historyEntries);
+    let floor = Math.max(orderSeq, localCounter());
+    slots.forEach(slot=>{ floor = Math.max(floor, parseOrderSequence(slot && slot.orderNo)); });
+    historyEntries.forEach(entry=>{ floor = Math.max(floor, parseOrderSequence(entry && entry.orderNo)); });
     return floor;
   }
   let remoteAuthPromise = null;
