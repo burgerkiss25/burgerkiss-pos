@@ -8,6 +8,7 @@ const landing = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const order = fs.readFileSync(path.join(root, 'order.html'), 'utf8');
 const shift = fs.readFileSync(path.join(root, 'shift.html'), 'utf8');
 const purchases = fs.readFileSync(path.join(root, 'purchases.html'), 'utf8');
+const purchasesJs = fs.readFileSync(path.join(root, 'purchases.js'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
 
@@ -72,4 +73,7 @@ test('purchase entry is isolated and requires purchaser PIN confirmation', () =>
   assert.match(purchases, /Receipt is in purse/);
   assert.match(purchases, /purchaseExport/);
   assert.doesNotMatch(purchases, /ui\.js|main\.js|id="buttons"|id="orderCart"/);
+  assert.doesNotMatch(purchasesJs, /\.innerHTML\s*=/);
+  assert.match(purchasesJs, /select\.replaceChildren/);
+  assert.match(purchasesJs, /host\.replaceChildren\(title, \.\.\.rows\)/);
 });

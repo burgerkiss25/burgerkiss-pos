@@ -8,6 +8,8 @@ const html = fs.readFileSync(path.join(root, 'order.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
+const htmlRenderers = fs.readFileSync(path.join(root, 'html_renderers.js'), 'utf8');
+const receiptRenderers = fs.readFileSync(path.join(root, 'receipt_renderers.js'), 'utf8');
 
 test('payment and handover have compact local headers', () => {
   assert.match(html, /id="btnPayBack"[^>]*>← Kitchen<\/button>/);
@@ -65,6 +67,33 @@ test('shift order audit rows can open order detail modal', () => {
   assert.match(shiftReports, /data-history-id/);
   assert.match(shiftReports, /function historyDetailHtml/);
   assert.match(shiftJs, /openOrderDetail/);
+});
+
+test('receipt and report HTML sinks are isolated in trusted renderer module', () => {
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  const shift = fs.readFileSync(path.join(root, 'shift.html'), 'utf8');
+  const shiftJs = fs.readFileSync(path.join(root, 'shift.js'), 'utf8');
+  assert.match(htmlRenderers, /function setTrustedHtml/);
+  assert.match(htmlRenderers, /\.innerHTML\s*=/);
+  assert.match(ui, /const HTML_RENDERERS = window\.BK_HTML_RENDERERS \|\| \{\}/);
+  assert.doesNotMatch(ui, /receiptBody'\)\.innerHTML|printArea'\)\.innerHTML|dailyReportBody'\)\.innerHTML/);
+  assert.doesNotMatch(shiftJs, /shiftReportBody[\s\S]{0,160}\.innerHTML|shiftOrderDetailBody'\)\.innerHTML/);
+  assert.ok(html.indexOf('html_renderers.js') > -1 && html.indexOf('html_renderers.js') < html.indexOf('ui.js'));
+  assert.ok(admin.indexOf('html_renderers.js') > -1 && admin.indexOf('html_renderers.js') < admin.indexOf('ui.js'));
+  assert.ok(shift.indexOf('html_renderers.js') > -1 && shift.indexOf('html_renderers.js') < shift.indexOf('shift.js'));
+});
+
+test('receipt HTML builders are isolated from the main UI bundle', () => {
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.match(receiptRenderers, /function historyReceiptHtml/);
+  assert.match(receiptRenderers, /function orderReceiptHtml/);
+  assert.match(receiptRenderers, /function groupedRowsHtml/);
+  assert.match(ui, /const RECEIPT_RENDERERS = window\.BK_RECEIPT_RENDERERS \|\| \{\}/);
+  assert.doesNotMatch(ui, /function historyReceiptHtml|function receiptSectionHtml|function htmlGroupedRows/);
+  assert.match(ui, /RECEIPT_RENDERERS\.historyReceiptHtml/);
+  assert.match(ui, /RECEIPT_RENDERERS\.orderReceiptHtml/);
+  assert.ok(html.indexOf('receipt_renderers.js') > -1 && html.indexOf('receipt_renderers.js') < html.indexOf('ui.js'));
+  assert.ok(admin.indexOf('receipt_renderers.js') > -1 && admin.indexOf('receipt_renderers.js') < admin.indexOf('ui.js'));
 });
 
 
@@ -139,6 +168,18 @@ test('stock overview has search and sorted results', () => {
   assert.match(ui, /localeCompare/);
 });
 
+test('stock overview, void reason and group order dialogs avoid inline HTML templates', () => {
+  const stockOverview = ui.slice(ui.indexOf('function renderStock'), ui.indexOf('function openReceipt'));
+  const voidReason = ui.slice(ui.indexOf('function requestVoidReason'), ui.indexOf('function voidHistoryOrder'));
+  const groupDialog = ui.slice(ui.indexOf('function openGroup'), ui.indexOf('function closeGroup'));
+  assert.doesNotMatch(stockOverview, /host\.innerHTML\s*=|row\.innerHTML\s*=/);
+  assert.doesNotMatch(voidReason, /appDialogBody'\)\.innerHTML/);
+  assert.doesNotMatch(groupDialog, /body\.innerHTML|row\.innerHTML/);
+  assert.match(stockOverview, /host\.replaceChildren\(summary, filters, list\)/);
+  assert.match(voidReason, /presetSelect\.appendChild\(optionNode/);
+  assert.match(groupDialog, /input\.onchange = event=> toggleGroup/);
+});
+
 
 test('payment card renders dynamic payment copy without innerHTML or inline handlers', () => {
   const renderPay = ui.slice(ui.indexOf('function renderPay()'), ui.indexOf('function continueFromPayment'));
@@ -170,4 +211,32 @@ test('history purge list renders rows with DOM text nodes', () => {
   assert.match(renderPurge, /row\.className = 'history-purge-row'/);
   assert.match(renderPurge, /order\.textContent = entry\.orderNo \|\| ''/);
   assert.match(renderPurge, /meta\.textContent = `\$\{entry\.externalOrderNo \|\| entry\.slotName \|\| ''\} · \$\{paymentLabel\(entry\.pay\)\} ·/);
+});
+
+test('order history list renders rows with DOM text nodes', () => {
+  const renderStart = ui.indexOf('function renderHistoryBody');
+  const renderHistory = ui.slice(renderStart, ui.indexOf('function openHistory', renderStart));
+  assert.doesNotMatch(renderHistory, /body\.innerHTML\s*=/);
+  assert.match(renderHistory, /body\.replaceChildren\(summary, list\)/);
+  assert.match(renderHistory, /button\.dataset\.historyId = h\.id \|\| ''/);
+  assert.match(renderHistory, /button\.onclick = \(\)=> openHistoryOrder/);
+});
+
+test('order history detail modal renders with DOM text nodes', () => {
+  const detail = ui.slice(ui.indexOf('function openHistoryOrder'), ui.indexOf('function closeHistoryOrder'));
+  assert.doesNotMatch(detail, /historyDetailBody'\)\.innerHTML/);
+  assert.match(ui, /function historyItemsNode\(entry\)/);
+  assert.match(ui, /function historyDetailMeta\(label, value\)/);
+  assert.match(detail, /historyDetailBody'\)\.replaceChildren\(\.\.\.content\)/);
+  assert.match(detail, /notice\.append\(/);
+  assert.match(detail, /totals\.className = 'history-totals'/);
+});
+
+test('active order summary modal renders grouped rows with DOM nodes', () => {
+  const summary = ui.slice(ui.indexOf('function openSummary'), ui.indexOf('function closeSummary'));
+  assert.doesNotMatch(summary, /body\.innerHTML\s*=/);
+  assert.match(ui, /function groupedRowsNode\(items\)/);
+  assert.match(summary, /body\.replaceChildren\(groupedRowsNode\(s\.items\), subtotal, meta\)/);
+  assert.match(summary, /meta\.className = 'summary-meta'/);
+  assert.match(css, /\.summary-meta\{/);
 });
