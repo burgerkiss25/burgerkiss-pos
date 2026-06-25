@@ -18,6 +18,12 @@
   let lastRemoteHash = '';
 
   function clone(x){ try{ return JSON.parse(JSON.stringify(x)); }catch(e){ return {}; } }
+  function textEl(tag, text, className){
+    const el = document.createElement(tag);
+    if(className) el.className = className;
+    el.textContent = text == null ? '' : String(text);
+    return el;
+  }
   function cleanMap(input){
     const clean = {};
     if(!input || typeof input !== 'object') return clean;
@@ -342,27 +348,62 @@
     const categoryLabels = {burger:'Burgers',wings:'Wings',fries:'Fries',salad:'Salads',drink:'Drinks',extra:'Add-ons',sauce:'Sauces'};
     const products = BK_DATA.BASE.slice();
     const categories = Array.from(new Set(products.map(product=>product.cat || 'other')));
-    body.innerHTML = `<div class="admin-editor-intro"><div><h4>Product images</h4><p>Images are grouped by product category and follow the display order managed in Products.</p></div><span class="admin-count-badge">${products.length} products</span></div><div id="adminImageCategories"></div>`;
-    const categoriesWrap = body.querySelector('#adminImageCategories');
+    const intro = document.createElement('div');
+    intro.className = 'admin-editor-intro';
+    const introCopy = document.createElement('div');
+    introCopy.append(textEl('h4', 'Product images'), textEl('p', 'Images are grouped by product category and follow the display order managed in Products.'));
+    intro.append(introCopy, textEl('span', `${products.length} products`, 'admin-count-badge'));
+    const categoriesWrap = document.createElement('div');
+    categoriesWrap.id = 'adminImageCategories';
+    body.replaceChildren(intro, categoriesWrap);
     categories.forEach(category=>{
       const items = products.filter(product=>(product.cat || 'other') === category).sort((a,b)=>Number(a.categoryOrder||0)-Number(b.categoryOrder||0));
       const section = document.createElement('section');
       section.className = 'admin-category-group';
       section.dataset.imageCategory = category;
       const label = categoryLabels[category] || String(category).replace(/(^|_)([a-z])/g,(_,space,letter)=>`${space ? ' ' : ''}${letter.toUpperCase()}`);
-      section.innerHTML = `<header><div><h4>${label}</h4><small>${items.length} ${items.length === 1 ? 'product' : 'products'}</small></div><span>Follows product order</span></header><div class="admin-image-grid"></div>`;
-      const grid = section.querySelector('.admin-image-grid');
+      const header = document.createElement('header');
+      const headerCopy = document.createElement('div');
+      headerCopy.append(textEl('h4', label), textEl('small', `${items.length} ${items.length === 1 ? 'product' : 'products'}`));
+      header.append(headerCopy, textEl('span', 'Follows product order'));
+      const grid = document.createElement('div');
+      grid.className = 'admin-image-grid';
+      section.append(header, grid);
       items.forEach(it=>{
-      const row = document.createElement('div');
-      row.className = 'admin-image-card';
-      const src = DRAFT[it.id] || '';
-      row.innerHTML = `
-        <div class="admin-image-preview"><img class="img-preview ${src ? '' : 'hidden'}" id="img-prev-${it.id}" data-preview-id="${it.id}" loading="lazy" alt="${it.name}"><span class="${src ? 'hidden' : ''}" data-empty-image>No image</span></div>
-        <div class="admin-image-copy"><b>${it.name}</b><small>${it.cat} · ${it.id}</small></div>
-        <div class="admin-image-actions"><label class="x admin-upload-button">Choose image<input class="sr-only" type="file" accept="image/*" data-img-id="${it.id}"></label><button class="mini" data-remove-id="${it.id}">Remove</button></div>
-        <small id="img-status-${it.id}" class="muted"></small>
-      `;
-      grid.appendChild(row);
+        const row = document.createElement('div');
+        row.className = 'admin-image-card';
+        const src = DRAFT[it.id] || '';
+        const preview = document.createElement('div');
+        preview.className = 'admin-image-preview';
+        const img = document.createElement('img');
+        img.className = `img-preview ${src ? '' : 'hidden'}`;
+        img.id = `img-prev-${it.id}`;
+        img.dataset.previewId = it.id;
+        img.loading = 'lazy';
+        img.alt = it.name;
+        const empty = textEl('span', 'No image', src ? 'hidden' : '');
+        empty.dataset.emptyImage = '';
+        preview.append(img, empty);
+        const copy = document.createElement('div');
+        copy.className = 'admin-image-copy';
+        copy.append(textEl('b', it.name), textEl('small', `${it.cat} · ${it.id}`));
+        const actions = document.createElement('div');
+        actions.className = 'admin-image-actions';
+        const upload = textEl('label', 'Choose image', 'x admin-upload-button');
+        const input = document.createElement('input');
+        input.className = 'sr-only';
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.dataset.imgId = it.id;
+        upload.appendChild(input);
+        const remove = textEl('button', 'Remove', 'mini');
+        remove.type = 'button';
+        remove.dataset.removeId = it.id;
+        actions.append(upload, remove);
+        const status = textEl('small', '', 'muted');
+        status.id = `img-status-${it.id}`;
+        row.append(preview, copy, actions, status);
+        grid.appendChild(row);
       });
       categoriesWrap.appendChild(section);
     });
