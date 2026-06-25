@@ -96,6 +96,19 @@ test('receipt HTML builders are isolated from the main UI bundle', () => {
   assert.ok(admin.indexOf('receipt_renderers.js') > -1 && admin.indexOf('receipt_renderers.js') < admin.indexOf('ui.js'));
 });
 
+test('daily report calculations and markup use shared report helpers', () => {
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  const shiftReports = fs.readFileSync(path.join(root, 'shift_reports.js'), 'utf8');
+  assert.match(ui, /const REPORTS = window\.BK_REPORTS \|\| \{\}/);
+  assert.match(ui, /REPORTS\.dailyReportData/);
+  assert.match(ui, /REPORTS\.dailyReportHtml\(report, \{interactive:false\}\)/);
+  assert.doesNotMatch(ui, /function dateInputValue/);
+  assert.match(shiftReports, /convertedOrders/);
+  assert.match(shiftReports, /function reportOrderHtml/);
+  assert.ok(html.indexOf('shift_reports.js') > -1 && html.indexOf('shift_reports.js') < html.indexOf('ui.js'));
+  assert.ok(admin.indexOf('shift_reports.js') > -1 && admin.indexOf('shift_reports.js') < admin.indexOf('ui.js'));
+});
+
 
 test('daily sales date picker is restricted for non-owner staff', () => {
   const shiftJs = fs.readFileSync(path.join(root, 'shift.js'), 'utf8');

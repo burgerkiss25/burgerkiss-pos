@@ -97,20 +97,6 @@
     });
     return fragment;
   }
-  function groupedRowsNode(items){
-    const fragment = document.createDocumentFragment();
-    BK_LOGIC.groupedLines(items).forEach(({name, qty, note, total})=>{
-      const row = document.createElement('div');
-      row.className = 'row';
-      row.style.borderTop = '1px dashed #2a2f39';
-      row.style.padding = '6px 0';
-      const left = document.createElement('span');
-      left.append(textEl('b', name), textEl('small', `× ${qty}${note ? ` · ${note}` : ''}`));
-      row.append(left, textEl('span', `${total} GHS`));
-      fragment.appendChild(row);
-    });
-    return fragment;
-  }
 
   function escapeHtml(value){
     return String(value == null ? '' : value)
@@ -121,6 +107,7 @@
   const DIALOGS = window.BK_DIALOGS || {};
   const HTML_RENDERERS = window.BK_HTML_RENDERERS || {};
   const RECEIPT_RENDERERS = window.BK_RECEIPT_RENDERERS || {};
+  const REPORTS = window.BK_REPORTS || {};
   function ensureDialogHost(){ return DIALOGS.ensureHost ? DIALOGS.ensureHost() : null; }
   function appDialogBody(){ return document.getElementById('appDialogBody'); }
   function setTrustedHtml(id, html){
@@ -2947,30 +2934,6 @@
     item.append(textEl('small', label), textEl('strong', value));
     return item;
   }
-  function historyItemsNode(entry){
-    const items = Array.isArray(entry.items) ? entry.items : [];
-    if(!items.length) return textEl('div', 'No saved item details.', 'empty-state');
-    const list = document.createElement('div');
-    list.className = 'history-item-list';
-    items.forEach(item=>{
-      const row = document.createElement('div');
-      row.className = 'history-item';
-      const main = document.createElement('div');
-      main.className = 'history-item-main';
-      main.append(textEl('strong', `${Number(item.qty)||1}x ${item.name}`), textEl('b', `${Number(item.total)||0} GHS`));
-      row.appendChild(main);
-      splitEntryNoteLines(item.note).forEach(note=>{
-        row.appendChild(textEl('div', `+ ${String(note).replace(/^\+\s*/, '')}`, 'history-item-extra'));
-      });
-      list.appendChild(row);
-    });
-    return list;
-  }
-  function historyDetailMeta(label, value){
-    const item = document.createElement('div');
-    item.append(textEl('small', label), textEl('strong', value));
-    return item;
-  }
   function isOwnerSession(){
     const current = window.BK_ACCESS && BK_ACCESS.current ? BK_ACCESS.current() : null;
     return !!(current && current.role === 'owner');
@@ -3303,59 +3266,21 @@
       renderHistoryBody();
     });
   }
-  function dateInputValue(date){
-    const d = date instanceof Date ? date : new Date(date || Date.now());
-    const pad = n=>String(n).padStart(2,'0');
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-  }
   function dailyReportData(dateValue){
-    const selected = String(dateValue || dateInputValue(new Date()));
-    const orders = getHistory().filter(entry=>dateInputValue(entry.closedAt) === selected);
-    const completed = orders.filter(entry=>entry.status !== 'voided');
-    const voided = orders.filter(entry=>entry.status === 'voided');
-    const sum = (list, field)=>list.reduce((total, entry)=>total + Number(entry[field] || 0), 0);
-    const netSales = sum(completed, 'total');
+    if(REPORTS.dailyReportData) return REPORTS.dailyReportData(dateValue);
     return {
-      date:selected, orders, completed, voided, netSales,
-      cashTotal:sum(completed.filter(entry=>entry.pay === 'cash'), 'total'),
-      momoTelecelTotal:sum(completed.filter(entry=>entry.pay === 'momo' && entry.momoProvider === 'telecel'), 'total'),
-      momoMtnTotal:sum(completed.filter(entry=>entry.pay === 'momo' && entry.momoProvider === 'mtn'), 'total'),
-      momoUnspecifiedTotal:sum(completed.filter(entry=>entry.pay === 'momo' && !entry.momoProvider), 'total'),
-      boltTotal:sum(completed.filter(entry=>entry.pay === 'bolt'), 'total'),
-      hubtelTotal:sum(completed.filter(entry=>entry.pay === 'hubtel'), 'total'),
-      chowdeckTotal:sum(completed.filter(entry=>entry.pay === 'chowdeck'), 'total'),
-      convertedOrders:completed.filter(entry=>entry.finalChannel === 'direct').length,
-      discounts:sum(completed, 'discount'),
-      voidValue:sum(voided, 'total'),
-      average:completed.length ? Math.round(netSales / completed.length) : 0
+      date:String(dateValue || ''), orders:[], completed:[], voided:[], purchases:[],
+      netSales:0, cashTotal:0, momoTelecelTotal:0, momoMtnTotal:0, momoUnspecifiedTotal:0,
+      boltTotal:0, hubtelTotal:0, chowdeckTotal:0, convertedOrders:0, discounts:0,
+      voidValue:0, average:0, cashFloat:0, cashPurchases:0, expectedWallet:0, topUpNeeded:0
     };
   }
   function dailyReportHtml(report){
-    return `<div class="daily-report">
-      <div class="report-heading"><span>Business date</span><strong>${escapeHtml(report.date)}</strong></div>
-      <div class="report-metrics">
-        <div><small>Net sales</small><strong>${report.netSales} GHS</strong></div>
-        <div><small>Cash</small><strong>${report.cashTotal} GHS</strong></div>
-        <div><small>Telecel MoMo</small><strong>${report.momoTelecelTotal} GHS</strong></div>
-        <div><small>MTN MoMo</small><strong>${report.momoMtnTotal} GHS</strong></div>
-        <div><small>MoMo unspecified</small><strong>${report.momoUnspecifiedTotal} GHS</strong></div>
-        <div><small>Bolt</small><strong>${report.boltTotal} GHS</strong></div>
-        <div><small>Hubtel</small><strong>${report.hubtelTotal} GHS</strong></div>
-        <div><small>Chowdeck</small><strong>${report.chowdeckTotal} GHS</strong></div>
-        <div><small>Converted online orders</small><strong>${report.convertedOrders}</strong></div>
-        <div><small>Completed orders</small><strong>${report.completed.length}</strong></div>
-        <div><small>Discounts</small><strong>${report.discounts} GHS</strong></div>
-        <div><small>Average order</small><strong>${report.average} GHS</strong></div>
-        <div class="void-metric"><small>Voided orders</small><strong>${report.voided.length}</strong></div>
-        <div class="void-metric"><small>Voided value</small><strong>${report.voidValue} GHS</strong></div>
-      </div>
-      <div class="report-orders"><h3>Order audit</h3>${report.orders.length ? report.orders.map(entry=>`
-        <div class="report-order ${entry.status === 'voided' ? 'voided' : ''}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(paymentLabel(entry.pay, entry.momoProvider))}${entry.voidReason ? ` · ${escapeHtml(entry.voidReason)}` : ''}</small></span><strong>${entry.total} GHS</strong></div>`).join('') : '<div class="empty-state">No orders for this date.</div>'}</div>
-    </div>`;
+    return REPORTS.dailyReportHtml ? REPORTS.dailyReportHtml(report, {interactive:false}) : '';
   }
   function openDailyReport(){
     const input = document.getElementById('reportDate');
-    if(!input.value) input.value = dateInputValue(new Date());
+    if(!input.value) input.value = REPORTS.dateInputValue ? REPORTS.dateInputValue(new Date()) : '';
     renderDailyReport();
     document.getElementById('modalDailyReport').classList.add('open');
     refreshHistoryFromRemote().then(()=>renderDailyReport());
