@@ -220,6 +220,18 @@ test('stock overview, void reason and group order dialogs avoid inline HTML temp
   assert.match(groupDialog, /input\.onchange = event=> toggleGroup/);
 });
 
+test('stock overview, void reason and group order dialogs avoid inline HTML templates', () => {
+  const stockOverview = ui.slice(ui.indexOf('function renderStock'), ui.indexOf('function openReceipt'));
+  const voidReason = ui.slice(ui.indexOf('function requestVoidReason'), ui.indexOf('function voidHistoryOrder'));
+  const groupDialog = ui.slice(ui.indexOf('function openGroup'), ui.indexOf('function closeGroup'));
+  assert.doesNotMatch(stockOverview, /host\.innerHTML\s*=|row\.innerHTML\s*=/);
+  assert.doesNotMatch(voidReason, /appDialogBody'\)\.innerHTML/);
+  assert.doesNotMatch(groupDialog, /body\.innerHTML|row\.innerHTML/);
+  assert.match(stockOverview, /host\.replaceChildren\(summary, filters, list\)/);
+  assert.match(voidReason, /presetSelect\.appendChild\(optionNode/);
+  assert.match(groupDialog, /input\.onchange = event=> toggleGroup/);
+});
+
 
 test('payment card renders dynamic payment copy without innerHTML or inline handlers', () => {
   const renderPay = ui.slice(ui.indexOf('function renderPay()'), ui.indexOf('function continueFromPayment'));
