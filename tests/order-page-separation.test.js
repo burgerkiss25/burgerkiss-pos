@@ -12,6 +12,10 @@ const purchasesJs = fs.readFileSync(path.join(root, 'purchases.js'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
 
+function scriptIndex(html, file){
+  return html.indexOf(`src="./${file}`);
+}
+
 test('landing page requires access before workspace selection', () => {
   assert.match(landing, /access\.js/);
   assert.match(landing, /entry\.js/);
@@ -74,9 +78,9 @@ test('state normalization helpers are split from state orchestration', () => {
   assert.match(normalizers, /function normalizeState\(st\)/);
   assert.match(state, /const NORMALIZERS = window\.BK_STATE_NORMALIZERS \|\| \{\}/);
   assert.doesNotMatch(state, /function normalizeItem\(it\)/);
-  assert.ok(order.indexOf('state_normalizers.js') > -1 && order.indexOf('state_normalizers.js') < order.indexOf('state.js'));
+  assert.ok(scriptIndex(order, 'state_normalizers.js') > -1 && scriptIndex(order, 'state_normalizers.js') < scriptIndex(order, 'state.js'));
   const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
-  assert.ok(admin.indexOf('state_normalizers.js') > -1 && admin.indexOf('state_normalizers.js') < admin.indexOf('state.js'));
+  assert.ok(scriptIndex(admin, 'state_normalizers.js') > -1 && scriptIndex(admin, 'state_normalizers.js') < scriptIndex(admin, 'state.js'));
 });
 
 test('order number helpers are split from state orchestration', () => {
@@ -88,8 +92,8 @@ test('order number helpers are split from state orchestration', () => {
   assert.match(service, /function formatOrderNo\(seq/);
   assert.match(service, /function knownSequenceFloor/);
   assert.match(state, /const ORDER_NUMBERS = window\.BK_ORDER_NUMBER_SERVICE \|\| \{\}/);
-  assert.ok(order.indexOf('order_number_service.js') > -1 && order.indexOf('order_number_service.js') < order.indexOf('state.js'));
-  assert.ok(admin.indexOf('order_number_service.js') > -1 && admin.indexOf('order_number_service.js') < admin.indexOf('state.js'));
+  assert.ok(scriptIndex(order, 'order_number_service.js') > -1 && scriptIndex(order, 'order_number_service.js') < scriptIndex(order, 'state.js'));
+  assert.ok(scriptIndex(admin, 'order_number_service.js') > -1 && scriptIndex(admin, 'order_number_service.js') < scriptIndex(admin, 'state.js'));
 });
 
 test('state persistence helpers are split from state orchestration', () => {
@@ -101,8 +105,8 @@ test('state persistence helpers are split from state orchestration', () => {
   assert.match(persistence, /function writeState\(storage, key, payload\)/);
   assert.match(persistence, /function clearAppStorage\(storage, keys\)/);
   assert.match(state, /const PERSISTENCE = window\.BK_STATE_PERSISTENCE \|\| \{\}/);
-  assert.ok(order.indexOf('state_persistence.js') > -1 && order.indexOf('state_persistence.js') < order.indexOf('state.js'));
-  assert.ok(admin.indexOf('state_persistence.js') > -1 && admin.indexOf('state_persistence.js') < admin.indexOf('state.js'));
+  assert.ok(scriptIndex(order, 'state_persistence.js') > -1 && scriptIndex(order, 'state_persistence.js') < scriptIndex(order, 'state.js'));
+  assert.ok(scriptIndex(admin, 'state_persistence.js') > -1 && scriptIndex(admin, 'state_persistence.js') < scriptIndex(admin, 'state.js'));
 });
 
 test('state remote helpers are split from state orchestration', () => {
@@ -115,8 +119,20 @@ test('state remote helpers are split from state orchestration', () => {
   assert.match(remote, /function loadState\(\)/);
   assert.match(remote, /function reserveOrderSequence\(floor\)/);
   assert.match(state, /const REMOTE = window\.BK_STATE_REMOTE \|\| \{\}/);
-  assert.ok(order.indexOf('state_remote.js') > -1 && order.indexOf('state_remote.js') < order.indexOf('state.js'));
-  assert.ok(admin.indexOf('state_remote.js') > -1 && admin.indexOf('state_remote.js') < admin.indexOf('state.js'));
+  assert.ok(scriptIndex(order, 'state_remote.js') > -1 && scriptIndex(order, 'state_remote.js') < scriptIndex(order, 'state.js'));
+  assert.ok(scriptIndex(admin, 'state_remote.js') > -1 && scriptIndex(admin, 'state_remote.js') < scriptIndex(admin, 'state.js'));
+});
+
+test('discount helpers are split from state orchestration', () => {
+  const state = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
+  const discounts = fs.readFileSync(path.join(root, 'discount_state.js'), 'utf8');
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.match(discounts, /root\.BK_DISCOUNT_STATE = \{/);
+  assert.match(discounts, /function clearSlotDiscount\(slot\)/);
+  assert.match(discounts, /function applySlotDiscount\(slot, rate, approval/);
+  assert.match(state, /const DISCOUNTS = window\.BK_DISCOUNT_STATE \|\| \{\}/);
+  assert.ok(scriptIndex(order, 'discount_state.js') > -1 && scriptIndex(order, 'discount_state.js') < scriptIndex(order, 'state.js'));
+  assert.ok(scriptIndex(admin, 'discount_state.js') > -1 && scriptIndex(admin, 'discount_state.js') < scriptIndex(admin, 'state.js'));
 });
 
 

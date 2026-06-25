@@ -6,6 +6,7 @@
   const ORDER_NUMBERS = window.BK_ORDER_NUMBER_SERVICE || {};
   const PERSISTENCE = window.BK_STATE_PERSISTENCE || {};
   const REMOTE = window.BK_STATE_REMOTE || {};
+  const DISCOUNTS = window.BK_DISCOUNT_STATE || {};
   let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo', momoProvider:'telecel'|'mtn'|'', issued:false}]
   let active = 0;
   let discountRate = 0;
@@ -17,6 +18,7 @@
 
   function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
   function normalizeDiscount(v){
+    if(DISCOUNTS.normalizeDiscount) return DISCOUNTS.normalizeDiscount(v);
     return NORMALIZERS.normalizeDiscount ? NORMALIZERS.normalizeDiscount(v) : 0;
   }
   function normalizeSlot(slot, idx){
@@ -333,10 +335,12 @@
     save();
   }
   function clearSlotDiscount(slot){
-    if(!slot) return;
+    if(DISCOUNTS.clearSlotDiscount) return DISCOUNTS.clearSlotDiscount(slot);
+    if(!slot) return false;
     slot.discountRate = 0;
     slot.discountApprovedBy = null;
     slot.discountApprovedAt = 0;
+    return true;
   }
 
   function addItem(id, note, meta){
@@ -458,9 +462,12 @@
   function setDiscount(r, approval){
     const slot = slots[active];
     if(!slot || slot.issued) return false;
-    slot.discountRate = normalizeDiscount(r);
-    slot.discountApprovedBy = slot.discountRate && approval && typeof approval === 'object' ? approval : null;
-    slot.discountApprovedAt = slot.discountRate ? Date.now() : 0;
+    if(DISCOUNTS.applySlotDiscount) DISCOUNTS.applySlotDiscount(slot, r, approval, Date.now());
+    else {
+      slot.discountRate = normalizeDiscount(r);
+      slot.discountApprovedBy = slot.discountRate && approval && typeof approval === 'object' ? approval : null;
+      slot.discountApprovedAt = slot.discountRate ? Date.now() : 0;
+    }
     discountRate = 0;
     save();
     return true;

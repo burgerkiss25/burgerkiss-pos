@@ -4,6 +4,7 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.resolve(__dirname, '..');
+const discountStateCode = fs.readFileSync(path.join(root, 'discount_state.js'), 'utf8');
 const stateNormalizersCode = fs.readFileSync(path.join(root, 'state_normalizers.js'), 'utf8');
 const orderNumberServiceCode = fs.readFileSync(path.join(root, 'order_number_service.js'), 'utf8');
 const statePersistenceCode = fs.readFileSync(path.join(root, 'state_persistence.js'), 'utf8');
@@ -31,6 +32,7 @@ function runState(storage, extra = {}) {
   };
   context.window = context;
   vm.createContext(context);
+  vm.runInContext(discountStateCode, context);
   vm.runInContext(stateNormalizersCode, context);
   vm.runInContext(orderNumberServiceCode, context);
   vm.runInContext(statePersistenceCode, context);
