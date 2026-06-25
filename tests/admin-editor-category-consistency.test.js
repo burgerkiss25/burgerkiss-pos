@@ -5,7 +5,7 @@ const menus = fs.readFileSync('menus.js', 'utf8');
 const images = fs.readFileSync('images.js', 'utf8');
 const stock = fs.readFileSync('stock.js', 'utf8');
 
-assert.match(menus, /data-menu-category/);
+assert.match(menus, /dataset\.menuCategory = category/);
 assert.match(menus, /Menus are grouped by their base product category/);
 assert.match(menus, /Follows product order/);
 
