@@ -7,6 +7,7 @@
   const PERSISTENCE = window.BK_STATE_PERSISTENCE || {};
   const REMOTE = window.BK_STATE_REMOTE || {};
   const DISCOUNTS = window.BK_DISCOUNT_STATE || {};
+  const CART = window.BK_CART_STATE || {};
   let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo', momoProvider:'telecel'|'mtn'|'', issued:false}]
   let active = 0;
   let discountRate = 0;
@@ -346,20 +347,25 @@
   function addItem(id, note, meta){
     if(!slots.length || slots[active].issued) return;
     const details = meta && typeof meta === 'object' ? meta : {};
-    slots[active].packAsked = false;
-    slots[active].sentToKitchen = false;
-    clearSlotDiscount(slots[active]);
-    slots[active].items.push({
-      itemId:id,
-      note: (note||'').trim(),
-      done:false,
-      menuGroupId: typeof details.menuGroupId === 'string' ? details.menuGroupId : '',
-      menuName: typeof details.menuName === 'string' ? details.menuName : '',
-      menuRole: typeof details.menuRole === 'string' ? details.menuRole : '',
-      menuNoSauce: !!details.menuNoSauce,
-      customerGroupId: typeof details.customerGroupId === 'string' ? details.customerGroupId : '',
-      packGroupId: typeof details.packGroupId === 'string' ? details.packGroupId : ''
-    });
+    if(CART.addItem){
+      if(!CART.addItem(slots[active], id, note, details, clearSlotDiscount)) return;
+    }
+    else {
+      slots[active].packAsked = false;
+      slots[active].sentToKitchen = false;
+      clearSlotDiscount(slots[active]);
+      slots[active].items.push({
+        itemId:id,
+        note: (note||'').trim(),
+        done:false,
+        menuGroupId: typeof details.menuGroupId === 'string' ? details.menuGroupId : '',
+        menuName: typeof details.menuName === 'string' ? details.menuName : '',
+        menuRole: typeof details.menuRole === 'string' ? details.menuRole : '',
+        menuNoSauce: !!details.menuNoSauce,
+        customerGroupId: typeof details.customerGroupId === 'string' ? details.customerGroupId : '',
+        packGroupId: typeof details.packGroupId === 'string' ? details.packGroupId : ''
+      });
+    }
     history.push({slot:active});
     save();
   }
@@ -369,6 +375,7 @@
     s.items.pop(); save();
   }
   function parseItemKey(key){
+    if(CART.parseItemKey) return CART.parseItemKey(key);
     try{
       const arr = JSON.parse(key);
       if(Array.isArray(arr) && typeof arr[0]==='string'){
@@ -387,18 +394,31 @@
   }
   function decItemForKey(key){
     const s = slots[active]; if(!s || s.issued) return;
+    if(CART.decItemForKey){
+      if(CART.decItemForKey(s, key, clearSlotDiscount)) save();
+      return;
+    }
     const [id, note='', menuGroupId=''] = parseItemKey(key);
     const idx = s.items.findIndex(it => it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId));
     if(idx>-1){ s.items.splice(idx,1); s.packAsked=false; s.sentToKitchen=false; clearSlotDiscount(s); save(); }
   }
   function removeItemForKey(key){
     const s = slots[active]; if(!s || s.issued) return;
+    if(CART.removeItemForKey){
+      if(CART.removeItemForKey(s, key, clearSlotDiscount)) save();
+      return;
+    }
     const [id, note='', menuGroupId=''] = parseItemKey(key);
     const next = s.items.filter(it => !(it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId)));
     if(next.length !== s.items.length){ s.items = next; s.packAsked=false; s.sentToKitchen=false; clearSlotDiscount(s); save(); }
   }
   function replaceMenuGroup(menuGroupId, nextItems){
     const s = slots[active]; if(!s || s.issued || !menuGroupId) return false;
+    if(CART.replaceMenuGroup){
+      const changed = CART.replaceMenuGroup(s, menuGroupId, nextItems, clearSlotDiscount);
+      if(changed) save();
+      return changed;
+    }
     const replacements = Array.isArray(nextItems) ? nextItems : [];
     s.items = s.items
       .filter(it => (it.menuGroupId || '') !== menuGroupId)

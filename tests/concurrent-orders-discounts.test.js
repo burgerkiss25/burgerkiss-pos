@@ -9,6 +9,7 @@ const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 const state = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
 const discountState = fs.readFileSync(path.join(root, 'discount_state.js'), 'utf8');
+const cartState = fs.readFileSync(path.join(root, 'cart_state.js'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
 const access = fs.readFileSync(path.join(root, 'access.js'), 'utf8');
 
@@ -36,7 +37,8 @@ test('discounts require an owner PIN and are stored per order', () => {
 
 test('cart changes invalidate an existing discount approval', () => {
   assert.match(discountState, /function clearSlotDiscount\(slot\)/);
-  assert.match(state, /slots\[active\]\.sentToKitchen = false;\s*clearSlotDiscount\(slots\[active\]\)/);
+  assert.match(cartState, /function invalidateForCartChange\(slot, clearDiscount\)/);
+  assert.match(state, /CART\.addItem\(slots\[active\], id, note, details, clearSlotDiscount\)/);
 });
 
 test('generated modifier summaries are not duplicated in parent notes', () => {

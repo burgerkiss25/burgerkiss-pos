@@ -135,6 +135,19 @@ test('discount helpers are split from state orchestration', () => {
   assert.ok(scriptIndex(admin, 'discount_state.js') > -1 && scriptIndex(admin, 'discount_state.js') < scriptIndex(admin, 'state.js'));
 });
 
+test('cart helpers are split from state orchestration', () => {
+  const state = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
+  const cartState = fs.readFileSync(path.join(root, 'cart_state.js'), 'utf8');
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.match(cartState, /root\.BK_CART_STATE = \{/);
+  assert.match(cartState, /function parseItemKey\(key\)/);
+  assert.match(cartState, /function addItem\(slot, id, note, details/);
+  assert.match(cartState, /function replaceMenuGroup\(slot, menuGroupId, nextItems/);
+  assert.match(state, /const CART = window\.BK_CART_STATE \|\| \{\}/);
+  assert.ok(scriptIndex(order, 'cart_state.js') > -1 && scriptIndex(order, 'cart_state.js') < scriptIndex(order, 'state.js'));
+  assert.ok(scriptIndex(admin, 'cart_state.js') > -1 && scriptIndex(admin, 'cart_state.js') < scriptIndex(admin, 'state.js'));
+});
+
 
 test('purchase entry is isolated and requires purchaser PIN confirmation', () => {
   assert.match(purchases, /purchaseAuthForm/);
