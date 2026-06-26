@@ -177,6 +177,18 @@ test('slot helpers are split from state orchestration', () => {
   assert.ok(scriptIndex(admin, 'slot_state.js') > -1 && scriptIndex(admin, 'slot_state.js') < scriptIndex(admin, 'state.js'));
 });
 
+test('undo helpers are split from state orchestration', () => {
+  const state = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
+  const undoState = fs.readFileSync(path.join(root, 'undo_state.js'), 'utf8');
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.match(undoState, /root\.BK_UNDO_STATE = \{/);
+  assert.match(undoState, /function recordItemAdd\(history, slotIndex\)/);
+  assert.match(undoState, /function undoLastItem\(history, slots\)/);
+  assert.match(state, /const UNDO = window\.BK_UNDO_STATE \|\| \{\}/);
+  assert.ok(scriptIndex(order, 'undo_state.js') > -1 && scriptIndex(order, 'undo_state.js') < scriptIndex(order, 'state.js'));
+  assert.ok(scriptIndex(admin, 'undo_state.js') > -1 && scriptIndex(admin, 'undo_state.js') < scriptIndex(admin, 'state.js'));
+});
+
 
 test('purchase entry is isolated and requires purchaser PIN confirmation', () => {
   assert.match(purchases, /purchaseAuthForm/);

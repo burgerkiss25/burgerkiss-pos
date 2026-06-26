@@ -11,6 +11,7 @@
   const PAYMENTS = window.BK_PAYMENT_STATE || {};
   const ORDER_STATUS = window.BK_ORDER_STATUS_STATE || {};
   const SLOTS = window.BK_SLOT_STATE || {};
+  const UNDO = window.BK_UNDO_STATE || {};
   let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo', momoProvider:'telecel'|'mtn'|'', issued:false}]
   let active = 0;
   let discountRate = 0;
@@ -283,7 +284,10 @@
   function whenReady(){ return readyPromise; }
 
   function clearAll(){
-    slots=[]; active=0; discountRate=0; history.length=0; save(); return true;
+    slots=[]; active=0; discountRate=0;
+    if(UNDO.clear) UNDO.clear(history);
+    else history.length=0;
+    save(); return true;
   }
   function clearStorage(){
     const keys = [
@@ -368,13 +372,17 @@
         packGroupId: typeof details.packGroupId === 'string' ? details.packGroupId : ''
       });
     }
-    history.push({slot:active});
+    if(UNDO.recordItemAdd) UNDO.recordItemAdd(history, active);
+    else history.push({slot:active});
     save();
   }
   function undo(){
-    const last = history.pop(); if(!last) return;
-    const s = slots[last.slot]; if(!s || !s.items.length) return;
-    s.items.pop(); save();
+    const changed = UNDO.undoLastItem ? UNDO.undoLastItem(history, slots) : (function(){
+      const last = history.pop(); if(!last) return false;
+      const s = slots[last.slot]; if(!s || !s.items.length) return false;
+      s.items.pop(); return true;
+    })();
+    if(changed) save();
   }
   function parseItemKey(key){
     if(CART.parseItemKey) return CART.parseItemKey(key);

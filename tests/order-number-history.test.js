@@ -9,6 +9,7 @@ const cartStateCode = fs.readFileSync(path.join(root, 'cart_state.js'), 'utf8');
 const paymentStateCode = fs.readFileSync(path.join(root, 'payment_state.js'), 'utf8');
 const orderStatusStateCode = fs.readFileSync(path.join(root, 'order_status_state.js'), 'utf8');
 const slotStateCode = fs.readFileSync(path.join(root, 'slot_state.js'), 'utf8');
+const undoStateCode = fs.readFileSync(path.join(root, 'undo_state.js'), 'utf8');
 const stateNormalizersCode = fs.readFileSync(path.join(root, 'state_normalizers.js'), 'utf8');
 const orderNumberServiceCode = fs.readFileSync(path.join(root, 'order_number_service.js'), 'utf8');
 const statePersistenceCode = fs.readFileSync(path.join(root, 'state_persistence.js'), 'utf8');
@@ -41,6 +42,7 @@ function runState(storage, extra = {}) {
   vm.runInContext(paymentStateCode, context);
   vm.runInContext(orderStatusStateCode, context);
   vm.runInContext(slotStateCode, context);
+  vm.runInContext(undoStateCode, context);
   vm.runInContext(stateNormalizersCode, context);
   vm.runInContext(orderNumberServiceCode, context);
   vm.runInContext(statePersistenceCode, context);
