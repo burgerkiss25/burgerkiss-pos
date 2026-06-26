@@ -8,6 +8,8 @@
   const REMOTE = window.BK_STATE_REMOTE || {};
   const DISCOUNTS = window.BK_DISCOUNT_STATE || {};
   const CART = window.BK_CART_STATE || {};
+  const PAYMENTS = window.BK_PAYMENT_STATE || {};
+  const ORDER_STATUS = window.BK_ORDER_STATUS_STATE || {};
   let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo', momoProvider:'telecel'|'mtn'|'', issued:false}]
   let active = 0;
   let discountRate = 0;
@@ -439,10 +441,14 @@
   function setPay(i,status){
     if(!slots[i] || slots[i].issued) return;
     const provider = arguments.length > 2 && (arguments[2] === 'telecel' || arguments[2] === 'mtn') ? arguments[2] : '';
-    slots[i].pay = PAY_SET.has(status) ? status : 'unpaid';
-    slots[i].momoProvider = slots[i].pay === 'momo' ? provider : '';
-    slots[i].paidBy = slots[i].pay === 'unpaid' ? null : (window.BK_ACCESS && BK_ACCESS.operationalActor ? BK_ACCESS.operationalActor() : null);
-    slots[i].paidAt = slots[i].pay === 'unpaid' ? 0 : Date.now();
+    const actor = window.BK_ACCESS && BK_ACCESS.operationalActor ? BK_ACCESS.operationalActor() : null;
+    if(PAYMENTS.applyPayment) PAYMENTS.applyPayment(slots[i], status, provider, actor, Date.now());
+    else {
+      slots[i].pay = PAY_SET.has(status) ? status : 'unpaid';
+      slots[i].momoProvider = slots[i].pay === 'momo' ? provider : '';
+      slots[i].paidBy = slots[i].pay === 'unpaid' ? null : actor;
+      slots[i].paidAt = slots[i].pay === 'unpaid' ? 0 : Date.now();
+    }
     save();
   }
   function updateSlot(i, changes){
@@ -454,24 +460,26 @@
   }
   function setIssued(i, v){
     if(!slots[i]) return;
-    if(slots[i].issued && v===false) return;
-    slots[i].issued = !!v;
-    save();
+    const changed = ORDER_STATUS.setIssued ? ORDER_STATUS.setIssued(slots[i], v) : (slots[i].issued && v===false ? false : (slots[i].issued = !!v, true));
+    if(changed) save();
   }
   function setPackMode(i, mode){
     if(!slots[i] || slots[i].issued) return;
-    slots[i].packMode = mode === 'split' ? 'split' : 'shared';
-    slots[i].packAsked = true;
-    save();
+    const changed = ORDER_STATUS.setPackMode ? ORDER_STATUS.setPackMode(slots[i], mode) : (slots[i].packMode = mode === 'split' ? 'split' : 'shared', slots[i].packAsked = true, true);
+    if(changed) save();
   }
   function toggleDone(i, j, v){
     if(!slots[i] || slots[i].issued || !slots[i].items[j]) return;
-    slots[i].items[j].done = !!v;
-    save();
+    const changed = ORDER_STATUS.toggleDone ? ORDER_STATUS.toggleDone(slots[i], j, v) : (slots[i].items[j].done = !!v, true);
+    if(changed) save();
   }
   function setDoneForKey(key, v){
     const s = slots[active]; if(!s || s.issued) return;
     const [id, note='', menuGroupId=''] = parseItemKey(key);
+    if(ORDER_STATUS.setDoneForKey){
+      if(ORDER_STATUS.setDoneForKey(s, [id, note, menuGroupId], v)) save();
+      return;
+    }
     let changed = false;
     s.items.forEach(it=>{
       if(it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId)){ it.done = !!v; changed = true; }

@@ -148,6 +148,23 @@ test('cart helpers are split from state orchestration', () => {
   assert.ok(scriptIndex(admin, 'cart_state.js') > -1 && scriptIndex(admin, 'cart_state.js') < scriptIndex(admin, 'state.js'));
 });
 
+test('payment and order status helpers are split from state orchestration', () => {
+  const state = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
+  const payments = fs.readFileSync(path.join(root, 'payment_state.js'), 'utf8');
+  const status = fs.readFileSync(path.join(root, 'order_status_state.js'), 'utf8');
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.match(payments, /root\.BK_PAYMENT_STATE = \{/);
+  assert.match(payments, /function applyPayment\(slot, status, provider, actor/);
+  assert.match(status, /root\.BK_ORDER_STATUS_STATE = \{/);
+  assert.match(status, /function setDoneForKey\(slot, keyParts, value\)/);
+  assert.match(state, /const PAYMENTS = window\.BK_PAYMENT_STATE \|\| \{\}/);
+  assert.match(state, /const ORDER_STATUS = window\.BK_ORDER_STATUS_STATE \|\| \{\}/);
+  assert.ok(scriptIndex(order, 'payment_state.js') > -1 && scriptIndex(order, 'payment_state.js') < scriptIndex(order, 'state.js'));
+  assert.ok(scriptIndex(order, 'order_status_state.js') > -1 && scriptIndex(order, 'order_status_state.js') < scriptIndex(order, 'state.js'));
+  assert.ok(scriptIndex(admin, 'payment_state.js') > -1 && scriptIndex(admin, 'payment_state.js') < scriptIndex(admin, 'state.js'));
+  assert.ok(scriptIndex(admin, 'order_status_state.js') > -1 && scriptIndex(admin, 'order_status_state.js') < scriptIndex(admin, 'state.js'));
+});
+
 
 test('purchase entry is isolated and requires purchaser PIN confirmation', () => {
   assert.match(purchases, /purchaseAuthForm/);
