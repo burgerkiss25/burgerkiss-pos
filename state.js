@@ -10,6 +10,7 @@
   const CART = window.BK_CART_STATE || {};
   const PAYMENTS = window.BK_PAYMENT_STATE || {};
   const ORDER_STATUS = window.BK_ORDER_STATUS_STATE || {};
+  const SLOTS = window.BK_SLOT_STATE || {};
   let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo', momoProvider:'telecel'|'mtn'|'', issued:false}]
   let active = 0;
   let discountRate = 0;
@@ -305,11 +306,14 @@
     const idx = slots.length+1;
     const details = meta && typeof meta === 'object' ? meta : {};
     return allocateOrderNo().then(function(orderNo){
-      const source = SOURCE_SET.has(details.orderSource) ? details.orderSource : 'walkin';
-      const pay = PAY_SET.has(details.pay) ? details.pay : (source === 'walkin' ? 'unpaid' : source);
       const access = window.BK_ACCESS && BK_ACCESS.current ? BK_ACCESS.current() : null;
       const actor = window.BK_ACCESS && BK_ACCESS.operationalActor ? BK_ACCESS.operationalActor() : null;
-      slots.push({name: label || `SN${idx}`, items: [], pay, issued:false, voided:false, voidReason:'', packMode:'shared', packAsked:false, drinkPackMode:'shared', sentToKitchen:false, discountRate:0, discountApprovedBy:null, discountApprovedAt:0, orderNo, createdAt: Date.now(), orderSource:source, externalOrderNo:String(details.externalOrderNo || '').trim(), originalSource:'', originalPay:'', finalChannel:'', fulfilment:'', conversionReason:'', refundStatus:'', convertedAt:0, customerName:String(details.customerName || ''), customerPhone:String(details.customerPhone || ''), preferredPayment:String(details.preferredPayment || ''), riderType:String(details.riderType || ''), deliveryStatus:String(details.deliveryStatus || ''), stockConsumed:false, createdBy:actor, paidBy:pay === 'unpaid' ? null : actor, paidAt:pay === 'unpaid' ? 0 : Date.now(), businessDate:access ? access.businessDate : '', shiftId:access ? access.shiftId : ''});
+      if(SLOTS.createSlot) slots.push(SLOTS.createSlot(idx, label, details, orderNo, actor, access, Date.now()));
+      else {
+        const source = SOURCE_SET.has(details.orderSource) ? details.orderSource : 'walkin';
+        const pay = PAY_SET.has(details.pay) ? details.pay : (source === 'walkin' ? 'unpaid' : source);
+        slots.push({name: label || `SN${idx}`, items: [], pay, issued:false, voided:false, voidReason:'', packMode:'shared', packAsked:false, drinkPackMode:'shared', sentToKitchen:false, discountRate:0, discountApprovedBy:null, discountApprovedAt:0, orderNo, createdAt: Date.now(), orderSource:source, externalOrderNo:String(details.externalOrderNo || '').trim(), originalSource:'', originalPay:'', finalChannel:'', fulfilment:'', conversionReason:'', refundStatus:'', convertedAt:0, customerName:String(details.customerName || ''), customerPhone:String(details.customerPhone || ''), preferredPayment:String(details.preferredPayment || ''), riderType:String(details.riderType || ''), deliveryStatus:String(details.deliveryStatus || ''), stockConsumed:false, createdBy:actor, paidBy:pay === 'unpaid' ? null : actor, paidAt:pay === 'unpaid' ? 0 : Date.now(), businessDate:access ? access.businessDate : '', shiftId:access ? access.shiftId : ''});
+      }
       active = slots.length-1;
       save();
       return active;
@@ -321,20 +325,16 @@
   }
   function setActiveName(name){
     if(!slots.length) return;
-    if(typeof name!=='string') return;
-    const n = name.trim();
-    if(!n) return;
-    slots[active].name = n;
-    save();
+    const changed = SLOTS.setActiveName ? SLOTS.setActiveName(slots[active], name) : (typeof name === 'string' && name.trim() ? (slots[active].name = name.trim(), true) : false);
+    if(changed) save();
   }
   function deleteActive(){
     if(!slots.length) return;
-    slots.splice(active,1);
-    active = Math.max(0, active-1);
+    active = SLOTS.deleteActive ? SLOTS.deleteActive(slots, active) : (slots.splice(active,1), Math.max(0, active-1));
     save();
   }
   function setActive(i){
-    active = clamp(Number(i)||0, 0, Math.max(0, slots.length-1));
+    active = SLOTS.setActiveIndex ? SLOTS.setActiveIndex(i, slots.length) : clamp(Number(i)||0, 0, Math.max(0, slots.length-1));
     save();
   }
   function clearSlotDiscount(slot){
@@ -453,8 +453,9 @@
   }
   function updateSlot(i, changes){
     if(!slots[i] || !changes || typeof changes !== 'object' || slots[i].issued) return false;
-    const next = Object.assign({}, slots[i], changes);
-    slots[i] = normalizeSlot(next, i);
+    const next = SLOTS.updateSlot ? SLOTS.updateSlot(slots[i], changes, i, normalizeSlot) : normalizeSlot(Object.assign({}, slots[i], changes), i);
+    if(!next) return false;
+    slots[i] = next;
     save();
     return true;
   }
