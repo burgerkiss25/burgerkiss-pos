@@ -95,6 +95,7 @@
   const HISTORY_RENDERERS = window.BK_HISTORY_RENDERERS || {};
   const STOCK_OVERVIEW_RENDERERS = window.BK_STOCK_OVERVIEW_RENDERERS || {};
   const ORDER_SUMMARY_RENDERERS = window.BK_ORDER_SUMMARY_RENDERERS || {};
+  const WORKFLOW_STATE = window.BK_WORKFLOW_STATE || {};
   const REPORTS = window.BK_REPORTS || {};
   function ensureDialogHost(){ return DIALOGS.ensureHost ? DIALOGS.ensureHost() : null; }
   function appDialogBody(){ return document.getElementById('appDialogBody'); }
@@ -1597,6 +1598,7 @@
   }
 
   function workflowNextState(stage, slot){
+    if(WORKFLOW_STATE.workflowNextState) return WORKFLOW_STATE.workflowNextState(stage, slot);
     const hasItems = !!(slot && Array.isArray(slot.items) && slot.items.length);
     if(stage === 'order'){
       if(!hasItems) return {state:'blocked', title:'Add products first', detail:'Choose at least one product from the product grid before sending this order to Kitchen.', label:'Continue to Kitchen', target:'make', disabled:true};

@@ -11,6 +11,11 @@ const purchases = fs.readFileSync(path.join(root, 'purchases.html'), 'utf8');
 const purchasesJs = fs.readFileSync(path.join(root, 'purchases.js'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
+const workflowState = fs.readFileSync(path.join(root, 'workflow_state.js'), 'utf8');
+
+function scriptIndex(html, file){
+  return html.indexOf(`src="./${file}`);
+}
 
 function scriptIndex(html, file){
   return html.indexOf(`src="./${file}`);
@@ -187,6 +192,15 @@ test('undo helpers are split from state orchestration', () => {
   assert.match(state, /const UNDO = window\.BK_UNDO_STATE \|\| \{\}/);
   assert.ok(scriptIndex(order, 'undo_state.js') > -1 && scriptIndex(order, 'undo_state.js') < scriptIndex(order, 'state.js'));
   assert.ok(scriptIndex(admin, 'undo_state.js') > -1 && scriptIndex(admin, 'undo_state.js') < scriptIndex(admin, 'state.js'));
+});
+
+test('workflow progression helpers are split from UI rendering', () => {
+  assert.match(workflowState, /root\.BK_WORKFLOW_STATE = \{/);
+  assert.match(workflowState, /function workflowNextState\(stage, slot\)/);
+  assert.match(workflowState, /function platformLabel\(source\)/);
+  assert.match(ui, /const WORKFLOW_STATE = window\.BK_WORKFLOW_STATE \|\| \{\}/);
+  assert.match(ui, /WORKFLOW_STATE\.workflowNextState\(stage, slot\)/);
+  assert.ok(scriptIndex(order, 'workflow_state.js') > -1 && scriptIndex(order, 'workflow_state.js') < scriptIndex(order, 'ui.js'));
 });
 
 
