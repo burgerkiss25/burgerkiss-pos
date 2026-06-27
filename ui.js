@@ -96,6 +96,8 @@
   const STOCK_OVERVIEW_RENDERERS = window.BK_STOCK_OVERVIEW_RENDERERS || {};
   const ORDER_SUMMARY_RENDERERS = window.BK_ORDER_SUMMARY_RENDERERS || {};
   const WORKFLOW_STATE = window.BK_WORKFLOW_STATE || {};
+  const PRODUCT_GRID_STATE = window.BK_PRODUCT_GRID_STATE || {};
+  const CART_ENTRY_STATE = window.BK_CART_ENTRY_STATE || {};
   const REPORTS = window.BK_REPORTS || {};
   function ensureDialogHost(){ return DIALOGS.ensureHost ? DIALOGS.ensureHost() : null; }
   function appDialogBody(){ return document.getElementById('appDialogBody'); }
@@ -247,9 +249,26 @@
   }
 
   function productsPerPage(){
+    if(PRODUCT_GRID_STATE.productsPerPage) return PRODUCT_GRID_STATE.productsPerPage(window.innerWidth, window.innerHeight);
     if(window.innerWidth <= 700) return window.innerHeight <= 560 ? 6 : 4;
     if(window.innerWidth <= 1180) return 6;
     return 8;
+  }
+
+  function productGridPageModel(base){
+    if(PRODUCT_GRID_STATE.pageModel){
+      return PRODUCT_GRID_STATE.pageModel(base, currentCat, productQuery, productPage, {width:window.innerWidth, height:window.innerHeight});
+    }
+    const query = productQuery.trim().toLowerCase();
+    const isFrontProduct = it => it && it.active !== false && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
+    const items = base.filter(isFrontProduct)
+      .filter(it => it.cat === currentCat)
+      .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true)
+      .sort((a,b)=>Number(a.categoryOrder || 0) - Number(b.categoryOrder || 0));
+    const pageSize = productsPerPage();
+    const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+    const page = Math.min(productPage, pageCount - 1);
+    return {items, page, pageSize, pageCount, pageItems:items.slice(page * pageSize, (page + 1) * pageSize)};
   }
 
   function updateProductPager(totalItems, pageCount){
@@ -280,15 +299,9 @@
     grid.replaceChildren();
     const base = (Array.isArray(BK_DATA.BASE) && BK_DATA.BASE.length) ? BK_DATA.BASE : (BK_DATA.DEFAULT_BASE || []);
     if(base !== BK_DATA.BASE) BK_DATA.BASE = base;
-    const query = productQuery.trim().toLowerCase();
-    const isFrontProduct = it => it && it.active !== false && it.cat !== 'extra' && !String(it.id || '').startsWith('x_sauce_');
-    const items = base.filter(isFrontProduct)
-      .filter(it => it.cat === currentCat)
-      .filter(it => query ? [it.name, it.searchText, it.baseName, it.subtitle].filter(Boolean).join(' ').toLowerCase().includes(query) : true)
-      .sort((a,b)=>Number(a.categoryOrder || 0) - Number(b.categoryOrder || 0));
-    const pageSize = productsPerPage();
-    const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
-    productPage = Math.min(productPage, pageCount - 1);
+    const model = productGridPageModel(base);
+    const {items, pageCount, pageItems} = model;
+    productPage = model.page;
     updateProductPager(items.length, pageCount);
     if(!items.length){
       const empty = document.createElement('div');
@@ -302,7 +315,7 @@
       grid.appendChild(empty);
       return;
     }
-    items.slice(productPage * pageSize, (productPage + 1) * pageSize).forEach(it=>{
+    pageItems.forEach(it=>{
       const b = document.createElement('button');
       b.className = 'item';
       b.type = 'button';
@@ -937,6 +950,7 @@
 
 
   function baseCustomerNote(note){
+    if(CART_ENTRY_STATE.baseCustomerNote) return CART_ENTRY_STATE.baseCustomerNote(note);
     return String(note || '')
       .replace(/\s+·\s+Add-ons:.*$/i, '')
       .replace(/\s+·\s+Extra sauces:.*$/i, '')
@@ -944,6 +958,7 @@
   }
 
   function parseLinkedModifierNote(note){
+    if(CART_ENTRY_STATE.parseLinkedModifierNote) return CART_ENTRY_STATE.parseLinkedModifierNote(note);
     const txt = String(note || '').trim();
     const m = txt.match(/^(included|extra|menu)?\s*for\s+(.+?)(?::\s*(.*))?$/i);
     if(!m) return null;
@@ -955,14 +970,17 @@
   }
 
   function hasMenuChildren(entry){
+    if(CART_ENTRY_STATE.hasMenuChildren) return CART_ENTRY_STATE.hasMenuChildren(entry);
     return (entry.children || []).some(child=> child.linked && child.linked.prefix === 'menu');
   }
 
   function linkedGroupKey(productName, note, menuGroupId){
+    if(CART_ENTRY_STATE.linkedGroupKey) return CART_ENTRY_STATE.linkedGroupKey(productName, note, menuGroupId);
     return `${String(productName || '').trim()}|${baseCustomerNote(note)}|${menuGroupId || ''}`;
   }
 
   function groupedCartRows(items){
+    if(CART_ENTRY_STATE.groupedCartRows) return CART_ENTRY_STATE.groupedCartRows(items, BK_LOGIC, productById);
     const groups = [];
     const linkedChildren = [];
     const parentByKey = new Map();
@@ -1015,6 +1033,7 @@
   }
 
   function groupedEntryTotal(entry){
+    if(CART_ENTRY_STATE.groupedEntryTotal) return CART_ENTRY_STATE.groupedEntryTotal(entry);
     return entry.total + (entry.children || []).reduce((sum, child)=> sum + child.total, 0);
   }
 
@@ -1147,6 +1166,7 @@
   }
 
   function groupedEntryText(entry){
+    if(CART_ENTRY_STATE.groupedEntryText) return CART_ENTRY_STATE.groupedEntryText(entry);
     const parent = `${entry.qty}x ${entry.name}${entry.note ? ` (${entry.note})` : ''}`;
     const children = (entry.children || []).map(child=>`↳ ${child.qty}x ${child.name}${child.note ? ` (${child.note})` : ''}`);
     return [parent, ...children].join(' · ');

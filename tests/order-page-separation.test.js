@@ -12,10 +12,8 @@ const purchasesJs = fs.readFileSync(path.join(root, 'purchases.js'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
 const workflowState = fs.readFileSync(path.join(root, 'workflow_state.js'), 'utf8');
-
-function scriptIndex(html, file){
-  return html.indexOf(`src="./${file}`);
-}
+const productGridState = fs.readFileSync(path.join(root, 'product_grid_state.js'), 'utf8');
+const cartEntryState = fs.readFileSync(path.join(root, 'cart_entry_state.js'), 'utf8');
 
 function scriptIndex(html, file){
   return html.indexOf(`src="./${file}`);
@@ -201,6 +199,27 @@ test('workflow progression helpers are split from UI rendering', () => {
   assert.match(ui, /const WORKFLOW_STATE = window\.BK_WORKFLOW_STATE \|\| \{\}/);
   assert.match(ui, /WORKFLOW_STATE\.workflowNextState\(stage, slot\)/);
   assert.ok(scriptIndex(order, 'workflow_state.js') > -1 && scriptIndex(order, 'workflow_state.js') < scriptIndex(order, 'ui.js'));
+});
+
+test('product grid filtering and paging helpers are split from UI rendering', () => {
+  assert.match(productGridState, /root\.BK_PRODUCT_GRID_STATE = \{/);
+  assert.match(productGridState, /function productsPerPage\(width, height\)/);
+  assert.match(productGridState, /function visibleProducts\(base, category, query\)/);
+  assert.match(productGridState, /function pageModel\(base, category, query, requestedPage, viewport\)/);
+  assert.match(ui, /const PRODUCT_GRID_STATE = window\.BK_PRODUCT_GRID_STATE \|\| \{\}/);
+  assert.match(ui, /PRODUCT_GRID_STATE\.pageModel\(base, currentCat, productQuery, productPage/);
+  assert.ok(scriptIndex(order, 'product_grid_state.js') > -1 && scriptIndex(order, 'product_grid_state.js') < scriptIndex(order, 'ui.js'));
+});
+
+test('cart entry grouping helpers are split from UI rendering', () => {
+  assert.match(cartEntryState, /root\.BK_CART_ENTRY_STATE = \{/);
+  assert.match(cartEntryState, /function baseCustomerNote\(note\)/);
+  assert.match(cartEntryState, /function parseLinkedModifierNote\(note\)/);
+  assert.match(cartEntryState, /function groupedCartRows\(items, logic, productResolver\)/);
+  assert.match(cartEntryState, /function groupedEntryText\(entry\)/);
+  assert.match(ui, /const CART_ENTRY_STATE = window\.BK_CART_ENTRY_STATE \|\| \{\}/);
+  assert.match(ui, /CART_ENTRY_STATE\.groupedCartRows\(items, BK_LOGIC, productById\)/);
+  assert.ok(scriptIndex(order, 'cart_entry_state.js') > -1 && scriptIndex(order, 'cart_entry_state.js') < scriptIndex(order, 'ui.js'));
 });
 
 
