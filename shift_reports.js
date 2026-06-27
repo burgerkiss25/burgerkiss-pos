@@ -101,18 +101,19 @@
     }).catch(e=>{ console.warn('history remote refresh failed:', e && e.message); return false; });
   }
   function dailyReportData(date){
-    const selected = date || dateInputValue(new Date());
+    const selected = String(date || dateInputValue(new Date()));
     const orders = getHistory().filter(entry=>dateInputValue(entry.closedAt) === selected);
     const completed = orders.filter(entry=>entry.status !== 'voided');
     const voided = orders.filter(entry=>entry.status === 'voided');
     const sum = (list, field)=>list.reduce((total, entry)=>total + Number(entry[field] || 0), 0);
+    const netSales = sum(completed, 'total');
     const cashTotal = sum(completed.filter(entry=>entry.pay === 'cash'), 'total');
     const purchases = root.BK_STOCK && root.BK_STOCK.getPurchases ? root.BK_STOCK.getPurchases().filter(p=>dateInputValue(p.ts) === selected) : [];
     const cashPurchases = sum(purchases.filter(p=>p.paymentSource === 'cash_wallet'), 'amount');
     const expectedWallet = CASH_FLOAT_GHS + cashTotal - cashPurchases;
     return {
       date:selected, orders, completed, voided, purchases,
-      netSales:sum(completed, 'total'),
+      netSales,
       cashTotal,
       momoTelecelTotal:sum(completed.filter(entry=>entry.pay === 'momo' && entry.momoProvider === 'telecel'), 'total'),
       momoMtnTotal:sum(completed.filter(entry=>entry.pay === 'momo' && entry.momoProvider === 'mtn'), 'total'),
@@ -120,15 +121,24 @@
       boltTotal:sum(completed.filter(entry=>entry.pay === 'bolt'), 'total'),
       hubtelTotal:sum(completed.filter(entry=>entry.pay === 'hubtel'), 'total'),
       chowdeckTotal:sum(completed.filter(entry=>entry.pay === 'chowdeck'), 'total'),
+      convertedOrders:completed.filter(entry=>entry.finalChannel === 'direct').length,
       discounts:sum(completed, 'discount'),
       voidValue:sum(voided, 'total'),
+      average:completed.length ? Math.round(netSales / completed.length) : 0,
       cashFloat:CASH_FLOAT_GHS,
       cashPurchases,
       expectedWallet,
       topUpNeeded:Math.max(0, CASH_FLOAT_GHS - expectedWallet)
     };
   }
-  function dailyReportHtml(report){
+  function reportOrderHtml(entry, interactive){
+    const className = `report-order ${entry.status === 'voided' ? 'voided' : ''}`.trim();
+    const content = `<span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(paymentLabel(entry.pay, entry.momoProvider))}${entry.voidReason ? ` · ${escapeHtml(entry.voidReason)}` : ''}</small></span><strong>${entry.total} GHS</strong>`;
+    if(interactive) return `<button type="button" class="${className}" data-history-id="${escapeHtml(entry.id)}">${content}</button>`;
+    return `<div class="${className}">${content}</div>`;
+  }
+  function dailyReportHtml(report, options){
+    const interactive = !options || options.interactive !== false;
     const topUp = report.topUpNeeded > 0
       ? `<div class="void-metric"><small>Top up needed</small><strong>${report.topUpNeeded} GHS</strong></div>`
       : `<div><small>Wallet status</small><strong>Ready</strong></div>`;
@@ -143,6 +153,12 @@
         <div><small>Bolt</small><strong>${report.boltTotal} GHS</strong></div>
         <div><small>Hubtel</small><strong>${report.hubtelTotal} GHS</strong></div>
         <div><small>Chowdeck</small><strong>${report.chowdeckTotal} GHS</strong></div>
+        <div><small>Converted online orders</small><strong>${report.convertedOrders}</strong></div>
+        <div><small>Completed orders</small><strong>${report.completed.length}</strong></div>
+        <div><small>Discounts</small><strong>${report.discounts} GHS</strong></div>
+        <div><small>Average order</small><strong>${report.average} GHS</strong></div>
+        <div class="void-metric"><small>Voided orders</small><strong>${report.voided.length}</strong></div>
+        <div class="void-metric"><small>Voided value</small><strong>${report.voidValue} GHS</strong></div>
         <div><small>Starting float</small><strong>${report.cashFloat} GHS</strong></div>
         <div><small>Cash purchases</small><strong>-${report.cashPurchases} GHS</strong></div>
         <div><small>Expected wallet</small><strong>${report.expectedWallet} GHS</strong></div>
@@ -150,7 +166,7 @@
       </div>
       <div class="report-heading"><span>Wallet note</span><strong>The BurgerKiss purse must start each shift with 200 GHS change.</strong></div>
       <div class="report-orders"><h3>Order audit</h3>${report.orders.length ? report.orders.map(entry=>`
-        <button type="button" class="report-order ${entry.status === 'voided' ? 'voided' : ''}" data-history-id="${escapeHtml(entry.id)}"><span><b>${escapeHtml(entry.orderNo)}</b><small>${escapeHtml(paymentLabel(entry.pay, entry.momoProvider))}${entry.voidReason ? ` · ${escapeHtml(entry.voidReason)}` : ''}</small></span><strong>${entry.total} GHS</strong></button>`).join('') : '<div class="empty-state">No orders for this date.</div>'}</div>
+        ${reportOrderHtml(entry, interactive)}`).join('') : '<div class="empty-state">No orders for this date.</div>'}</div>
       ${purchaseListHtml(report.purchases)}
     </div>`;
   }
