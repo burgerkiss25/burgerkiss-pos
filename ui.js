@@ -99,6 +99,7 @@
   const PRODUCT_GRID_STATE = window.BK_PRODUCT_GRID_STATE || {};
   const PRODUCT_GRID_RENDERERS = window.BK_PRODUCT_GRID_RENDERERS || {};
   const CART_ENTRY_STATE = window.BK_CART_ENTRY_STATE || {};
+  const CART_ENTRY_RENDERERS = window.BK_CART_ENTRY_RENDERERS || {};
   const REPORTS = window.BK_REPORTS || {};
   function ensureDialogHost(){ return DIALOGS.ensureHost ? DIALOGS.ensureHost() : null; }
   function appDialogBody(){ return document.getElementById('appDialogBody'); }
@@ -1204,6 +1205,26 @@
   function appendGroupedEntry(host, slot, entry, slotIndex, opts){
     const settings = opts || {};
     const showPrices = settings.showPrices !== false;
+    if(CART_ENTRY_RENDERERS.groupedEntryNode){
+      const row = CART_ENTRY_RENDERERS.groupedEntryNode(entry, {
+        compact:settings.compact,
+        kitchen:settings.kitchen,
+        showPrices,
+        checkbox:settings.checkbox,
+        checked:settings.checkbox ? groupedEntryDone(slot, entry) : false,
+        disabled:!!slot.issued,
+        displayTitle:settings.displayTitle,
+        totalText:`${groupedEntryTotal(entry)} GHS`,
+        noteLines:staffFacingNote,
+        itemName:staffFacingItemName,
+        onToggle:(_, checked)=>{
+          if(settings.onToggle) settings.onToggle(entry, checked);
+          else setGroupedEntryDone(entry, checked);
+        }
+      });
+      host.appendChild(row);
+      return row;
+    }
     const row = document.createElement('div');
     row.className = `${settings.compact ? 'grouped-meal compact' : 'grouped-meal'}${settings.kitchen ? ' kitchen-entry' : ''}`;
 

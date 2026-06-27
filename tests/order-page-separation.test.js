@@ -15,6 +15,7 @@ const workflowState = fs.readFileSync(path.join(root, 'workflow_state.js'), 'utf
 const productGridState = fs.readFileSync(path.join(root, 'product_grid_state.js'), 'utf8');
 const productGridRenderers = fs.readFileSync(path.join(root, 'product_grid_renderers.js'), 'utf8');
 const cartEntryState = fs.readFileSync(path.join(root, 'cart_entry_state.js'), 'utf8');
+const cartEntryRenderers = fs.readFileSync(path.join(root, 'cart_entry_renderers.js'), 'utf8');
 
 function scriptIndex(html, file){
   return html.indexOf(`src="./${file}`);
@@ -233,6 +234,17 @@ test('cart entry grouping helpers are split from UI rendering', () => {
   assert.match(ui, /const CART_ENTRY_STATE = window\.BK_CART_ENTRY_STATE \|\| \{\}/);
   assert.match(ui, /CART_ENTRY_STATE\.groupedCartRows\(items, BK_LOGIC, productById\)/);
   assert.ok(scriptIndex(order, 'cart_entry_state.js') > -1 && scriptIndex(order, 'cart_entry_state.js') < scriptIndex(order, 'ui.js'));
+});
+
+test('cart entry DOM renderers are split from UI orchestration', () => {
+  assert.match(cartEntryRenderers, /root\.BK_CART_ENTRY_RENDERERS = \{/);
+  assert.match(cartEntryRenderers, /function groupedEntryNode\(entry, options\)/);
+  assert.match(cartEntryRenderers, /header\.appendChild\(cb\)/);
+  assert.match(cartEntryRenderers, /childLine\.textContent =/);
+  assert.match(cartEntryRenderers, /extraLine\.textContent =/);
+  assert.match(ui, /const CART_ENTRY_RENDERERS = window\.BK_CART_ENTRY_RENDERERS \|\| \{\}/);
+  assert.match(ui, /CART_ENTRY_RENDERERS\.groupedEntryNode/);
+  assert.ok(scriptIndex(order, 'cart_entry_renderers.js') > -1 && scriptIndex(order, 'cart_entry_renderers.js') < scriptIndex(order, 'ui.js'));
 });
 
 
