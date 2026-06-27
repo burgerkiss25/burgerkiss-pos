@@ -17,6 +17,10 @@ function scriptIndex(html, file){
   return html.indexOf(`src="./${file}`);
 }
 
+function scriptIndex(html, file){
+  return html.indexOf(`src="./${file}`);
+}
+
 test('landing page requires access before workspace selection', () => {
   assert.match(landing, /access\.js/);
   assert.match(landing, /entry\.js/);
