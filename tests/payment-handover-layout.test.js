@@ -8,6 +8,11 @@ const html = fs.readFileSync(path.join(root, 'order.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
+const htmlRenderers = fs.readFileSync(path.join(root, 'html_renderers.js'), 'utf8');
+const receiptRenderers = fs.readFileSync(path.join(root, 'receipt_renderers.js'), 'utf8');
+const historyRenderers = fs.readFileSync(path.join(root, 'history_renderers.js'), 'utf8');
+const stockOverviewRenderers = fs.readFileSync(path.join(root, 'stock_overview_renderers.js'), 'utf8');
+const orderSummaryRenderers = fs.readFileSync(path.join(root, 'order_summary_renderers.js'), 'utf8');
 
 test('payment and handover have compact local headers', () => {
   assert.match(html, /id="btnPayBack"[^>]*>← Kitchen<\/button>/);
@@ -65,6 +70,84 @@ test('shift order audit rows can open order detail modal', () => {
   assert.match(shiftReports, /data-history-id/);
   assert.match(shiftReports, /function historyDetailHtml/);
   assert.match(shiftJs, /openOrderDetail/);
+});
+
+test('receipt and report HTML sinks are isolated in trusted renderer module', () => {
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  const shift = fs.readFileSync(path.join(root, 'shift.html'), 'utf8');
+  const shiftJs = fs.readFileSync(path.join(root, 'shift.js'), 'utf8');
+  assert.match(htmlRenderers, /function setTrustedHtml/);
+  assert.match(htmlRenderers, /\.innerHTML\s*=/);
+  assert.match(ui, /const HTML_RENDERERS = window\.BK_HTML_RENDERERS \|\| \{\}/);
+  assert.doesNotMatch(ui, /receiptBody'\)\.innerHTML|printArea'\)\.innerHTML|dailyReportBody'\)\.innerHTML/);
+  assert.doesNotMatch(shiftJs, /shiftReportBody[\s\S]{0,160}\.innerHTML|shiftOrderDetailBody'\)\.innerHTML/);
+  assert.ok(html.indexOf('html_renderers.js') > -1 && html.indexOf('html_renderers.js') < html.indexOf('ui.js'));
+  assert.ok(admin.indexOf('html_renderers.js') > -1 && admin.indexOf('html_renderers.js') < admin.indexOf('ui.js'));
+  assert.ok(shift.indexOf('html_renderers.js') > -1 && shift.indexOf('html_renderers.js') < shift.indexOf('shift.js'));
+});
+
+test('receipt HTML builders are isolated from the main UI bundle', () => {
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.match(receiptRenderers, /function historyReceiptHtml/);
+  assert.match(receiptRenderers, /function orderReceiptHtml/);
+  assert.match(receiptRenderers, /function groupedRowsHtml/);
+  assert.match(ui, /const RECEIPT_RENDERERS = window\.BK_RECEIPT_RENDERERS \|\| \{\}/);
+  assert.doesNotMatch(ui, /function historyReceiptHtml|function receiptSectionHtml|function htmlGroupedRows/);
+  assert.match(ui, /RECEIPT_RENDERERS\.historyReceiptHtml/);
+  assert.match(ui, /RECEIPT_RENDERERS\.orderReceiptHtml/);
+  assert.ok(html.indexOf('receipt_renderers.js') > -1 && html.indexOf('receipt_renderers.js') < html.indexOf('ui.js'));
+  assert.ok(admin.indexOf('receipt_renderers.js') > -1 && admin.indexOf('receipt_renderers.js') < admin.indexOf('ui.js'));
+});
+
+test('daily report calculations and markup use shared report helpers', () => {
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  const shiftReports = fs.readFileSync(path.join(root, 'shift_reports.js'), 'utf8');
+  assert.match(ui, /const REPORTS = window\.BK_REPORTS \|\| \{\}/);
+  assert.match(ui, /REPORTS\.dailyReportData/);
+  assert.match(ui, /REPORTS\.dailyReportHtml\(report, \{interactive:false\}\)/);
+  assert.doesNotMatch(ui, /function dateInputValue/);
+  assert.match(shiftReports, /convertedOrders/);
+  assert.match(shiftReports, /function reportOrderHtml/);
+  assert.ok(html.indexOf('shift_reports.js') > -1 && html.indexOf('shift_reports.js') < html.indexOf('ui.js'));
+  assert.ok(admin.indexOf('shift_reports.js') > -1 && admin.indexOf('shift_reports.js') < admin.indexOf('ui.js'));
+});
+
+test('history list and detail DOM builders are isolated from the main UI bundle', () => {
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.match(historyRenderers, /function historyBodyNodes/);
+  assert.match(historyRenderers, /function historyDetailContent/);
+  assert.match(ui, /const HISTORY_RENDERERS = window\.BK_HISTORY_RENDERERS \|\| \{\}/);
+  assert.match(ui, /HISTORY_RENDERERS\.historyBodyNodes/);
+  assert.match(ui, /HISTORY_RENDERERS\.historyDetailContent/);
+  assert.doesNotMatch(ui, /function historyItemsNode|function historyDetailMeta|function historyStatusLabel/);
+  assert.ok(html.indexOf('history_renderers.js') > -1 && html.indexOf('history_renderers.js') < html.indexOf('ui.js'));
+  assert.ok(admin.indexOf('history_renderers.js') > -1 && admin.indexOf('history_renderers.js') < admin.indexOf('ui.js'));
+});
+
+test('stock overview DOM builders and filtering are isolated from the main UI bundle', () => {
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.match(stockOverviewRenderers, /function stockOverviewModel/);
+  assert.match(stockOverviewRenderers, /function renderStockOverview/);
+  assert.match(stockOverviewRenderers, /localeCompare/);
+  assert.match(ui, /const STOCK_OVERVIEW_RENDERERS = window\.BK_STOCK_OVERVIEW_RENDERERS \|\| \{\}/);
+  assert.match(ui, /STOCK_OVERVIEW_RENDERERS\.stockOverviewModel/);
+  assert.match(ui, /STOCK_OVERVIEW_RENDERERS\.renderStockOverview/);
+  assert.doesNotMatch(ui, /stockOverviewSearch|stock-overview-row|localeCompare/);
+  assert.ok(html.indexOf('stock_overview_renderers.js') > -1 && html.indexOf('stock_overview_renderers.js') < html.indexOf('ui.js'));
+  assert.ok(admin.indexOf('stock_overview_renderers.js') > -1 && admin.indexOf('stock_overview_renderers.js') < admin.indexOf('ui.js'));
+});
+
+test('active summary and group order DOM builders are isolated from the main UI bundle', () => {
+  const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
+  assert.match(orderSummaryRenderers, /function groupedRowsNode/);
+  assert.match(orderSummaryRenderers, /function summaryContent/);
+  assert.match(orderSummaryRenderers, /function groupRows/);
+  assert.match(ui, /const ORDER_SUMMARY_RENDERERS = window\.BK_ORDER_SUMMARY_RENDERERS \|\| \{\}/);
+  assert.match(ui, /ORDER_SUMMARY_RENDERERS\.summaryContent/);
+  assert.match(ui, /ORDER_SUMMARY_RENDERERS\.groupRows/);
+  assert.doesNotMatch(ui, /function groupedRowsNode/);
+  assert.ok(html.indexOf('order_summary_renderers.js') > -1 && html.indexOf('order_summary_renderers.js') < html.indexOf('ui.js'));
+  assert.ok(admin.indexOf('order_summary_renderers.js') > -1 && admin.indexOf('order_summary_renderers.js') < admin.indexOf('ui.js'));
 });
 
 
@@ -134,9 +217,21 @@ test('daily sales shows and exports purchase audit with date and purchaser', () 
 });
 
 test('stock overview has search and sorted results', () => {
-  assert.match(ui, /stockOverviewSearch/);
+  assert.match(stockOverviewRenderers, /stockOverviewSearch/);
   assert.match(ui, /stockOverviewQuery/);
-  assert.match(ui, /localeCompare/);
+  assert.match(stockOverviewRenderers, /localeCompare/);
+});
+
+test('stock overview, void reason and group order dialogs avoid inline HTML templates', () => {
+  const stockOverview = ui.slice(ui.indexOf('function renderStock'), ui.indexOf('function openReceipt'));
+  const voidReason = ui.slice(ui.indexOf('function requestVoidReason'), ui.indexOf('function voidHistoryOrder'));
+  const groupDialog = ui.slice(ui.indexOf('function openGroup'), ui.indexOf('function closeGroup'));
+  assert.doesNotMatch(stockOverview, /host\.innerHTML\s*=|row\.innerHTML\s*=/);
+  assert.doesNotMatch(voidReason, /appDialogBody'\)\.innerHTML/);
+  assert.doesNotMatch(groupDialog, /body\.innerHTML|row\.innerHTML/);
+  assert.match(stockOverview, /STOCK_OVERVIEW_RENDERERS\.renderStockOverview/);
+  assert.match(voidReason, /presetSelect\.appendChild\(optionNode/);
+  assert.match(groupDialog, /ORDER_SUMMARY_RENDERERS\.groupRows/);
 });
 
 
@@ -170,4 +265,31 @@ test('history purge list renders rows with DOM text nodes', () => {
   assert.match(renderPurge, /row\.className = 'history-purge-row'/);
   assert.match(renderPurge, /order\.textContent = entry\.orderNo \|\| ''/);
   assert.match(renderPurge, /meta\.textContent = `\$\{entry\.externalOrderNo \|\| entry\.slotName \|\| ''\} · \$\{paymentLabel\(entry\.pay\)\} ·/);
+});
+
+test('order history list renders rows with DOM text nodes', () => {
+  const renderStart = ui.indexOf('function renderHistoryBody');
+  const renderHistory = ui.slice(renderStart, ui.indexOf('function openHistory', renderStart));
+  assert.doesNotMatch(renderHistory, /body\.innerHTML\s*=/);
+  assert.match(renderHistory, /HISTORY_RENDERERS\.historyBodyNodes/);
+  assert.match(renderHistory, /body\.replaceChildren\(\.\.\.nodes\)/);
+});
+
+test('order history detail modal renders with DOM text nodes', () => {
+  const detail = ui.slice(ui.indexOf('function openHistoryOrder'), ui.indexOf('function closeHistoryOrder'));
+  assert.doesNotMatch(detail, /historyDetailBody'\)\.innerHTML/);
+  assert.match(historyRenderers, /function historyItemsNode\(entry\)/);
+  assert.match(historyRenderers, /function historyDetailMeta\(label, value\)/);
+  assert.match(detail, /historyDetailBody'\)\.replaceChildren\(\.\.\.content\)/);
+  assert.match(historyRenderers, /notice\.append\(/);
+  assert.match(historyRenderers, /totals\.className = 'history-totals'/);
+});
+
+test('active order summary modal renders grouped rows with DOM nodes', () => {
+  const summary = ui.slice(ui.indexOf('function openSummary'), ui.indexOf('function closeSummary'));
+  assert.doesNotMatch(summary, /body\.innerHTML\s*=/);
+  assert.match(orderSummaryRenderers, /function groupedRowsNode\(items, logic\)/);
+  assert.match(summary, /ORDER_SUMMARY_RENDERERS\.summaryContent/);
+  assert.match(orderSummaryRenderers, /meta\.className = 'summary-meta'/);
+  assert.match(css, /\.summary-meta\{/);
 });

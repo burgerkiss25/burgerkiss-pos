@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'order.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
+const productGridRenderers = fs.readFileSync(path.join(root, 'product_grid_renderers.js'), 'utf8');
 const access = fs.readFileSync(path.join(root, 'access.js'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 
@@ -17,9 +18,9 @@ test('order header no longer duplicates cart totals or technical order context',
 
 test('employee tools live inside the staff session menu', () => {
   assert.doesNotMatch(html, /class="more-menu"/);
-  assert.match(access, /id="btnStockOverview"/);
-  assert.match(access, /id="btnHistory"/);
-  assert.match(access, /id="btnReceipt"/);
+  assert.match(access, /id = 'btnStockOverview'|id:'btnStockOverview'/);
+  assert.match(access, /id:'btnHistory'/);
+  assert.match(access, /id:'btnReceipt'/);
   assert.doesNotMatch(access, /id="btnDailyReport"/);
   assert.match(access, /History \/ Daily Report/);
   assert.match(html, /id="hDailyReport"/);
@@ -65,11 +66,12 @@ test('online order dialog guides platform entry before products', () => {
 
 test('product grid renders dynamic labels with textContent instead of card innerHTML', () => {
   assert.doesNotMatch(ui, /b\.innerHTML\s*=/);
-  assert.doesNotMatch(ui, /empty\.innerHTML\s*=/);
-  assert.match(ui, /catBadge\.textContent = catLabel/);
-  assert.match(ui, /name\.textContent = it\.name/);
-  assert.match(ui, /subtitle\.textContent = it\.subtitle/);
-  assert.match(ui, /price\.textContent = `\$\{itemDisplayPrice\(it\)\} GHS`/);
+  assert.doesNotMatch(productGridRenderers, /innerHTML\s*=/);
+  assert.match(productGridRenderers, /el\.textContent = text == null \? '' : String\(text\)/);
+  assert.match(productGridRenderers, /textEl\('span', opts\.categoryLabel/);
+  assert.match(productGridRenderers, /textEl\('div', product\.name, 'name'\)/);
+  assert.match(productGridRenderers, /textEl\('small', product\.subtitle, 'item-subtitle'\)/);
+  assert.match(ui, /priceText = `\$\{itemDisplayPrice\(it\)\} GHS`/);
 });
 
 
@@ -108,4 +110,34 @@ test('online order and conversion dialogs render bodies without innerHTML', () =
   assert.match(onlineDialog, /confirmButton\.textContent = 'Create Online Order'/);
   assert.match(conversionDialog, /summary\.className = 'online-conversion-summary'/);
   assert.match(conversionDialog, /confirmButton\.textContent = 'Convert to Direct Order'/);
+});
+
+test('modifier, meal, fulfilment and packing dialogs render bodies with DOM nodes', () => {
+  const modifierDialog = ui.slice(ui.indexOf('function openModifierSheet'), ui.indexOf('function addQuantities'));
+  const mealDialog = ui.slice(ui.indexOf('function openMealModeDialog'), ui.indexOf('function friesModifierSections'));
+  const fulfilmentDialog = ui.slice(ui.indexOf('function whatsappOrderSetup'), ui.indexOf('function defaultPackingItems'));
+  const packingDialog = ui.slice(ui.indexOf('function packingAssignmentDialog'), ui.indexOf('function continueOrderToKitchen'));
+  [modifierDialog, mealDialog, fulfilmentDialog, packingDialog].forEach(source=>{
+    assert.doesNotMatch(source, /appDialogBody'\)\.innerHTML/);
+    assert.match(source, /appDialogBody\(\)\.replaceChildren/);
+  });
+  assert.match(modifierDialog, /quickBtn\.dataset\.note = noteText/);
+  assert.match(mealDialog, /choices\.className = 'meal-choice'/);
+  assert.match(fulfilmentDialog, /optionNode\('customer-rider'/);
+  assert.match(packingDialog, /select\.dataset\.itemIndex = String\(entry\.index\)/);
+});
+
+test('product and cart containers are cleared with replaceChildren', () => {
+  const pager = ui.slice(ui.indexOf('function updateProductPager'), ui.indexOf('function buildProducts'));
+  const buildProducts = ui.slice(ui.indexOf('function buildProducts'), ui.indexOf('function openModifierSheet'));
+  const renderOrder = ui.slice(ui.indexOf('function renderOrder'), ui.indexOf('function removeItem'));
+  const flowActions = ui.slice(ui.indexOf('function ensureFlowActions'), ui.indexOf('function createFreshOrderSlot'));
+  assert.doesNotMatch(pager, /dots\.innerHTML\s*=/);
+  assert.doesNotMatch(buildProducts, /grid\.innerHTML\s*=/);
+  assert.doesNotMatch(renderOrder, /lines\.innerHTML\s*=/);
+  assert.doesNotMatch(flowActions, /row\.innerHTML\s*=/);
+  assert.match(pager, /dots\.replaceChildren\(\)/);
+  assert.match(buildProducts, /grid\.replaceChildren\(\)/);
+  assert.match(renderOrder, /lines\.replaceChildren\(\)/);
+  assert.match(flowActions, /row\.replaceChildren\(\)/);
 });

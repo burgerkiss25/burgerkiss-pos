@@ -2,6 +2,16 @@
 (function(){
   const SAVE_KEY = 'bk_state_v5';
   const ORDER_COUNTER_KEY = 'bk_order_counter_v1';
+  const NORMALIZERS = window.BK_STATE_NORMALIZERS || {};
+  const ORDER_NUMBERS = window.BK_ORDER_NUMBER_SERVICE || {};
+  const PERSISTENCE = window.BK_STATE_PERSISTENCE || {};
+  const REMOTE = window.BK_STATE_REMOTE || {};
+  const DISCOUNTS = window.BK_DISCOUNT_STATE || {};
+  const CART = window.BK_CART_STATE || {};
+  const PAYMENTS = window.BK_PAYMENT_STATE || {};
+  const ORDER_STATUS = window.BK_ORDER_STATUS_STATE || {};
+  const SLOTS = window.BK_SLOT_STATE || {};
+  const UNDO = window.BK_UNDO_STATE || {};
   let slots = [];       // [{name, items:[{itemId,note,done:false}], pay:'unpaid'|'cash'|'momo', momoProvider:'telecel'|'mtn'|'', issued:false}]
   let active = 0;
   let discountRate = 0;
@@ -13,108 +23,59 @@
 
   function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
   function normalizeDiscount(v){
-    const n = Number(v);
-    if (!Number.isFinite(n)) return 0;
-    return clamp(n, 0, 1);
-  }
-  function normalizeItem(it){
-    if(!it || typeof it!=='object' || typeof it.itemId!=='string') return null;
-    return {
-      itemId: it.itemId,
-      note: typeof it.note==='string' ? it.note : '',
-      done: !!it.done,
-      menuGroupId: typeof it.menuGroupId === 'string' ? it.menuGroupId : '',
-      menuName: typeof it.menuName === 'string' ? it.menuName : '',
-      menuRole: typeof it.menuRole === 'string' ? it.menuRole : '',
-      menuNoSauce: !!it.menuNoSauce,
-      customerGroupId: typeof it.customerGroupId === 'string' ? it.customerGroupId : '',
-      packGroupId: typeof it.packGroupId === 'string' ? it.packGroupId : ''
-    };
+    if(DISCOUNTS.normalizeDiscount) return DISCOUNTS.normalizeDiscount(v);
+    return NORMALIZERS.normalizeDiscount ? NORMALIZERS.normalizeDiscount(v) : 0;
   }
   function normalizeSlot(slot, idx){
-    const rawItems = Array.isArray(slot && slot.items) ? slot.items : [];
-    return {
-      name: (slot && typeof slot.name==='string' && slot.name.trim()) ? slot.name.trim() : `SN${idx+1}`,
-      items: rawItems.map(normalizeItem).filter(Boolean),
-      pay: PAY_SET.has(slot && slot.pay) ? slot.pay : 'unpaid',
-      momoProvider: slot && (slot.momoProvider === 'telecel' || slot.momoProvider === 'mtn') ? slot.momoProvider : '',
-      issued: !!(slot && slot.issued),
-      voided: !!(slot && slot.voided),
-      voidReason: String((slot && slot.voidReason) || ''),
-      packMode: (slot && slot.packMode === 'split') ? 'split' : 'shared',
-      packAsked: !!(slot && slot.packAsked),
-      drinkPackMode: (slot && slot.drinkPackMode === 'by-customer') ? 'by-customer' : 'shared',
-      sentToKitchen: !!(slot && slot.sentToKitchen),
-      discountRate: normalizeDiscount(slot && slot.discountRate),
-      discountApprovedBy: (slot && slot.discountApprovedBy && typeof slot.discountApprovedBy === 'object') ? slot.discountApprovedBy : null,
-      discountApprovedAt: Number(slot && slot.discountApprovedAt) || 0,
-      orderNo: (slot && typeof slot.orderNo==='string' && slot.orderNo.trim()) ? slot.orderNo.trim() : null,
-      createdAt: Number(slot && slot.createdAt) > 0 ? Number(slot.createdAt) : Date.now(),
-      orderSource: SOURCE_SET.has(slot && slot.orderSource) ? slot.orderSource : 'walkin',
-      externalOrderNo: String((slot && slot.externalOrderNo) || '').trim(),
-      originalSource: SOURCE_SET.has(slot && slot.originalSource) ? slot.originalSource : '',
-      originalPay: PAY_SET.has(slot && slot.originalPay) ? slot.originalPay : '',
-      finalChannel: String((slot && slot.finalChannel) || ''),
-      fulfilment: String((slot && slot.fulfilment) || ''),
-      conversionReason: String((slot && slot.conversionReason) || ''),
-      refundStatus: String((slot && slot.refundStatus) || ''),
-      convertedAt: Number(slot && slot.convertedAt) || 0,
-      createdBy: (slot && slot.createdBy && typeof slot.createdBy === 'object') ? slot.createdBy : null,
-      paidBy: (slot && slot.paidBy && typeof slot.paidBy === 'object') ? slot.paidBy : null,
-      paidAt: Number(slot && slot.paidAt) || 0,
-      businessDate: String((slot && slot.businessDate) || ''),
-      shiftId: String((slot && slot.shiftId) || ''),
-      customerName: String((slot && slot.customerName) || ''),
-      customerPhone: String((slot && slot.customerPhone) || ''),
-      preferredPayment: String((slot && slot.preferredPayment) || ''),
-      riderType: String((slot && slot.riderType) || ''),
-      deliveryStatus: String((slot && slot.deliveryStatus) || ''),
-      stockConsumed: !!(slot && slot.stockConsumed)
-    };
+    return NORMALIZERS.normalizeSlot ? NORMALIZERS.normalizeSlot(slot, idx) : {name:`SN${idx+1}`, items:[], pay:'unpaid'};
   }
   function normalizeState(st){
-    const rawSlots = Array.isArray(st && st.slots) ? st.slots : [];
-    const legacyDiscount = normalizeDiscount(st && st.discountRate);
-    const nextSlots = rawSlots.map((slot, i)=>{
-      const normalized = normalizeSlot(slot, i);
-      if(!normalized.discountRate && legacyDiscount) normalized.discountRate = legacyDiscount;
-      return normalized;
-    });
-    const nextActive = clamp(Number(st && st.active) || 0, 0, Math.max(0, nextSlots.length-1));
-    const nextDiscount = 0;
-    const nextSeq = Math.max(0, Number(st && st.orderSeq) || 0);
-    const nextUpdatedAt = Math.max(0, Number(st && st.ts) || 0);
-    return { slots: nextSlots, active: nextActive, discountRate: nextDiscount, orderSeq: nextSeq, updatedAt: nextUpdatedAt };
+    return NORMALIZERS.normalizeState ? NORMALIZERS.normalizeState(st) : {slots:[], active:0, discountRate:0, orderSeq:0, updatedAt:0};
   }
   function parseOrderSequence(orderNo){
+    if(ORDER_NUMBERS.parseOrderSequence) return ORDER_NUMBERS.parseOrderSequence(orderNo);
     const match = String(orderNo || '').match(/(\d+)$/);
     return match ? Math.max(0, Number(match[1]) || 0) : 0;
   }
   function formatOrderNo(seq){
+    if(ORDER_NUMBERS.formatOrderNo) return ORDER_NUMBERS.formatOrderNo(seq);
     const d = new Date();
     const pad = n => String(n).padStart(2, '0');
     const date = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
     return `BK-${date}-${String(seq).padStart(8, '0')}`;
   }
   function localCounter(){
+    if(ORDER_NUMBERS.localCounter) return ORDER_NUMBERS.localCounter(localStorage, ORDER_COUNTER_KEY);
     try{ return Math.max(0, Number(localStorage.getItem(ORDER_COUNTER_KEY)) || 0); }
     catch(e){ return 0; }
   }
   function rememberCounter(seq){
-    orderSeq = Math.max(orderSeq, Number(seq) || 0);
-    try{ localStorage.setItem(ORDER_COUNTER_KEY, String(orderSeq)); }catch(e){}
+    orderSeq = ORDER_NUMBERS.rememberCounter
+      ? ORDER_NUMBERS.rememberCounter(localStorage, ORDER_COUNTER_KEY, orderSeq, seq)
+      : Math.max(orderSeq, Number(seq) || 0);
+    if(!ORDER_NUMBERS.rememberCounter){
+      try{ localStorage.setItem(ORDER_COUNTER_KEY, String(orderSeq)); }catch(e){}
+    }
   }
   function knownSequenceFloor(){
+    const historyEntries = PERSISTENCE.readHistory
+      ? PERSISTENCE.readHistory(localStorage, 'bk_order_history_v1')
+      : [];
+    if(!PERSISTENCE.readHistory){
+      try{
+        const raw = JSON.parse(localStorage.getItem('bk_order_history_v1') || '[]');
+        if(Array.isArray(raw)) historyEntries.push(...raw);
+      }catch(e){}
+    }
+    if(ORDER_NUMBERS.knownSequenceFloor) return ORDER_NUMBERS.knownSequenceFloor(orderSeq, localCounter(), slots, historyEntries);
     let floor = Math.max(orderSeq, localCounter());
     slots.forEach(slot=>{ floor = Math.max(floor, parseOrderSequence(slot && slot.orderNo)); });
-    try{
-      const raw = JSON.parse(localStorage.getItem('bk_order_history_v1') || '[]');
-      if(Array.isArray(raw)) raw.forEach(entry=>{ floor = Math.max(floor, parseOrderSequence(entry && entry.orderNo)); });
-    }catch(e){}
+    historyEntries.forEach(entry=>{ floor = Math.max(floor, parseOrderSequence(entry && entry.orderNo)); });
     return floor;
   }
   let remoteAuthPromise = null;
   function ensureRemoteAuth(){
+    if(REMOTE.ensureAuth) return REMOTE.ensureAuth();
     if(!remoteEnabled() || !window.firebase.auth) return Promise.resolve(true);
     if(remoteAuthPromise) return remoteAuthPromise;
     try{
@@ -127,6 +88,7 @@
     }catch(error){ return Promise.reject(error); }
   }
   function getOrderCounterRef(){
+    if(REMOTE.orderCounterRef) return REMOTE.orderCounterRef();
     try{
       const app = (window.firebase.apps && firebase.apps.length)
         ? firebase.app()
@@ -140,6 +102,12 @@
     const allocate = function(){
       const floor = knownSequenceFloor();
       if(remoteEnabled()){
+        if(REMOTE.reserveOrderSequence){
+          return REMOTE.reserveOrderSequence(floor).then(function(seq){
+            rememberCounter(seq);
+            return formatOrderNo(seq);
+          });
+        }
         return ensureRemoteAuth().then(function(){
           const ref = getOrderCounterRef();
           if(!ref) throw new Error('Order number service is unavailable.');
@@ -189,9 +157,11 @@
 
 
   function remoteEnabled(){
+    if(REMOTE.remoteEnabled) return REMOTE.remoteEnabled();
     return !!(window.BK_SYNC_ENABLED !== false && window.FIREBASE_CONFIG && window.firebase && window.firebase.database);
   }
   function getRemoteRef(){
+    if(REMOTE.stateRef) return REMOTE.stateRef();
     try{
       const app = (window.firebase.apps && firebase.apps.length)
         ? firebase.app()
@@ -212,6 +182,12 @@
       remoteSaveTimer = null;
     }
     if(!remoteEnabled()) return Promise.resolve(true);
+    if(REMOTE.saveState){
+      return REMOTE.saveState(remotePayload()).then(()=>true).catch(function(error){
+        console.warn('remote state save failed:', error && error.message);
+        return false;
+      });
+    }
     return ensureRemoteAuth().then(function(){
       const ref = getRemoteRef();
       if(!ref) throw new Error('Remote state reference unavailable.');
@@ -231,6 +207,18 @@
   }
   function loadRemoteOnce(){
     if(!remoteEnabled()) return Promise.resolve(false);
+    if(REMOTE.loadState){
+      return REMOTE.loadState().then(function(raw){
+        if(!raw || !raw.v) return false;
+        if(updatedAt && Number(raw.ts) <= updatedAt) return false;
+        const n = normalizeState(raw);
+        slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq; updatedAt = n.updatedAt;
+        rememberCounter(knownSequenceFloor());
+        if(PERSISTENCE.writeState) PERSISTENCE.writeState(localStorage, SAVE_KEY, remotePayload());
+        else try{ localStorage.setItem(SAVE_KEY, JSON.stringify(remotePayload())); }catch(e){}
+        return true;
+      }).catch(()=>false);
+    }
     return ensureRemoteAuth().then(function(){
       const ref = getRemoteRef();
       if(!ref) return null;
@@ -243,27 +231,43 @@
       const n = normalizeState(raw);
       slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq; updatedAt = n.updatedAt;
       rememberCounter(knownSequenceFloor());
-      try{ localStorage.setItem(SAVE_KEY, JSON.stringify(remotePayload())); }catch(e){}
+      if(PERSISTENCE.writeState) PERSISTENCE.writeState(localStorage, SAVE_KEY, remotePayload());
+      else try{ localStorage.setItem(SAVE_KEY, JSON.stringify(remotePayload())); }catch(e){}
       return true;
     }).catch(()=>false);
   }
   function save(){
     updatedAt = Date.now();
-    try{ localStorage.setItem(SAVE_KEY, JSON.stringify(remotePayload())); }catch(e){}
+    if(PERSISTENCE.writeState) PERSISTENCE.writeState(localStorage, SAVE_KEY, remotePayload());
+    else try{ localStorage.setItem(SAVE_KEY, JSON.stringify(remotePayload())); }catch(e){}
     saveRemoteSoon();
   }
   function load(){
     let hadLocal = false;
-    try{
-      const raw = localStorage.getItem(SAVE_KEY);
-      hadLocal = !!raw;
-      if(raw){
-        const n = normalizeState(JSON.parse(raw));
+    const local = PERSISTENCE.readState
+      ? PERSISTENCE.readState(localStorage, SAVE_KEY)
+      : null;
+    if(local){
+      hadLocal = !!local.exists;
+      if(local.value){
+        const n = normalizeState(local.value);
         slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq; updatedAt = n.updatedAt;
         rememberCounter(knownSequenceFloor());
+      }else if(local.error){
+        console.warn('local state load failed:', local.error && local.error.message);
       }
-    }catch(e){
-      console.warn('local state load failed:', e && e.message);
+    }else{
+      try{
+        const raw = localStorage.getItem(SAVE_KEY);
+        hadLocal = !!raw;
+        if(raw){
+          const n = normalizeState(JSON.parse(raw));
+          slots = n.slots; active = n.active; discountRate = n.discountRate; orderSeq = n.orderSeq; updatedAt = n.updatedAt;
+          rememberCounter(knownSequenceFloor());
+        }
+      }catch(e){
+        console.warn('local state load failed:', e && e.message);
+      }
     }
     readyPromise = loadRemoteOnce().then(function(hasRemote){
       return repairOrderNumbers().then(function(changed){
@@ -280,15 +284,22 @@
   function whenReady(){ return readyPromise; }
 
   function clearAll(){
-    slots=[]; active=0; discountRate=0; history.length=0; save(); return true;
+    slots=[]; active=0; discountRate=0;
+    if(UNDO.clear) UNDO.clear(history);
+    else history.length=0;
+    save(); return true;
   }
   function clearStorage(){
-    localStorage.removeItem(SAVE_KEY);
-    if(window.BK_PRICES && window.BK_PRICES.KEY) localStorage.removeItem(window.BK_PRICES.KEY);
-    if(window.BK_PRODUCTS && window.BK_PRODUCTS.KEY) localStorage.removeItem(window.BK_PRODUCTS.KEY);
-    if(window.BK_MENUS && window.BK_MENUS.KEY) localStorage.removeItem(window.BK_MENUS.KEY);
-    if(window.BK_IMAGES && window.BK_IMAGES.KEY) localStorage.removeItem(window.BK_IMAGES.KEY);
-    if(window.BK_STOCK && window.BK_STOCK.KEY) localStorage.removeItem(window.BK_STOCK.KEY);
+    const keys = [
+      SAVE_KEY,
+      window.BK_PRICES && window.BK_PRICES.KEY,
+      window.BK_PRODUCTS && window.BK_PRODUCTS.KEY,
+      window.BK_MENUS && window.BK_MENUS.KEY,
+      window.BK_IMAGES && window.BK_IMAGES.KEY,
+      window.BK_STOCK && window.BK_STOCK.KEY
+    ];
+    if(PERSISTENCE.clearAppStorage) PERSISTENCE.clearAppStorage(localStorage, keys);
+    else keys.forEach(function(key){ if(key) localStorage.removeItem(key); });
   }
 
   function ensureSlot(){
@@ -299,11 +310,14 @@
     const idx = slots.length+1;
     const details = meta && typeof meta === 'object' ? meta : {};
     return allocateOrderNo().then(function(orderNo){
-      const source = SOURCE_SET.has(details.orderSource) ? details.orderSource : 'walkin';
-      const pay = PAY_SET.has(details.pay) ? details.pay : (source === 'walkin' ? 'unpaid' : source);
       const access = window.BK_ACCESS && BK_ACCESS.current ? BK_ACCESS.current() : null;
       const actor = window.BK_ACCESS && BK_ACCESS.operationalActor ? BK_ACCESS.operationalActor() : null;
-      slots.push({name: label || `SN${idx}`, items: [], pay, issued:false, voided:false, voidReason:'', packMode:'shared', packAsked:false, drinkPackMode:'shared', sentToKitchen:false, discountRate:0, discountApprovedBy:null, discountApprovedAt:0, orderNo, createdAt: Date.now(), orderSource:source, externalOrderNo:String(details.externalOrderNo || '').trim(), originalSource:'', originalPay:'', finalChannel:'', fulfilment:'', conversionReason:'', refundStatus:'', convertedAt:0, customerName:String(details.customerName || ''), customerPhone:String(details.customerPhone || ''), preferredPayment:String(details.preferredPayment || ''), riderType:String(details.riderType || ''), deliveryStatus:String(details.deliveryStatus || ''), stockConsumed:false, createdBy:actor, paidBy:pay === 'unpaid' ? null : actor, paidAt:pay === 'unpaid' ? 0 : Date.now(), businessDate:access ? access.businessDate : '', shiftId:access ? access.shiftId : ''});
+      if(SLOTS.createSlot) slots.push(SLOTS.createSlot(idx, label, details, orderNo, actor, access, Date.now()));
+      else {
+        const source = SOURCE_SET.has(details.orderSource) ? details.orderSource : 'walkin';
+        const pay = PAY_SET.has(details.pay) ? details.pay : (source === 'walkin' ? 'unpaid' : source);
+        slots.push({name: label || `SN${idx}`, items: [], pay, issued:false, voided:false, voidReason:'', packMode:'shared', packAsked:false, drinkPackMode:'shared', sentToKitchen:false, discountRate:0, discountApprovedBy:null, discountApprovedAt:0, orderNo, createdAt: Date.now(), orderSource:source, externalOrderNo:String(details.externalOrderNo || '').trim(), originalSource:'', originalPay:'', finalChannel:'', fulfilment:'', conversionReason:'', refundStatus:'', convertedAt:0, customerName:String(details.customerName || ''), customerPhone:String(details.customerPhone || ''), preferredPayment:String(details.preferredPayment || ''), riderType:String(details.riderType || ''), deliveryStatus:String(details.deliveryStatus || ''), stockConsumed:false, createdBy:actor, paidBy:pay === 'unpaid' ? null : actor, paidAt:pay === 'unpaid' ? 0 : Date.now(), businessDate:access ? access.businessDate : '', shiftId:access ? access.shiftId : ''});
+      }
       active = slots.length-1;
       save();
       return active;
@@ -315,55 +329,63 @@
   }
   function setActiveName(name){
     if(!slots.length) return;
-    if(typeof name!=='string') return;
-    const n = name.trim();
-    if(!n) return;
-    slots[active].name = n;
-    save();
+    const changed = SLOTS.setActiveName ? SLOTS.setActiveName(slots[active], name) : (typeof name === 'string' && name.trim() ? (slots[active].name = name.trim(), true) : false);
+    if(changed) save();
   }
   function deleteActive(){
     if(!slots.length) return;
-    slots.splice(active,1);
-    active = Math.max(0, active-1);
+    active = SLOTS.deleteActive ? SLOTS.deleteActive(slots, active) : (slots.splice(active,1), Math.max(0, active-1));
     save();
   }
   function setActive(i){
-    active = clamp(Number(i)||0, 0, Math.max(0, slots.length-1));
+    active = SLOTS.setActiveIndex ? SLOTS.setActiveIndex(i, slots.length) : clamp(Number(i)||0, 0, Math.max(0, slots.length-1));
     save();
   }
   function clearSlotDiscount(slot){
-    if(!slot) return;
+    if(DISCOUNTS.clearSlotDiscount) return DISCOUNTS.clearSlotDiscount(slot);
+    if(!slot) return false;
     slot.discountRate = 0;
     slot.discountApprovedBy = null;
     slot.discountApprovedAt = 0;
+    return true;
   }
 
   function addItem(id, note, meta){
     if(!slots.length || slots[active].issued) return;
     const details = meta && typeof meta === 'object' ? meta : {};
-    slots[active].packAsked = false;
-    slots[active].sentToKitchen = false;
-    clearSlotDiscount(slots[active]);
-    slots[active].items.push({
-      itemId:id,
-      note: (note||'').trim(),
-      done:false,
-      menuGroupId: typeof details.menuGroupId === 'string' ? details.menuGroupId : '',
-      menuName: typeof details.menuName === 'string' ? details.menuName : '',
-      menuRole: typeof details.menuRole === 'string' ? details.menuRole : '',
-      menuNoSauce: !!details.menuNoSauce,
-      customerGroupId: typeof details.customerGroupId === 'string' ? details.customerGroupId : '',
-      packGroupId: typeof details.packGroupId === 'string' ? details.packGroupId : ''
-    });
-    history.push({slot:active});
+    if(CART.addItem){
+      if(!CART.addItem(slots[active], id, note, details, clearSlotDiscount)) return;
+    }
+    else {
+      slots[active].packAsked = false;
+      slots[active].sentToKitchen = false;
+      clearSlotDiscount(slots[active]);
+      slots[active].items.push({
+        itemId:id,
+        note: (note||'').trim(),
+        done:false,
+        menuGroupId: typeof details.menuGroupId === 'string' ? details.menuGroupId : '',
+        menuName: typeof details.menuName === 'string' ? details.menuName : '',
+        menuRole: typeof details.menuRole === 'string' ? details.menuRole : '',
+        menuNoSauce: !!details.menuNoSauce,
+        customerGroupId: typeof details.customerGroupId === 'string' ? details.customerGroupId : '',
+        packGroupId: typeof details.packGroupId === 'string' ? details.packGroupId : ''
+      });
+    }
+    if(UNDO.recordItemAdd) UNDO.recordItemAdd(history, active);
+    else history.push({slot:active});
     save();
   }
   function undo(){
-    const last = history.pop(); if(!last) return;
-    const s = slots[last.slot]; if(!s || !s.items.length) return;
-    s.items.pop(); save();
+    const changed = UNDO.undoLastItem ? UNDO.undoLastItem(history, slots) : (function(){
+      const last = history.pop(); if(!last) return false;
+      const s = slots[last.slot]; if(!s || !s.items.length) return false;
+      s.items.pop(); return true;
+    })();
+    if(changed) save();
   }
   function parseItemKey(key){
+    if(CART.parseItemKey) return CART.parseItemKey(key);
     try{
       const arr = JSON.parse(key);
       if(Array.isArray(arr) && typeof arr[0]==='string'){
@@ -382,18 +404,31 @@
   }
   function decItemForKey(key){
     const s = slots[active]; if(!s || s.issued) return;
+    if(CART.decItemForKey){
+      if(CART.decItemForKey(s, key, clearSlotDiscount)) save();
+      return;
+    }
     const [id, note='', menuGroupId=''] = parseItemKey(key);
     const idx = s.items.findIndex(it => it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId));
     if(idx>-1){ s.items.splice(idx,1); s.packAsked=false; s.sentToKitchen=false; clearSlotDiscount(s); save(); }
   }
   function removeItemForKey(key){
     const s = slots[active]; if(!s || s.issued) return;
+    if(CART.removeItemForKey){
+      if(CART.removeItemForKey(s, key, clearSlotDiscount)) save();
+      return;
+    }
     const [id, note='', menuGroupId=''] = parseItemKey(key);
     const next = s.items.filter(it => !(it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId)));
     if(next.length !== s.items.length){ s.items = next; s.packAsked=false; s.sentToKitchen=false; clearSlotDiscount(s); save(); }
   }
   function replaceMenuGroup(menuGroupId, nextItems){
     const s = slots[active]; if(!s || s.issued || !menuGroupId) return false;
+    if(CART.replaceMenuGroup){
+      const changed = CART.replaceMenuGroup(s, menuGroupId, nextItems, clearSlotDiscount);
+      if(changed) save();
+      return changed;
+    }
     const replacements = Array.isArray(nextItems) ? nextItems : [];
     s.items = s.items
       .filter(it => (it.menuGroupId || '') !== menuGroupId)
@@ -414,39 +449,46 @@
   function setPay(i,status){
     if(!slots[i] || slots[i].issued) return;
     const provider = arguments.length > 2 && (arguments[2] === 'telecel' || arguments[2] === 'mtn') ? arguments[2] : '';
-    slots[i].pay = PAY_SET.has(status) ? status : 'unpaid';
-    slots[i].momoProvider = slots[i].pay === 'momo' ? provider : '';
-    slots[i].paidBy = slots[i].pay === 'unpaid' ? null : (window.BK_ACCESS && BK_ACCESS.operationalActor ? BK_ACCESS.operationalActor() : null);
-    slots[i].paidAt = slots[i].pay === 'unpaid' ? 0 : Date.now();
+    const actor = window.BK_ACCESS && BK_ACCESS.operationalActor ? BK_ACCESS.operationalActor() : null;
+    if(PAYMENTS.applyPayment) PAYMENTS.applyPayment(slots[i], status, provider, actor, Date.now());
+    else {
+      slots[i].pay = PAY_SET.has(status) ? status : 'unpaid';
+      slots[i].momoProvider = slots[i].pay === 'momo' ? provider : '';
+      slots[i].paidBy = slots[i].pay === 'unpaid' ? null : actor;
+      slots[i].paidAt = slots[i].pay === 'unpaid' ? 0 : Date.now();
+    }
     save();
   }
   function updateSlot(i, changes){
     if(!slots[i] || !changes || typeof changes !== 'object' || slots[i].issued) return false;
-    const next = Object.assign({}, slots[i], changes);
-    slots[i] = normalizeSlot(next, i);
+    const next = SLOTS.updateSlot ? SLOTS.updateSlot(slots[i], changes, i, normalizeSlot) : normalizeSlot(Object.assign({}, slots[i], changes), i);
+    if(!next) return false;
+    slots[i] = next;
     save();
     return true;
   }
   function setIssued(i, v){
     if(!slots[i]) return;
-    if(slots[i].issued && v===false) return;
-    slots[i].issued = !!v;
-    save();
+    const changed = ORDER_STATUS.setIssued ? ORDER_STATUS.setIssued(slots[i], v) : (slots[i].issued && v===false ? false : (slots[i].issued = !!v, true));
+    if(changed) save();
   }
   function setPackMode(i, mode){
     if(!slots[i] || slots[i].issued) return;
-    slots[i].packMode = mode === 'split' ? 'split' : 'shared';
-    slots[i].packAsked = true;
-    save();
+    const changed = ORDER_STATUS.setPackMode ? ORDER_STATUS.setPackMode(slots[i], mode) : (slots[i].packMode = mode === 'split' ? 'split' : 'shared', slots[i].packAsked = true, true);
+    if(changed) save();
   }
   function toggleDone(i, j, v){
     if(!slots[i] || slots[i].issued || !slots[i].items[j]) return;
-    slots[i].items[j].done = !!v;
-    save();
+    const changed = ORDER_STATUS.toggleDone ? ORDER_STATUS.toggleDone(slots[i], j, v) : (slots[i].items[j].done = !!v, true);
+    if(changed) save();
   }
   function setDoneForKey(key, v){
     const s = slots[active]; if(!s || s.issued) return;
     const [id, note='', menuGroupId=''] = parseItemKey(key);
+    if(ORDER_STATUS.setDoneForKey){
+      if(ORDER_STATUS.setDoneForKey(s, [id, note, menuGroupId], v)) save();
+      return;
+    }
     let changed = false;
     s.items.forEach(it=>{
       if(it.itemId===id && (it.note||'')===note && (!menuGroupId || (it.menuGroupId||'')===menuGroupId)){ it.done = !!v; changed = true; }
@@ -457,9 +499,12 @@
   function setDiscount(r, approval){
     const slot = slots[active];
     if(!slot || slot.issued) return false;
-    slot.discountRate = normalizeDiscount(r);
-    slot.discountApprovedBy = slot.discountRate && approval && typeof approval === 'object' ? approval : null;
-    slot.discountApprovedAt = slot.discountRate ? Date.now() : 0;
+    if(DISCOUNTS.applySlotDiscount) DISCOUNTS.applySlotDiscount(slot, r, approval, Date.now());
+    else {
+      slot.discountRate = normalizeDiscount(r);
+      slot.discountApprovedBy = slot.discountRate && approval && typeof approval === 'object' ? approval : null;
+      slot.discountApprovedAt = slot.discountRate ? Date.now() : 0;
+    }
     discountRate = 0;
     save();
     return true;
