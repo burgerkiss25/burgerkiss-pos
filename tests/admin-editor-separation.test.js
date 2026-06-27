@@ -21,9 +21,12 @@ assert.match(admin, /BK_CATALOG\.openEditor/);
 assert.match(admin, /resetEditor\(activeStockMode\)/);
 
 assert.match(stock, /const showIngredients = activeMode === 'stock'/);
-assert.match(stock, /id="stockIngredientSearch"/);
+assert.match(stock, /input\.id = 'stockIngredientSearch'/);
 assert.match(stock, /const showTransfers = activeMode === 'stock'/);
 assert.match(stock, /const showRecipes = activeMode === 'recipes' \|\| activeMode === 'addons'/);
+assert.match(stock, /function stockEditorIntro\(\)/);
+assert.match(stock, /function transferPanelNode\(\)/);
+assert.match(stock, /body\.replaceChildren\(\.\.\.content\)/);
 assert.match(stock, /p\.cat !== 'extra' && p\.cat !== 'sauce'/);
 assert.match(stock, /const recipeNext = clone\(RECIPES\)/);
 assert.match(stock, /function resetEditor\(mode\)/);

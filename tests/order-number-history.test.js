@@ -4,8 +4,22 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.resolve(__dirname, '..');
+const discountStateCode = fs.readFileSync(path.join(root, 'discount_state.js'), 'utf8');
+const cartStateCode = fs.readFileSync(path.join(root, 'cart_state.js'), 'utf8');
+const paymentStateCode = fs.readFileSync(path.join(root, 'payment_state.js'), 'utf8');
+const orderStatusStateCode = fs.readFileSync(path.join(root, 'order_status_state.js'), 'utf8');
+const slotStateCode = fs.readFileSync(path.join(root, 'slot_state.js'), 'utf8');
+const undoStateCode = fs.readFileSync(path.join(root, 'undo_state.js'), 'utf8');
+const stateNormalizersCode = fs.readFileSync(path.join(root, 'state_normalizers.js'), 'utf8');
+const orderNumberServiceCode = fs.readFileSync(path.join(root, 'order_number_service.js'), 'utf8');
+const statePersistenceCode = fs.readFileSync(path.join(root, 'state_persistence.js'), 'utf8');
+const stateRemoteCode = fs.readFileSync(path.join(root, 'state_remote.js'), 'utf8');
 const stateCode = fs.readFileSync(path.join(root, 'state.js'), 'utf8');
 const logicCode = fs.readFileSync(path.join(root, 'logic.js'), 'utf8');
+const shiftReportsCode = fs.readFileSync(path.join(root, 'shift_reports.js'), 'utf8');
+const historyRenderersCode = fs.readFileSync(path.join(root, 'history_renderers.js'), 'utf8');
+const workflowStateCode = fs.readFileSync(path.join(root, 'workflow_state.js'), 'utf8');
+const cartEntryStateCode = fs.readFileSync(path.join(root, 'cart_entry_state.js'), 'utf8');
 const uiCode = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
 
 function createStorage(seed = {}) {
@@ -25,6 +39,16 @@ function runState(storage, extra = {}) {
   };
   context.window = context;
   vm.createContext(context);
+  vm.runInContext(discountStateCode, context);
+  vm.runInContext(cartStateCode, context);
+  vm.runInContext(paymentStateCode, context);
+  vm.runInContext(orderStatusStateCode, context);
+  vm.runInContext(slotStateCode, context);
+  vm.runInContext(undoStateCode, context);
+  vm.runInContext(stateNormalizersCode, context);
+  vm.runInContext(orderNumberServiceCode, context);
+  vm.runInContext(statePersistenceCode, context);
+  vm.runInContext(stateRemoteCode, context);
   vm.runInContext(stateCode, context);
   return context;
 }
@@ -106,8 +130,32 @@ async function testDuplicateRepair() {
 
 function testIssuedOrderHistoryRecovery() {
   const storage = createStorage();
+  const makeElement = () => ({
+    children: [],
+    dataset: {},
+    className: '',
+    textContent: '',
+    innerHTML: '',
+    classList: {add() {}, remove() {}, toggle() {}},
+    append(...nodes) {
+      this.children.push(...nodes);
+      this.textContent += nodes.map(node => node && node.textContent ? node.textContent : '').join('');
+    },
+    appendChild(node) {
+      this.children.push(node);
+      this.textContent += node && node.textContent ? node.textContent : '';
+      return node;
+    },
+    replaceChildren(...nodes) {
+      this.children = [];
+      this.textContent = '';
+      this.innerHTML = '';
+      this.append(...nodes);
+    },
+    querySelectorAll: () => []
+  });
   const elements = {
-    historyBody: {innerHTML: '', querySelectorAll: () => []},
+    historyBody: makeElement(),
     modalHistory: {classList: {add() {}, remove() {}}},
     hSearch: {value: ''}
   };
@@ -120,7 +168,11 @@ function testIssuedOrderHistoryRecovery() {
   const context = {
     console, Promise, Map, Set, Date, Math, Number, String, Array, Object, JSON,
     localStorage: storage,
-    document: {getElementById: id => elements[id] || null},
+    document: {
+      getElementById: id => elements[id] || null,
+      createElement: () => makeElement(),
+      createTextNode: text => ({textContent: String(text || '')})
+    },
     setTimeout, clearTimeout,
     BK_SYNC_ENABLED: false,
     BK_STATE: {getState: () => activeState, setState(next) { activeState = next; }},
@@ -132,12 +184,15 @@ function testIssuedOrderHistoryRecovery() {
   };
   context.window = context;
   vm.createContext(context);
+  vm.runInContext(historyRenderersCode, context);
+  vm.runInContext(shiftReportsCode, context);
+  vm.runInContext(cartEntryStateCode, context);
   vm.runInContext(uiCode, context);
   context.BK_UI.openHistory();
   const history = JSON.parse(storage.getItem('bk_order_history_v1') || '[]');
   assert.strictEqual(history.length, 1);
   assert.strictEqual(history[0].orderNo, slot.orderNo);
-  assert.ok(elements.historyBody.innerHTML.includes(slot.orderNo));
+  assert.ok(elements.historyBody.textContent.includes(slot.orderNo));
 
   const reportDate = new Date(history[0].closedAt).toISOString().slice(0, 10);
   const reportBeforeVoid = context.BK_UI.dailyReportData(reportDate);
@@ -171,6 +226,8 @@ function testInlineWorkflowProgression() {
   };
   context.window = context;
   vm.createContext(context);
+  vm.runInContext(workflowStateCode, context);
+  vm.runInContext(cartEntryStateCode, context);
   vm.runInContext(uiCode, context);
 
   const empty = {items: [], pay: 'unpaid'};
@@ -214,6 +271,33 @@ function testMenuGroupsRemainSeparate() {
   assert.notStrictEqual(lines[0].key, lines[1].key);
 }
 
+function testCartEntryStateGrouping() {
+  const context = {console, Map, Set, Array, Object, String, Number};
+  context.window = context;
+  vm.createContext(context);
+  vm.runInContext(cartEntryStateCode, context);
+  const products = [
+    {id:'burger', name:'Burger', cat:'food'},
+    {id:'x_sauce_ketchup', name:'Ketchup', cat:'extra'}
+  ];
+  const groupedLines = () => [
+    {id:'burger', name:'Burger', note:'no onion', menuGroupId:'', qty:1, total:50, key:'burger'},
+    {id:'x_sauce_ketchup', name:'Ketchup', note:'extra for Burger: no onion', menuGroupId:'', qty:1, total:5, key:'sauce'}
+  ];
+  const rows = context.BK_CART_ENTRY_STATE.groupedCartRows(
+    [
+      {itemId:'burger', note:'no onion'},
+      {itemId:'x_sauce_ketchup', note:'extra for Burger: no onion'}
+    ],
+    {groupedLines},
+    id => products.find(product => product.id === id)
+  );
+  assert.strictEqual(rows.length, 1);
+  assert.strictEqual(rows[0].children.length, 1);
+  assert.strictEqual(context.BK_CART_ENTRY_STATE.groupedEntryTotal(rows[0]), 55);
+  assert.match(context.BK_CART_ENTRY_STATE.groupedEntryText(rows[0]), /↳ 1x Ketchup/);
+}
+
 function testMenuHandoverPackagingPlan() {
   const storage = createStorage();
   const products = [
@@ -245,6 +329,7 @@ function testMenuHandoverPackagingPlan() {
   };
   context.window = context;
   vm.createContext(context);
+  vm.runInContext(cartEntryStateCode, context);
   vm.runInContext(uiCode, context);
 
   const menuItems = (groupId, drinkId) => [
@@ -330,6 +415,7 @@ async function testOnlineOrderMetadataAndConversion() {
   await testDuplicateRepair();
   testIssuedOrderHistoryRecovery();
   testInlineWorkflowProgression();
+  testCartEntryStateGrouping();
   testMenuGroupsRemainSeparate();
   testMenuHandoverPackagingPlan();
   await testMenuMetadataPersistence();
