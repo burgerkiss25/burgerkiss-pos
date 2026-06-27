@@ -15,7 +15,6 @@
   let remoteSaveTimer = null;
 
   function clone(x){ return JSON.parse(JSON.stringify(x)); }
-  function esc(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function normalizeId(v){
     return String(v || '')
       .trim()
@@ -109,10 +108,43 @@
   }
   function getMenus(){ return clone(MENUS); }
 
-  function optionHtml(list, selected, includeBlank){
-    const opts = includeBlank ? ['<option value="">None</option>'] : [];
-    list.forEach(p=> opts.push(`<option value="${esc(p.id)}" ${p.id===selected?'selected':''}>${esc(p.name)} (${esc(p.id)})</option>`));
-    return opts.join('');
+  function textEl(tag, text, className){
+    const el = document.createElement(tag);
+    if(className) el.className = className;
+    el.textContent = text == null ? '' : String(text);
+    return el;
+  }
+  function optionEl(value, label, selected){
+    const option = document.createElement('option');
+    option.value = value || '';
+    option.textContent = label;
+    option.selected = option.value === String(selected || '');
+    return option;
+  }
+  function fillProductOptions(select, list, selected, includeBlank){
+    const options = [];
+    if(includeBlank) options.push(optionEl('', 'None', selected));
+    list.forEach(product=>options.push(optionEl(product.id, `${product.name} (${product.id})`, selected)));
+    select.replaceChildren(...options);
+  }
+  function field(label, control){
+    const wrapper = document.createElement('label');
+    wrapper.append(textEl('span', label), control);
+    return wrapper;
+  }
+  function inputField(name, value, placeholder, type){
+    const input = document.createElement('input');
+    input.dataset.field = name;
+    input.placeholder = placeholder || '';
+    input.value = value == null ? '' : String(value);
+    if(type) input.type = type;
+    return input;
+  }
+  function selectField(name, list, selected, includeBlank){
+    const select = document.createElement('select');
+    select.dataset.field = name;
+    fillProductOptions(select, list, selected, includeBlank);
+    return select;
   }
   function notifyValidation(message){
     const body = document.getElementById('menusBody');
@@ -128,20 +160,39 @@
     notice.scrollIntoView({block:'nearest'});
     return false;
   }
-  function rowHtml(m){
-    return `
-      <article class="admin-menu-card" data-menu-row>
-        <div class="admin-menu-card-heading"><div><h4>${esc(m.name || 'New menu')}</h4><small>Based on ${esc(productName(m.baseId))}</small></div><button class="mini admin-row-danger" data-remove>Delete menu</button></div>
-        <div class="admin-form-grid">
-          <label><span>Menu name</span><input data-field="name" placeholder="Menu name" value="${esc(m.name)}"></label>
-          <label><span>Menu price</span><span class="currency-field"><input data-field="menuPrice" type="number" step="1" min="0" placeholder="0" value="${Number(m.menuPrice) || ''}"><b>GHS</b></span></label>
-          <label><span>Base product</span><select data-field="baseId">${optionHtml(frontProducts(), m.baseId, false)}</select></label>
-          <label><span>Default fries</span><select data-field="defaultFries">${optionHtml(byCat('fries'), m.defaultFries, true)}</select></label>
-          <label><span>Default drink</span><select data-field="defaultDrink">${optionHtml(byCat('drink'), m.defaultDrink, true)}</select></label>
-          <label><span>Default wing sauce</span><select data-field="defaultWingsSauce">${optionHtml(sauces(), m.defaultWingsSauce, true)}</select></label>
-        </div>
-        <details class="admin-advanced"><summary>Technical details</summary><label><span>Menu ID</span><input data-field="id" placeholder="menu_id" value="${esc(m.id)}"></label></details>
-      </article>`;
+  function rowNode(m){
+    const article = document.createElement('article');
+    article.className = 'admin-menu-card';
+    article.dataset.menuRow = '';
+    const heading = document.createElement('div');
+    heading.className = 'admin-menu-card-heading';
+    const headingCopy = document.createElement('div');
+    headingCopy.append(textEl('h4', m.name || 'New menu'), textEl('small', `Based on ${productName(m.baseId)}`));
+    const remove = textEl('button', 'Delete menu', 'mini admin-row-danger');
+    remove.type = 'button';
+    remove.dataset.remove = '';
+    heading.append(headingCopy, remove);
+    const grid = document.createElement('div');
+    grid.className = 'admin-form-grid';
+    const price = inputField('menuPrice', Number(m.menuPrice) || '', '0', 'number');
+    price.step = '1';
+    price.min = '0';
+    const currency = document.createElement('span');
+    currency.className = 'currency-field';
+    currency.append(price, textEl('b', 'GHS'));
+    grid.append(
+      field('Menu name', inputField('name', m.name, 'Menu name')),
+      field('Menu price', currency),
+      field('Base product', selectField('baseId', frontProducts(), m.baseId, false)),
+      field('Default fries', selectField('defaultFries', byCat('fries'), m.defaultFries, true)),
+      field('Default drink', selectField('defaultDrink', byCat('drink'), m.defaultDrink, true)),
+      field('Default wing sauce', selectField('defaultWingsSauce', sauces(), m.defaultWingsSauce, true))
+    );
+    const advanced = document.createElement('details');
+    advanced.className = 'admin-advanced';
+    advanced.append(textEl('summary', 'Technical details'), field('Menu ID', inputField('id', m.id, 'menu_id')));
+    article.append(heading, grid, advanced);
+    return article;
   }
   function bindRowEvents(body){
     body.querySelectorAll('button[data-remove]').forEach(btn=>{
@@ -153,22 +204,30 @@
     if(!body) return;
     const categoryLabels = {burger:'Burgers',wings:'Wings',fries:'Fries',salad:'Salads',drink:'Drinks',other:'Other'};
     const categories = Array.from(new Set(DRAFT.map(menu=>productCategory(menu.baseId))));
-    const grouped = categories.map(category=>{
+    const intro = document.createElement('div');
+    intro.className = 'stock-editor-intro';
+    const introCopy = document.createElement('div');
+    introCopy.append(textEl('h4', 'Standard menus'), textEl('p', 'Menus are grouped by their base product category and follow the display order managed in Products.'));
+    intro.append(introCopy, textEl('span', `${DRAFT.length} menus`, 'admin-count-badge'));
+    const sections = categories.map(category=>{
       const rows = DRAFT
         .filter(menu=>productCategory(menu.baseId) === category)
         .sort((a,b)=>productOrder(a.baseId)-productOrder(b.baseId));
       const label = categoryLabels[category] || category.replace(/(^|_)([a-z])/g,(_,space,letter)=>`${space ? ' ' : ''}${letter.toUpperCase()}`);
-      return `<section class="admin-category-group" data-menu-category="${esc(category)}">
-        <header><div><h4>${esc(label)}</h4><small>${rows.length} ${rows.length === 1 ? 'menu' : 'menus'}</small></div><span>Follows product order</span></header>
-        <div class="admin-menu-grid">${rows.map(rowHtml).join('')}</div>
-      </section>`;
-    }).join('');
-    body.innerHTML = `
-      <div class="stock-editor-intro">
-        <div><h4>Standard menus</h4><p>Menus are grouped by their base product category and follow the display order managed in Products.</p></div><span class="admin-count-badge">${DRAFT.length} menus</span>
-      </div>
-      ${grouped || '<div class="empty-state">No menus configured.</div>'}
-    `;
+      const section = document.createElement('section');
+      section.className = 'admin-category-group';
+      section.dataset.menuCategory = category;
+      const header = document.createElement('header');
+      const headerCopy = document.createElement('div');
+      headerCopy.append(textEl('h4', label), textEl('small', `${rows.length} ${rows.length === 1 ? 'menu' : 'menus'}`));
+      header.append(headerCopy, textEl('span', 'Follows product order'));
+      const grid = document.createElement('div');
+      grid.className = 'admin-menu-grid';
+      rows.forEach(row=>grid.appendChild(rowNode(row)));
+      section.append(header, grid);
+      return section;
+    });
+    body.replaceChildren(intro, ...(sections.length ? sections : [textEl('div', 'No menus configured.', 'empty-state')]));
     bindRowEvents(body);
   }
   function openEditor(){ DRAFT = clone(MENUS); renderRows(); document.getElementById('modalMenus').classList.add('open'); }
