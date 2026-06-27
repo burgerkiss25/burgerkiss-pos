@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'order.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
+const productGridRenderers = fs.readFileSync(path.join(root, 'product_grid_renderers.js'), 'utf8');
 const access = fs.readFileSync(path.join(root, 'access.js'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 
@@ -65,11 +66,12 @@ test('online order dialog guides platform entry before products', () => {
 
 test('product grid renders dynamic labels with textContent instead of card innerHTML', () => {
   assert.doesNotMatch(ui, /b\.innerHTML\s*=/);
-  assert.doesNotMatch(ui, /empty\.innerHTML\s*=/);
-  assert.match(ui, /catBadge\.textContent = catLabel/);
-  assert.match(ui, /name\.textContent = it\.name/);
-  assert.match(ui, /subtitle\.textContent = it\.subtitle/);
-  assert.match(ui, /price\.textContent = `\$\{itemDisplayPrice\(it\)\} GHS`/);
+  assert.doesNotMatch(productGridRenderers, /innerHTML\s*=/);
+  assert.match(productGridRenderers, /el\.textContent = text == null \? '' : String\(text\)/);
+  assert.match(productGridRenderers, /textEl\('span', opts\.categoryLabel/);
+  assert.match(productGridRenderers, /textEl\('div', product\.name, 'name'\)/);
+  assert.match(productGridRenderers, /textEl\('small', product\.subtitle, 'item-subtitle'\)/);
+  assert.match(ui, /priceText = `\$\{itemDisplayPrice\(it\)\} GHS`/);
 });
 
 

@@ -97,6 +97,7 @@
   const ORDER_SUMMARY_RENDERERS = window.BK_ORDER_SUMMARY_RENDERERS || {};
   const WORKFLOW_STATE = window.BK_WORKFLOW_STATE || {};
   const PRODUCT_GRID_STATE = window.BK_PRODUCT_GRID_STATE || {};
+  const PRODUCT_GRID_RENDERERS = window.BK_PRODUCT_GRID_RENDERERS || {};
   const CART_ENTRY_STATE = window.BK_CART_ENTRY_STATE || {};
   const REPORTS = window.BK_REPORTS || {};
   function ensureDialogHost(){ return DIALOGS.ensureHost ? DIALOGS.ensureHost() : null; }
@@ -271,6 +272,63 @@
     return {items, page, pageSize, pageCount, pageItems:items.slice(page * pageSize, (page + 1) * pageSize)};
   }
 
+  function productEmptyState(){
+    if(PRODUCT_GRID_RENDERERS.emptyState) return PRODUCT_GRID_RENDERERS.emptyState();
+    const empty = document.createElement('div');
+    empty.className = 'empty-state product-empty';
+    const emptyTitle = document.createElement('strong');
+    emptyTitle.textContent = 'No products found';
+    const emptyHint = document.createElement('span');
+    emptyHint.textContent = 'Try another category or clear the search.';
+    empty.append(emptyTitle, emptyHint);
+    empty.style.gridColumn = '1 / -1';
+    return empty;
+  }
+
+  function productCardNode(it){
+    const img = BK_IMAGES.get(it.imageId || it.id);
+    const catLabel = CATEGORY_LABELS[it.cat] || it.cat || 'Item';
+    const priceText = `${itemDisplayPrice(it)} GHS`;
+    if(PRODUCT_GRID_RENDERERS.productButton){
+      return PRODUCT_GRID_RENDERERS.productButton(it, {image:img, categoryLabel:catLabel, priceText, onClick:()=> addProductWithFlow(it)});
+    }
+    const b = document.createElement('button');
+    b.className = 'item';
+    b.type = 'button';
+    if(img){
+      b.classList.add('item-with-bg');
+      b.style.backgroundImage = `url(${img})`;
+    }else{
+      b.classList.remove('item-with-bg');
+      b.style.backgroundImage = '';
+    }
+    const catBadge = document.createElement('span');
+    catBadge.className = 'cat-badge';
+    catBadge.textContent = catLabel;
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = it.name;
+    const meta = document.createElement('div');
+    meta.className = 'item-meta';
+    const price = document.createElement('div');
+    price.className = 'price';
+    price.textContent = priceText;
+    const addBadge = document.createElement('span');
+    addBadge.className = 'badge';
+    addBadge.textContent = '+1';
+    meta.append(price, addBadge);
+    b.append(catBadge, name);
+    if(it.subtitle){
+      const subtitle = document.createElement('small');
+      subtitle.className = 'item-subtitle';
+      subtitle.textContent = it.subtitle;
+      b.appendChild(subtitle);
+    }
+    b.appendChild(meta);
+    b.onclick = ()=> addProductWithFlow(it);
+    return b;
+  }
+
   function updateProductPager(totalItems, pageCount){
     const categoryTitle = document.getElementById('productCategoryTitle');
     const pageStatus = document.getElementById('productPageStatus');
@@ -285,7 +343,8 @@
     if(controls) controls.classList.toggle('single-page', pageCount <= 1);
     if(dots){
       dots.replaceChildren();
-      for(let index = 0; index < pageCount; index += 1){
+      if(PRODUCT_GRID_RENDERERS.pagerDots) dots.append(...PRODUCT_GRID_RENDERERS.pagerDots(productPage, pageCount));
+      else for(let index = 0; index < pageCount; index += 1){
         const dot = document.createElement('span');
         dot.className = index === productPage ? 'active' : '';
         dots.appendChild(dot);
@@ -304,55 +363,11 @@
     productPage = model.page;
     updateProductPager(items.length, pageCount);
     if(!items.length){
-      const empty = document.createElement('div');
-      empty.className = 'empty-state product-empty';
-      const emptyTitle = document.createElement('strong');
-      emptyTitle.textContent = 'No products found';
-      const emptyHint = document.createElement('span');
-      emptyHint.textContent = 'Try another category or clear the search.';
-      empty.append(emptyTitle, emptyHint);
-      empty.style.gridColumn = '1 / -1';
-      grid.appendChild(empty);
+      grid.appendChild(productEmptyState());
       return;
     }
     pageItems.forEach(it=>{
-      const b = document.createElement('button');
-      b.className = 'item';
-      b.type = 'button';
-      const img = BK_IMAGES.get(it.imageId || it.id);
-      if(img){
-        b.classList.add('item-with-bg');
-        b.style.backgroundImage = `url(${img})`;
-      }else{
-        b.classList.remove('item-with-bg');
-        b.style.backgroundImage = '';
-      }
-      const catLabel = CATEGORY_LABELS[it.cat] || it.cat || 'Item';
-      const catBadge = document.createElement('span');
-      catBadge.className = 'cat-badge';
-      catBadge.textContent = catLabel;
-      const name = document.createElement('div');
-      name.className = 'name';
-      name.textContent = it.name;
-      const meta = document.createElement('div');
-      meta.className = 'item-meta';
-      const price = document.createElement('div');
-      price.className = 'price';
-      price.textContent = `${itemDisplayPrice(it)} GHS`;
-      const addBadge = document.createElement('span');
-      addBadge.className = 'badge';
-      addBadge.textContent = '+1';
-      meta.append(price, addBadge);
-      b.append(catBadge, name);
-      if(it.subtitle){
-        const subtitle = document.createElement('small');
-        subtitle.className = 'item-subtitle';
-        subtitle.textContent = it.subtitle;
-        b.appendChild(subtitle);
-      }
-      b.appendChild(meta);
-      b.onclick = ()=> addProductWithFlow(it);
-      grid.appendChild(b);
+      grid.appendChild(productCardNode(it));
     });
   }
 

@@ -13,6 +13,7 @@ const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
 const workflowState = fs.readFileSync(path.join(root, 'workflow_state.js'), 'utf8');
 const productGridState = fs.readFileSync(path.join(root, 'product_grid_state.js'), 'utf8');
+const productGridRenderers = fs.readFileSync(path.join(root, 'product_grid_renderers.js'), 'utf8');
 const cartEntryState = fs.readFileSync(path.join(root, 'cart_entry_state.js'), 'utf8');
 
 function scriptIndex(html, file){
@@ -209,6 +210,18 @@ test('product grid filtering and paging helpers are split from UI rendering', ()
   assert.match(ui, /const PRODUCT_GRID_STATE = window\.BK_PRODUCT_GRID_STATE \|\| \{\}/);
   assert.match(ui, /PRODUCT_GRID_STATE\.pageModel\(base, currentCat, productQuery, productPage/);
   assert.ok(scriptIndex(order, 'product_grid_state.js') > -1 && scriptIndex(order, 'product_grid_state.js') < scriptIndex(order, 'ui.js'));
+});
+
+test('product grid DOM renderers are split from UI orchestration', () => {
+  assert.match(productGridRenderers, /root\.BK_PRODUCT_GRID_RENDERERS = \{/);
+  assert.match(productGridRenderers, /function pagerDots\(page, pageCount\)/);
+  assert.match(productGridRenderers, /function emptyState\(\)/);
+  assert.match(productGridRenderers, /function productButton\(product, options\)/);
+  assert.match(productGridRenderers, /button\.append\(/);
+  assert.match(ui, /const PRODUCT_GRID_RENDERERS = window\.BK_PRODUCT_GRID_RENDERERS \|\| \{\}/);
+  assert.match(ui, /PRODUCT_GRID_RENDERERS\.productButton/);
+  assert.match(ui, /PRODUCT_GRID_RENDERERS\.pagerDots/);
+  assert.ok(scriptIndex(order, 'product_grid_renderers.js') > -1 && scriptIndex(order, 'product_grid_renderers.js') < scriptIndex(order, 'ui.js'));
 });
 
 test('cart entry grouping helpers are split from UI rendering', () => {
